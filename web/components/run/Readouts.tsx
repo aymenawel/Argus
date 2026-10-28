@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { playhead, usePlayhead } from "@/lib/playhead";
+import { byVessel } from "@/lib/run-data";
 import type { RunSnapshot } from "@/lib/run-source";
 import { linearScale } from "@/lib/scale";
 import type { MeasurementRow, Vessel } from "@/lib/types";
@@ -37,15 +38,10 @@ export function Readouts({ snapshot, mainMetric }: Props) {
   const t = usePlayhead((p) => p.t);
   const selected = usePlayhead((p) => p.selectedVesselId);
   const reading = useReadings(snapshot, mainMetric, t);
-  const series = useMemo(() => {
-    const metrics = new Set([mainMetric, `${mainMetric}_l`]);
-    const groups = new Map<string, MeasurementRow[]>();
-    for (const row of snapshot.measurements) {
-      if (!metrics.has(row.metric)) continue;
-      groups.set(row.vessel_id, [...(groups.get(row.vessel_id) ?? []), row]);
-    }
-    return groups;
-  }, [snapshot.measurements, mainMetric]);
+  const series = useMemo(
+    () => byVessel(snapshot.measurements, new Set([mainMetric, `${mainMetric}_l`])),
+    [snapshot.measurements, mainMetric],
+  );
 
   return (
     <div className={styles.strip} role="group" aria-label="Readouts at the playhead">

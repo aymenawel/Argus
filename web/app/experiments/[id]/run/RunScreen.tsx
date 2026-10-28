@@ -12,9 +12,10 @@ import { Button } from "@/components/ui/Button";
 import { Panel } from "@/components/ui/Panel";
 import { ApiError, apiBase, getExperiment, getRecipes, getRuns, stopRun } from "@/lib/api";
 import { playhead } from "@/lib/playhead";
+import { runNotice } from "@/lib/run-data";
 import { LiveSource, type RunSnapshot } from "@/lib/run-source";
 import { formatRunTime } from "@/lib/scale";
-import type { Experiment, RunEvent } from "@/lib/types";
+import type { Experiment } from "@/lib/types";
 import styles from "./page.module.css";
 
 type Load =
@@ -42,17 +43,6 @@ function finding(snapshot: RunSnapshot): string {
   return `Stopped at ${formatRunTime(last)} · ${count}`;
 }
 
-const NOTICES: Partial<Record<RunEvent["kind"], string>> = {
-  interrupted: "This run stopped early: the worker stopped while it was running. What it measured is kept.",
-  no_calibration: "No Argus Card or ruler in view: frames are recorded, but nothing is measured in millimetres.",
-  spend: "The spend cap was reached: segmentation paused. Frames are still recorded and colour still measured.",
-};
-
-function notice(events: RunEvent[]): string | null {
-  const latest = [...events].reverse().find((e) => e.kind in NOTICES);
-  return latest ? (NOTICES[latest.kind] ?? null) : null;
-}
-
 export function RunScreen() {
   const { id } = useParams<{ id: string }>();
   const [load, setLoad] = useState<Load>({ state: "loading" });
@@ -70,7 +60,17 @@ export function RunScreen() {
           setLoad({ state: "empty", experiment });
           return;
         }
-        const source = new LiveSource(runs[0].run.id);
+        // A run started later on this experiment (by `argus run`, say) takes over the page when it appears.
+        const asked = new Set<string>();
+        const shown = runs[0].run.id;
+        const onOtherRun = (runId: string) => {
+          if (asked.has(runId)) return;
+          asked.add(runId);
+          getRuns(id)
+            .then((latest) => live && latest[0]?.run.id !== shown && setAttempt((a) => a + 1))
+            .catch(() => undefined);
+        };
+        const source = new LiveSource(shown, onOtherRun);
         const mainMetric = recipes.find((r) => r.id === experiment.recipe_id)?.main_measurement ?? "";
         playhead.reset();
         unsubscribe = source.subscribe((next) => live && setSnapshot(next));
@@ -151,7 +151,7 @@ export function RunScreen() {
 
   const ready = load.state === "ready" && snapshot !== null;
   const view = ready ? snapshot.view : null;
-  const problem = ready ? notice(snapshot.events) : null;
+  const problem = ready ? runNotice(snapshot.events, snapshot.view) : null;
 
   return (
     <>

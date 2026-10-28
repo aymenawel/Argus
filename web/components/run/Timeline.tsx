@@ -3,6 +3,7 @@
 import { Fragment, type KeyboardEvent, type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { playhead, usePlayhead } from "@/lib/playhead";
+import { byVessel } from "@/lib/run-data";
 import type { RunSnapshot, RunSource } from "@/lib/run-source";
 import { formatRunTime, linearScale } from "@/lib/scale";
 import type { FrameRow, MeasurementRow, RunEvent } from "@/lib/types";
@@ -70,14 +71,10 @@ export function Timeline({ snapshot, source, mainMetric }: Props) {
     );
   }, [analyzed, width]);
 
-  const series = useMemo(() => {
-    const metrics = new Set([mainMetric, `${mainMetric}_l`]);
-    const groups = new Map<string, MeasurementRow[]>();
-    for (const row of snapshot.measurements) {
-      if (metrics.has(row.metric)) groups.set(row.vessel_id, [...(groups.get(row.vessel_id) ?? []), row]);
-    }
-    return groups;
-  }, [snapshot.measurements, mainMetric]);
+  const series = useMemo(
+    () => byVessel(snapshot.measurements, new Set([mainMetric, `${mainMetric}_l`])),
+    [snapshot.measurements, mainMetric],
+  );
 
   const marks = snapshot.events.filter((e) => MARKED.has(e.kind));
 

@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { playhead, usePlayhead } from "@/lib/playhead";
+import { byVessel, regionAt } from "@/lib/run-data";
 import type { RunSnapshot, RunSource } from "@/lib/run-source";
 import { atOrBefore, formatRunTime } from "@/lib/scale";
-import type { DetectionOutline, MeasurementRow, Vessel } from "@/lib/types";
+import type { DetectionOutline, Vessel } from "@/lib/types";
 import styles from "./RunFrame.module.css";
 
 type Props = { snapshot: RunSnapshot; source: RunSource; mainMetric: string };
@@ -14,18 +15,11 @@ const points = (polygon: [number, number][]) => polygon.map(([x, y]) => `${x},${
 
 /** The newest reading of the main measurement per vessel at or before t (lab_mean mains show their L*). */
 export function useReadings(snapshot: RunSnapshot, mainMetric: string, t: number) {
-  const byVessel = useMemo(() => {
-    const groups = new Map<string, MeasurementRow[]>();
-    const metrics = new Set([mainMetric, `${mainMetric}_l`]);
-    for (const row of snapshot.measurements) {
-      if (!metrics.has(row.metric)) continue;
-      const list = groups.get(row.vessel_id) ?? [];
-      list.push(row);
-      groups.set(row.vessel_id, list);
-    }
-    return groups;
-  }, [snapshot.measurements, mainMetric]);
-  return (vessel: Vessel) => atOrBefore(byVessel.get(vessel.id) ?? [], t);
+  const groups = useMemo(
+    () => byVessel(snapshot.measurements, new Set([mainMetric, `${mainMetric}_l`])),
+    [snapshot.measurements, mainMetric],
+  );
+  return (vessel: Vessel) => atOrBefore(groups.get(vessel.id) ?? [], t);
 }
 
 function calibrationText(snapshot: RunSnapshot): string {
@@ -44,7 +38,10 @@ export function RunFrame({ snapshot, source, mainMetric }: Props) {
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const [outlines, setOutlines] = useState<{ frameId: string; items: DetectionOutline[] } | null>(null);
   const reading = useReadings(snapshot, mainMetric, t);
-  const { run, vessels } = snapshot.view;
+  const { run } = snapshot.view;
+  // Regions as drawn, or where a camera move carried them, at the frame shown.
+  const shownAt = frame?.t ?? t;
+  const vessels = snapshot.view.vessels.map((v) => ({ ...v, roi: regionAt(v, snapshot.events, shownAt) }));
 
   useEffect(() => {
     if (!frame) return;
