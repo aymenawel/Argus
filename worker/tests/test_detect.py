@@ -8,8 +8,10 @@ from tests.helpers import (
     bounding_box_of_dark_square,
     scene,
     scene_both_cards,
+    scene_two_identical_cards,
     scene_with_patch_centres,
     scene_with_square_on_card_plane,
+    scene_with_stray_marker,
 )
 
 
@@ -41,9 +43,27 @@ def test_print_check_rescales_and_bounds():
     d = detect_card(scene(STANDARD, 5.0))
     c = with_print_check(d, 98.0)
     pts = c.px_to_mm(np.array([[700.0, 600.0], [800.0, 600.0]]))
-    assert np.linalg.norm(pts[1] - pts[0]) == pytest.approx(20.0 * 100 / 98, rel=0.01)
+    assert np.linalg.norm(pts[1] - pts[0]) == pytest.approx(20.0 * 98 / 100, rel=0.01)
     with pytest.raises(ValueError):
         with_print_check(d, 80.0)
+
+
+def test_print_check_recovers_true_size_from_a_shrunken_print():
+    # The printer shrank the page to 98 %, so its 100 mm line measures 98 mm with a ruler.
+    d = with_print_check(detect_card(scene(STANDARD, 5.0 * 0.98)), 98.0)
+    ends_px = np.array([[700.0, 600.0], [950.0, 600.0]])  # 250 px apart: 50 mm at 5 px per real mm
+    assert np.linalg.norm(np.diff(d.px_to_mm(ends_px), axis=0)) == pytest.approx(50.0, rel=0.005)
+    assert d.mm_per_px == pytest.approx(0.2, rel=0.005)
+
+
+def test_two_prints_of_the_same_card_are_refused():
+    # Every id shows up on one print or the other: no way to tell which corners belong together.
+    assert detect_card(scene_two_identical_cards(STANDARD, cover_first=(3,), cover_second=(1,))) is None
+
+
+def test_a_marker_out_of_place_is_left_out():
+    d = detect_card(scene_with_stray_marker(STANDARD, stray_id=3, cover_ids=(3,)))
+    assert d.marker_ids == (0, 1, 2) and d.mm_per_px == pytest.approx(0.2, rel=0.01)
 
 
 def test_ruler_scale():

@@ -19,6 +19,9 @@ from argus.calibration.card import CARDS, CardSpec, aruco_dictionary
 UNCHECKED_PRINT_REL = 0.01  # a home printer's scale error before the 100 mm line is measured
 RULER_READING_MM = 0.5  # how precisely a person reads the 100 mm line
 PRINT_CHECK_RANGE_MM = (90.0, 110.0)
+# A corner further than this from the fitted card does not belong to it: a loose or falsely decoded marker.
+FIT_TOLERANCE_MM = 1.0
+FIT_TOLERANCE_PX = 3.0  # at low resolution a few pixels of corner error is still an honest detection
 
 
 @dataclass(frozen=True)
@@ -43,6 +46,11 @@ def _marker_span_mm(spec: CardSpec) -> float:
     return math.hypot(x1 - x0, y1 - y0)
 
 
+def _fit_tolerance_mm(spec: CardSpec, corners_px: list[np.ndarray]) -> float:
+    side_px = float(np.mean([np.linalg.norm(np.roll(c, -1, axis=0) - c, axis=1).mean() for c in corners_px]))
+    return max(FIT_TOLERANCE_MM, FIT_TOLERANCE_PX * spec.marker_size_mm / side_px)
+
+
 def _detector() -> cv2.aruco.ArucoDetector:
     params = cv2.aruco.DetectorParameters()
     params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
@@ -52,25 +60,46 @@ def _detector() -> cv2.aruco.ArucoDetector:
 def detect_card(
     image_bgr: np.ndarray, cards: Sequence[CardSpec] = CARDS, *, min_markers: int = 2
 ) -> CardDetection | None:
-    """The card with the most markers in view, or None. Markers of other cards are never mixed in."""
+    """The card with the most markers in view, or None.
+
+    Markers of other cards are never mixed in. A marker id seen twice (two prints of the card) makes the
+    frame ambiguous, so it gives None; a marker that doesn't sit where the others put it is left out.
+    """
     gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY) if image_bgr.ndim == 3 else image_bgr
     corners, ids, _ = _detector().detectMarkers(gray)
     if ids is None:
         return None
-    found = {int(i): c.reshape(4, 2) for i, c in zip(ids.flatten(), corners, strict=True)}
+    seen = [int(i) for i in ids.flatten()]
+    found = {i: c.reshape(4, 2) for i, c in zip(seen, corners, strict=True)}
     spec = max(cards, key=lambda s: sum(i in found for i in s.marker_ids))
+    if any(seen.count(i) > 1 for i in spec.marker_ids):
+        return None
     markers = [m for m in spec.markers() if m.id in found]
+    if not markers:
+        return None
+    tolerance = _fit_tolerance_mm(spec, [found[m.id] for m in markers])
+
+    def points(ms: list) -> tuple[np.ndarray, np.ndarray]:
+        image = np.concatenate([found[m.id] for m in ms]).astype(np.float64)
+        return image, np.concatenate([m.corners_mm() for m in ms]).astype(np.float64)
+
+    if len(markers) >= 3:  # with three or more, the honest markers outvote a stray one
+        _, inliers = cv2.findHomography(*points(markers), cv2.RANSAC, tolerance)
+        if inliers is None:
+            return None
+        markers = [m for m, ok in zip(markers, inliers.reshape(-1, 4).all(axis=1), strict=True) if ok]
     if len(markers) < min_markers:
         return None
 
-    image_pts = np.concatenate([found[m.id] for m in markers]).astype(np.float64)
-    card_pts = np.concatenate([m.corners_mm() for m in markers]).astype(np.float64)
+    image_pts, card_pts = points(markers)
     homography, _ = cv2.findHomography(image_pts, card_pts, 0)
     if homography is None:
         return None
 
     mapped = cv2.perspectiveTransform(image_pts.reshape(-1, 1, 2), homography).reshape(-1, 2)
     rms = float(np.sqrt(np.mean(np.sum((mapped - card_pts) ** 2, axis=1))))
+    if rms > tolerance:
+        return None
 
     centre_mm = np.array([[[spec.width_mm / 2, spec.height_mm / 2]]])
     cx, cy = cv2.perspectiveTransform(centre_mm, np.linalg.inv(homography))[0, 0]
@@ -93,7 +122,8 @@ def with_print_check(detection: CardDetection, measured_line_mm: float) -> CardD
     low, high = PRINT_CHECK_RANGE_MM
     if not low <= measured_line_mm <= high:
         raise ValueError(f"the print check line should measure close to 100 mm, got {measured_line_mm} mm")
-    scale = 100.0 / measured_line_mm
+    # A line that measures 98 mm means the page printed at 98 %: card millimetres are 0.98 real ones.
+    scale = measured_line_mm / 100.0
     return replace(
         detection,
         print_scale=scale,

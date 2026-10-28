@@ -27,16 +27,23 @@ def _tilted(frame: np.ndarray, tilt: np.ndarray | None) -> np.ndarray:
     return cv2.warpPerspective(frame, tilt, (FRAME_W, FRAME_H), borderValue=(255, 255, 255))
 
 
-def _card_frame(spec: CardSpec, px_per_mm: float, cover_ids=()) -> np.ndarray:
-    frame = _blank()
-    card = render_raster(spec, px_per_mm)
-    x0, y0 = ORIGIN.astype(int)
-    frame[y0 : y0 + card.shape[0], x0 : x0 + card.shape[1]] = card
+def _card(spec: CardSpec, px_per_mm: float, cover_ids=()) -> np.ndarray:
+    card = render_raster(spec, px_per_mm).copy()
     for marker in spec.markers():
         if marker.id in cover_ids:
-            mx, my = (ORIGIN + np.array([marker.x_mm, marker.y_mm]) * px_per_mm).astype(int)
+            mx, my = (np.array([marker.x_mm, marker.y_mm]) * px_per_mm).astype(int)
             side = round(marker.size_mm * px_per_mm)
-            frame[my - 2 : my + side + 2, mx - 2 : mx + side + 2] = 255
+            card[max(my - 2, 0) : my + side + 2, max(mx - 2, 0) : mx + side + 2] = 255
+    return card
+
+
+def _place(frame: np.ndarray, card: np.ndarray, x0: int, y0: int) -> None:
+    frame[y0 : y0 + card.shape[0], x0 : x0 + card.shape[1]] = card
+
+
+def _card_frame(spec: CardSpec, px_per_mm: float, cover_ids=()) -> np.ndarray:
+    frame = _blank()
+    _place(frame, _card(spec, px_per_mm, cover_ids), *ORIGIN.astype(int))
     return frame
 
 
@@ -66,6 +73,22 @@ def scene_both_cards(full: CardSpec, stray_compact_markers: int = 1, px_per_mm: 
         tile = cv2.aruco.generateImageMarker(aruco_dictionary(), marker_id, side)
         x, y = 1100 + k * (side + 40), 750
         frame[y : y + side, x : x + side] = tile[:, :, None]
+    return frame
+
+
+def scene_two_identical_cards(spec: CardSpec, px_per_mm: float = 5.0, cover_first=(), cover_second=()) -> np.ndarray:
+    """Two prints of the same card, each with a marker hidden, so every visible id belongs to one card or the other."""
+    frame = _card_frame(spec, px_per_mm, cover_first)
+    _place(frame, _card(spec, px_per_mm, cover_second), 850, 650)
+    return frame
+
+
+def scene_with_stray_marker(spec: CardSpec, stray_id: int, cover_ids=(), px_per_mm: float = 5.0) -> np.ndarray:
+    """A card plus a loose copy of one of its markers away from the card (or a falsely decoded pattern)."""
+    frame = _card_frame(spec, px_per_mm, cover_ids)
+    side = round(spec.marker_size_mm * px_per_mm)
+    tile = cv2.aruco.generateImageMarker(aruco_dictionary(), stray_id, side)
+    frame[750 : 750 + side, 1100 : 1100 + side] = tile[:, :, None]
     return frame
 
 
