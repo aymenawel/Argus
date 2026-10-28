@@ -75,6 +75,11 @@ def list_experiments(db: Database) -> list[Experiment]:
     return [_experiment(r) for r in rows]
 
 
+def set_experiment_status(db: Database, experiment_id: str, status: ExperimentStatus) -> None:
+    with db.write() as c:
+        c.execute("UPDATE experiments SET status=? WHERE id=?", (status, experiment_id))
+
+
 def get_experiment(db: Database, experiment_id: str) -> Experiment | None:
     with db.read() as c:
         row = c.execute("SELECT * FROM experiments WHERE id=?", (experiment_id,)).fetchone()
