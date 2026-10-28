@@ -46,6 +46,7 @@
   --primary-bg: #0b1220;
   --primary-ink: #ffffff;
   --pill-on: #ffffff;
+  --focus: #0b7d7d; /* accent-ink: the brand teal is under 3:1 on the light ground */
   --pos: #1f7a4d;
   --pos-bg: #dcf6e6;
   --neg: #b4232a;
@@ -78,6 +79,7 @@
   --primary-bg: #f5f7fa;
   --primary-ink: #0b0b0c;
   --pill-on: #2a2c31;
+  --focus: #2dd4bf;
   --pos: #4ade80;
   --pos-bg: #12291b;
   --neg: #f0707f;
@@ -111,6 +113,7 @@
     --primary-bg: #f5f7fa;
     --primary-ink: #0b0b0c;
     --pill-on: #2a2c31;
+    --focus: #2dd4bf;
     --pos: #4ade80;
     --pos-bg: #12291b;
     --neg: #f0707f;
