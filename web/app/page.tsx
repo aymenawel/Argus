@@ -54,6 +54,12 @@ export default function ExperimentsPage() {
     // Listen before fetching, so a row created in between is not lost.
     const unsubscribe = subscribe((type, data) => {
       if (type === "experiment") setExperiments((current) => merge(current, [data as Experiment]));
+      if (type === "resync") {
+        // The worker restarted or we missed too much: reload the list (if that fails, it stays as shown).
+        getExperiments()
+          .then((list) => live && setExperiments((current) => merge(current, list)))
+          .catch(() => undefined);
+      }
     });
     Promise.all([getExperiments(), getRecipes()])
       .then(([list, recipeList]) => {

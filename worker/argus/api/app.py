@@ -80,9 +80,8 @@ def create_app(
 
     @app.get("/api/events")
     async def events(last_event_id: str | None = Header(default=None)) -> StreamingResponse:
-        last = int(last_event_id) if last_event_id and last_event_id.isdigit() else None
         return StreamingResponse(
-            event_stream(broker, last),
+            event_stream(broker, last_event_id),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
