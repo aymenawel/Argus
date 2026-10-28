@@ -3,12 +3,14 @@ name = "argus-worker"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "fastapi[standard]>=0.162.0",
     "meta-sam-parser>=0.1.0",
     "numpy>=2.5.4",
     "openai>=3.40.0",
     "opencv-python>=5.0.0.93",
     "requests>=2.34.2",
     "scikit-image>=0.26.0",
+    "uncertainties>=3.2.3",
 ]
 
 [dependency-groups]
