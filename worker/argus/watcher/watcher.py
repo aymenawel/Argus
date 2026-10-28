@@ -120,6 +120,13 @@ class Watcher:
             signatures[vessel.id] = _Signature(_zscore(grey, tiles), _chromaticity(crop) - frame_chroma)
         return signatures
 
+    def follow(self, vessels: Sequence[Vessel]) -> None:
+        """The vessels' regions moved (the camera moved): start over, so the next frame is a 'first'."""
+        self.vessels = list(vessels)
+        self._keyframes, self._last_change, self._outside = {}, {}, None
+        self._streak = {v.id: 0 for v in self.vessels}
+        self._started = False
+
     def mark_analyzed(self, t: float, image_bgr: np.ndarray) -> None:
         """This frame was analyzed: it becomes every vessel's keyframe."""
         self._keyframes = self._signatures(image_bgr)

@@ -18,11 +18,12 @@ from typing import Any, Protocol
 import cv2
 import numpy as np
 
-from argus.calibration.run import RulerInput, calibrate
-from argus.capture.quality import REBASELINED, QualityGate
+from argus.calibration.run import RulerInput, calibrate, card_moved
+from argus.capture.quality import DEFAULT_THRESHOLDS, REBASELINED, QualityGate, QualityThresholds
 from argus.capture.webcam import CameraSettings, open_webcam
 from argus.domain import CameraProperty, EventKind, RunStatus
 from argus.pipeline.analyzer import RunContext, analyze_frame
+from argus.pipeline.moves import after_card_moved
 from argus.storage.repos import add_calibration, set_run_status
 from argus.watcher import Watcher
 
@@ -146,6 +147,38 @@ class CameraHub:
             camera.close()
 
 
+async def _follow_the_card(
+    ctx: RunContext,
+    gate: QualityGate,
+    watcher: Watcher,
+    watching: asyncio.Lock,
+    t: float,
+    image: np.ndarray,
+    *,
+    camera_moved: bool,
+    print_check_mm: float | None,
+    ruler: RulerInput | None,
+    camera_properties: dict[str, CameraProperty],
+) -> bool:
+    """Recalibrates when the card moved (and moves the vessels' regions when the camera did). Whether it did."""
+    old = ctx.calibration
+    if old is None or await asyncio.to_thread(card_moved, old, image) is not True:
+        return False
+    new = await asyncio.to_thread(calibrate, image, print_check_mm=print_check_mm, ruler=ruler)
+    if new is None:
+        return False
+    vessels, detail = after_card_moved(ctx.vessels, old, new, camera_moved=camera_moved)
+    if "rois" in detail:
+        ctx.vessels = gate.vessels = vessels
+        ctx.last_masks.clear()  # the old masks sit where the vessels used to be
+        async with watching:
+            watcher.follow(vessels)
+    ctx.calibration = new
+    await asyncio.to_thread(add_calibration, ctx.db, ctx.run.id, new.to_draft(t, camera_properties))
+    await ctx.event(t, EventKind.CAMERA_MOVED, "quality", detail)
+    return True
+
+
 async def run_live(
     ctx: RunContext,
     source: FrameSource,
@@ -158,58 +191,101 @@ async def run_live(
     ruler: RulerInput | None = None,
     camera_properties: dict[str, CameraProperty] | None = None,
     max_fps: float = 5.0,
+    quality: QualityThresholds = DEFAULT_THRESHOLDS,
 ) -> RunStatus:
-    """Runs until Stop (cancel) or until the source stops delivering frames. The caller closes the source."""
+    """Runs until Stop (cancel) or until the source stops delivering frames. The caller closes the source.
+
+    Capture never waits on the network (spec §4.3): frames are analyzed in background tasks, at most one of them
+    segmenting. A segmentation that can't start yet (no calibration, one still in flight, too soon after the last)
+    is owed, not dropped.
+    """
     step, interval = ctx.recipe.analysis_step_s, ctx.settings.segment_interval_s
+    properties = camera_properties or {}
     t0: float | None = None
     last_store = last_segment = -math.inf
-    gate = QualityGate(ctx.vessels)
+    gate = QualityGate(ctx.vessels, quality)
+    watching = asyncio.Lock()  # the watcher is read in a worker thread and updated when a segmentation lands
+    pending: set[asyncio.Task] = set()
+    segmenting: asyncio.Task | None = None
+    owed = scene_moved = False
     in_trouble: set[str] = set()  # quality problems already reported, until a good frame clears them
     t = 0.0
-    while not cancel.is_set():
-        image = await asyncio.to_thread(source.read)
-        if image is None:
-            await ctx.event(t, EventKind.INTERRUPTED, "pipeline", {"reason": "camera_lost"})
-            break
-        if t0 is None:
-            t0 = clock()
-        t = clock() - t0
-        report = await asyncio.to_thread(gate.check, t, image)
-        if not report.ok:
-            problem = "occluded" if "occluded" in report.flags else "blurred"
-            if problem not in in_trouble:
-                in_trouble.add(problem)
-                kind = EventKind.INTERVENTION if problem == "occluded" else EventKind.QUALITY
-                await ctx.event(t, kind, "quality", {"flags": list(report.flags), "blur": round(report.blur, 1)})
+
+    async def analyze(t: float, image: np.ndarray, segment: bool, flags: tuple[str, ...]) -> None:
+        outcome = await analyze_frame(ctx, t, image, segment=segment, quality_flags=flags)
+        if segment and outcome.segmented:
+            async with watching:
+                await asyncio.to_thread(watcher.mark_analyzed, t, image)
+
+    try:
+        while not cancel.is_set():
+            for task in [task for task in pending if task.done()]:
+                pending.discard(task)
+                task.result()  # an analysis that crashed ends the run, as it would inline
+            image = await asyncio.to_thread(source.read)
+            if image is None:
+                await ctx.event(t, EventKind.INTERRUPTED, "pipeline", {"reason": "camera_lost"})
+                break
+            if t0 is None:
+                t0 = clock()
+            t = clock() - t0
+            report = await asyncio.to_thread(gate.check, t, image)
+            if not report.ok:
+                problem = "occluded" if "occluded" in report.flags else "blurred"
+                if problem not in in_trouble:
+                    in_trouble.add(problem)
+                    kind = EventKind.INTERVENTION if problem == "occluded" else EventKind.QUALITY
+                    await ctx.event(t, kind, "quality", {"flags": list(report.flags), "blur": round(report.blur, 1)})
+                await sleep(1 / max_fps)
+                continue
+            in_trouble.clear()
+            if "rebaselined" in report.flags:
+                scene_moved = True
+                await ctx.event(t, EventKind.QUALITY, "quality", {"flags": list(report.flags), "message": REBASELINED})
+
+            due = t - last_store >= step - EPSILON_S
+            if ctx.calibration is None:
+                cal = await asyncio.to_thread(calibrate, image, print_check_mm=print_check_mm, ruler=ruler)
+                if cal is not None:
+                    ctx.calibration = cal
+                    await asyncio.to_thread(add_calibration, ctx.db, ctx.run.id, cal.to_draft(t, properties))
+            elif due or scene_moved:
+                moved = await _follow_the_card(
+                    ctx,
+                    gate,
+                    watcher,
+                    watching,
+                    t,
+                    image,
+                    camera_moved=scene_moved,
+                    print_check_mm=print_check_mm,
+                    ruler=ruler,
+                    camera_properties=properties,
+                )
+                owed, scene_moved = owed or moved, False
+
+            async with watching:
+                triggers = await asyncio.to_thread(watcher.observe, t, image)
+            for trig in triggers:
+                if trig.reason == "change":
+                    detail = {"ssim": round(trig.ssim or 0, 3), "colour_shift": round(trig.colour_shift or 0, 2)}
+                    await ctx.event(t, EventKind.CHANGE, "watcher", detail, vessel_id=trig.vessel_id)
+            owed = owed or any(trig.reason in SEGMENT_REASONS for trig in triggers)
+            free = segmenting is None or segmenting.done()
+            wants_segment = owed and free and ctx.calibration is not None and t - last_segment >= interval - EPSILON_S
+            if wants_segment or due:
+                task = asyncio.create_task(analyze(t, image, wants_segment, report.flags))
+                pending.add(task)
+                last_store = t
+                if wants_segment:
+                    owed, last_segment, segmenting = False, t, task
             await sleep(1 / max_fps)
-            continue
-        in_trouble.clear()
-        if "rebaselined" in report.flags:
-            await ctx.event(t, EventKind.QUALITY, "quality", {"flags": list(report.flags), "message": REBASELINED})
-
-        if ctx.calibration is None:
-            cal = await asyncio.to_thread(calibrate, image, print_check_mm=print_check_mm, ruler=ruler)
-            if cal is not None:
-                ctx.calibration = cal
-                draft = cal.to_draft(t, camera_properties or {})
-                await asyncio.to_thread(add_calibration, ctx.db, ctx.run.id, draft)
-
-        triggers = await asyncio.to_thread(watcher.observe, t, image)
-        for trig in triggers:
-            if trig.reason == "change":
-                detail = {"ssim": round(trig.ssim or 0, 3), "colour_shift": round(trig.colour_shift or 0, 2)}
-                await ctx.event(t, EventKind.CHANGE, "watcher", detail, vessel_id=trig.vessel_id)
-        wants_segment = any(trig.reason in SEGMENT_REASONS for trig in triggers) and (
-            t - last_segment >= interval - EPSILON_S
-        )
-        if wants_segment or t - last_store >= step - EPSILON_S:
-            outcome = await analyze_frame(ctx, t, image, segment=wants_segment, quality_flags=report.flags)
-            last_store = t
-            if wants_segment:
-                last_segment = t
-                if outcome.segmented:
-                    watcher.mark_analyzed(t, image)
-        await sleep(1 / max_fps)
+        await asyncio.gather(*pending)  # what was captured is analyzed before the run ends
+    except BaseException:
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+        raise
     await asyncio.to_thread(set_run_status, ctx.db, ctx.run.id, RunStatus.STOPPED)
     ctx.publish("run_status", {"status": str(RunStatus.STOPPED)})
     return RunStatus.STOPPED

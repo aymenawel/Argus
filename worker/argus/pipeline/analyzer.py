@@ -344,8 +344,11 @@ async def analyze_frame(
                 keyed.setdefault(vessel_id, {})[concept] = list(patches)
     elif segment:
         backend = "sam-3.1/image"
-        for concept in (c.name for c in ctx.recipe.concepts):
-            result = await segment_with_retries(ctx, image_bgr, concept, t=t, frame_ids=[frame_id])
+        concepts = [c.name for c in ctx.recipe.concepts]
+        results = await asyncio.gather(  # every concept at once; the semaphore bounds the calls
+            *(segment_with_retries(ctx, image_bgr, concept, t=t, frame_ids=[frame_id]) for concept in concepts)
+        )
+        for concept, result in zip(concepts, results, strict=True):
             if isinstance(result, Skipped):
                 if result.reason == "failed":  # a call the spend cap refused isn't a failure of SAM
                     failed.append(concept)

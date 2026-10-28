@@ -26,6 +26,7 @@ from argus.capture.quality import REBASELINED, QualityGate
 from argus.capture.video import VideoFileSource
 from argus.domain import EventKind, RunStatus, Vessel, new_id
 from argus.pipeline.analyzer import KeyedPatches, RunContext, Skipped, _write_jpeg, analyze_frame, segment_with_retries
+from argus.pipeline.moves import after_card_moved
 from argus.rois import roi_box
 from argus.segment import Clip, MaskPatch, SegmentResult
 from argus.segment.tracking import assign_to_vessels
@@ -69,17 +70,22 @@ def _event(
     ctx.publish("event", {"t": t, "id": event.id, "kind": str(kind), "vessel_id": vessel_id, "detail": detail})
 
 
+Epochs = list[tuple[float, list[Vessel]]]  # from when each set of vessel regions holds (they move with the camera)
+
+
 def _scan(
     ctx: RunContext, request: ImportRequest, cancel: asyncio.Event, started: float
-) -> tuple[list[_Sample], list[tuple[float, RunCalibration]]] | None:
+) -> tuple[list[_Sample], list[tuple[float, RunCalibration]], Epochs] | None:
     step = ctx.recipe.analysis_step_s
     # Between samples the watcher only looks for change; samples come on the clock, so no check-ins.
     settings = WatcherSettings(mode="smart_trigger", interval_s=step, cooldown_s=step, checkin_s=math.inf)
     watcher = Watcher(ctx.vessels, ctx.recipe.watcher, settings)
     samples: list[_Sample] = []
     calibrations: list[tuple[float, RunCalibration]] = []
+    epochs: Epochs = [(0.0, list(ctx.vessels))]
     next_sample = 0.0
     gate = QualityGate(ctx.vessels)
+    scene_moved = False
     for frame in VideoFileSource(request.paths, time_scale=request.time_scale).frames():
         if cancel.is_set():
             return None
@@ -98,6 +104,7 @@ def _scan(
             _event(ctx, frame.t, kind, "quality", {"flags": list(report.flags), "blur": round(report.blur, 1)})
             continue
         if "rebaselined" in report.flags:
+            scene_moved = True
             _event(ctx, frame.t, EventKind.QUALITY, "quality", {"flags": list(report.flags), "message": REBASELINED})
         watcher.mark_analyzed(frame.t, frame.image)
 
@@ -109,7 +116,13 @@ def _scan(
                 calibrations.append((frame.t, cal))
                 add_calibration(ctx.db, ctx.run.id, cal.to_draft(frame.t, {}))
                 if moved:
-                    _event(ctx, frame.t, EventKind.CAMERA_MOVED, "quality", {"message": "card moved: recalibrated"})
+                    vessels, detail = after_card_moved(epochs[-1][1], current, cal, camera_moved=scene_moved)
+                    if "rois" in detail:
+                        epochs.append((frame.t, vessels))
+                        gate.vessels = vessels
+                        watcher.follow(vessels)
+                    _event(ctx, frame.t, EventKind.CAMERA_MOVED, "quality", detail)
+        scene_moved = False
 
         frame_id = new_id("frm")
         path = ctx.files.frame_path(frame_id)
@@ -127,7 +140,7 @@ def _scan(
         ctx.publish(
             "run_progress", {"stage": "scan", "t": frame.t, "t_end": None, "speed": round(frame.t / elapsed, 2)}
         )
-    return samples, calibrations
+    return samples, calibrations, epochs
 
 
 def _write_clip(
@@ -189,12 +202,14 @@ async def _segment_vessel(
     shape: tuple[int, int],
     masks: dict[str, dict[str, dict]],
     cancel: asyncio.Event,
+    *,
+    first_clip: int = 0,
 ) -> None:
     """Stop is checked before every SAM call; a call already sent finishes and is logged."""
     box = roi_box(vessel, *shape, margin=CROP_MARGIN_PX)
     x0, y0, x1, y1 = box
     size = ctx.settings.sam_max_video_frames
-    for index, start in enumerate(range(0, len(samples), size)):
+    for index, start in enumerate(range(0, len(samples), size), start=first_clip):
         if cancel.is_set():
             return
         chunk = samples[start : start + size]
@@ -237,19 +252,23 @@ async def run_import(ctx: RunContext, request: ImportRequest, *, cancel: asyncio
     scanned = await asyncio.to_thread(_scan, ctx, request, cancel, started)
     if scanned is None or cancel.is_set():
         return await asyncio.to_thread(_finish, ctx, RunStatus.STOPPED)
-    samples, calibrations = scanned
+    samples, calibrations, epochs = scanned
     if not samples:
         return await asyncio.to_thread(_finish, ctx, RunStatus.FINISHED)
 
     masks: dict[str, dict[str, dict]] = {s.frame_id: {} for s in samples}
     if calibrations:  # without millimetres there is nothing to segment for
         shape = (await asyncio.to_thread(cv2.imread, str(samples[0].path))).shape[:2]
-        jobs = [(v, c.name) for v in ctx.vessels for c in ctx.recipe.concepts]
+        jobs = [(v.id, c.name) for v in ctx.vessels for c in ctx.recipe.concepts]
         done = 0
 
-        async def job(vessel: Vessel, concept: str) -> None:
+        async def job(vessel_id: str, concept: str) -> None:
             nonlocal done
-            await _segment_vessel(ctx, samples, vessel, concept, shape, masks, cancel)
+            bounds = [t for t, _ in epochs[1:]] + [math.inf]
+            for k, ((since, vessels), until) in enumerate(zip(epochs, bounds, strict=True)):
+                vessel = next(v for v in vessels if v.id == vessel_id)  # its region in this stretch of video
+                part = [s for s in samples if since <= s.t < until]
+                await _segment_vessel(ctx, part, vessel, concept, shape, masks, cancel, first_clip=k * 1000)
             done += 1
             ctx.publish("run_progress", {"stage": "segment", "done": done, "total": len(jobs)})
 
@@ -263,6 +282,7 @@ async def run_import(ctx: RunContext, request: ImportRequest, *, cancel: asyncio
             return await asyncio.to_thread(_finish, ctx, RunStatus.STOPPED)
         in_force = [cal for t, cal in calibrations if t <= sample.t]
         ctx.calibration = in_force[-1] if in_force else None
+        ctx.vessels = [vessels for t, vessels in epochs if t <= sample.t][-1]
         image = await asyncio.to_thread(cv2.imread, str(sample.path))
         frame_masks: KeyedPatches = masks[sample.frame_id]
         await analyze_frame(

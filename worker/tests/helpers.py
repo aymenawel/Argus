@@ -160,3 +160,18 @@ def rois_around_the_bar(length_mm: float = 40.0, margin: int = 40):
     ]
     a = [(float(x), float(y)) for x, y in a]
     return a, [(x, y + 300.0) for x, y in a]
+
+
+CARD_AREA = (slice(115, 585), slice(165, 785))  # the printed card and its white border in the card-plane scenes
+
+
+def on_a_bench(image: np.ndarray) -> np.ndarray:
+    """The scene on a textured bench (20 px blocks of random greys) wherever it is white, except on the card."""
+    rng = np.random.default_rng(3)
+    blocks = rng.integers(100, 241, (image.shape[0] // 20 + 1, image.shape[1] // 20 + 1), dtype=np.uint8)
+    bench = cv2.resize(blocks, None, fx=20, fy=20, interpolation=cv2.INTER_NEAREST)[: image.shape[0], : image.shape[1]]
+    white = (image >= 250).all(axis=2)
+    white[CARD_AREA] = False
+    out = image.copy()
+    out[white] = bench[white][:, None]
+    return out

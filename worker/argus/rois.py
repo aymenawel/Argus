@@ -20,3 +20,10 @@ def roi_box(vessel: Vessel, height: int, width: int, *, margin: int = 0) -> tupl
     x0, y0 = np.floor(points.min(axis=0)).astype(int) - margin
     x1, y1 = np.ceil(points.max(axis=0)).astype(int) + margin
     return max(int(x0), 0), max(int(y0), 0), min(int(x1), width), min(int(y1), height)
+
+
+def follow(vessel: Vessel, image_shift: np.ndarray) -> Vessel:
+    """The vessel with its ROI carried by a 3x3 image-to-image homography (a camera move seen through the card)."""
+    points = np.asarray(vessel.roi, np.float64).reshape(-1, 1, 2)
+    moved = cv2.perspectiveTransform(points, image_shift).reshape(-1, 2)
+    return vessel.model_copy(update={"roi": [(round(float(x), 1), round(float(y), 1)) for x, y in moved]})

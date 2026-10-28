@@ -20,7 +20,7 @@ from argus.recipes.model import Recipe
 from argus.segment import MaskPatch, SegmentError, SegmentResult, Track, TrackFrame
 from argus.storage.files import RunFiles
 from argus.storage.repos import add_vessels, create_run, events_for_run, frames_for_run, get_run, measurements_for_run
-from tests.helpers import scene_with_bar_on_card_plane
+from tests.helpers import on_a_bench, scene_with_bar_on_card_plane
 
 FPS, FRAMES, SCALE = 10, 120, 60  # 12 s of video = 12 run minutes
 RECIPE = Recipe.model_validate(
@@ -275,3 +275,33 @@ async def test_a_forced_stop_tells_the_page_and_logs_the_call_in_flight(ctx, cli
     with ctx.db.read() as c:
         errors = [r["error"] for r in c.execute("SELECT error FROM model_calls WHERE run_id=?", (ctx.run.id,))]
     assert errors and all(e == "cancelled" for e in errors)
+
+
+@pytest.fixture
+def bumped_clip(tmp_path):
+    """The growing bar on a textured bench; the camera is knocked (everything shifts) halfway through."""
+    path = tmp_path / "bumped.mp4"
+    writer = None
+    for i in range(FRAMES):
+        image, _ = scene_with_bar_on_card_plane(STANDARD, length_mm=10 + 30 * i / (FRAMES - 1), width_mm=2)
+        image = on_a_bench(image)
+        if i >= FRAMES // 2:
+            image = np.roll(image, (30, 40), axis=(0, 1))
+        if writer is None:
+            writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), FPS, image.shape[1::-1])
+        writer.write(image)
+    writer.release()
+    return path
+
+
+@pytest.mark.anyio
+async def test_after_a_camera_move_the_import_measures_where_the_vessels_went(ctx, bumped_clip):
+    drawn = np.asarray(ctx.vessels[0].roi)
+    await run_import(ctx, request(bumped_clip), cancel=asyncio.Event())
+    [moved] = [e for e in events_for_run(ctx.db, ctx.run.id) if e.kind == "camera_moved"]
+    assert np.allclose(np.asarray(moved.detail["rois"][ctx.vessels[0].id]) - drawn, (40, 30), atol=3)
+    after = [m for m in lengths_of_a(ctx) if m.t >= moved.t_start]
+    assert after  # still measured after the bump, and true: no false zeros from regions left behind
+    for row in after:
+        true_mm = 10 + 30 * (row.t / SCALE * FPS) / (FRAMES - 1)
+        assert abs(row.value - true_mm) <= row.uncertainty, (row.t, row.value, true_mm)

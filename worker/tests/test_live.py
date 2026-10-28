@@ -9,15 +9,16 @@ from pydantic import SecretStr
 
 from argus.api.events import EventBroker
 from argus.calibration.card import STANDARD
+from argus.capture.quality import DEFAULT_THRESHOLDS, QualityThresholds
 from argus.config import Settings
 from argus.domain import EventKind, Role, RunMode, RunSource, RunStatus, SourceKind, VesselDraft
 from argus.pipeline.analyzer import RunContext
 from argus.pipeline.live import CameraHub, run_live
-from argus.recipes.model import Recipe
+from argus.recipes.model import Recipe, WatcherSpec
 from argus.storage.files import RunFiles
 from argus.storage.repos import add_vessels, create_run, events_for_run, frames_for_run, get_run, measurements_for_run
 from argus.watcher import Watcher, WatcherSettings
-from tests.helpers import scene_with_bar_on_card_plane
+from tests.helpers import CARD_AREA, on_a_bench, scene_with_bar_on_card_plane
 from tests.test_analyzer import FakeSegmenter
 
 DT = 0.5
@@ -111,10 +112,12 @@ def make_ctx(db, exp, tmp_path):
     return make
 
 
-async def live(ctx, watcher, frames, *, cancel=None, on_read=None):
+async def live(ctx, watcher, frames, *, cancel=None, on_read=None, quality=DEFAULT_THRESHOLDS):
     clock = Clock()
     source = ListSource(frames, clock, on_read)
-    status = await run_live(ctx, source, watcher, cancel=cancel or asyncio.Event(), clock=clock, sleep=no_sleep)
+    status = await run_live(
+        ctx, source, watcher, cancel=cancel or asyncio.Event(), clock=clock, sleep=no_sleep, quality=quality
+    )
     return status, source
 
 
@@ -245,3 +248,71 @@ async def test_a_lamp_change_does_not_stop_measuring(make_ctx):
     await live(ctx, watcher, [SHORT] * 12 + [dimmer] * 12)
     assert max(f.t for f in frames_for_run(ctx.db, ctx.run.id)) >= 10.0
     assert not [e for e in events_for_run(ctx.db, ctx.run.id) if e.kind is EventKind.INTERVENTION]
+
+
+@pytest.mark.anyio
+async def test_capture_continues_while_sam_works(make_ctx):
+    ctx, watcher = make_ctx(step=1.0)
+    released, reads = asyncio.Event(), []
+
+    class AnswersLate(FakeSegmenter):
+        async def image(self, image_bgr, concept):
+            await released.wait()  # SAM answers only once the loop has read 8 more frames
+            return await super().image(image_bgr, concept)
+
+    ctx.segmenter = AnswersLate()
+
+    def on_read(now):
+        reads.append(now)
+        if len(reads) == 9:
+            released.set()
+
+    await asyncio.wait_for(live(ctx, watcher, [SHORT] * 16, on_read=on_read), 30)
+    frames = frames_for_run(ctx.db, ctx.run.id)
+    assert {0.0, 1.0, 2.0, 3.0} <= {f.t for f in frames}  # stored while SAM was still busy with t = 0
+    assert all(f.analyzed for f in frames) and measurements_for_run(ctx.db, ctx.run.id, metric="length")
+
+
+def lengths_after(ctx, t):
+    a = ctx.vessels[0].id
+    return [m for m in measurements_for_run(ctx.db, ctx.run.id, metric="length") if m.vessel_id == a and m.t >= t]
+
+
+@pytest.mark.anyio
+async def test_after_a_camera_move_the_vessels_follow_the_card(make_ctx):
+    ctx, watcher = make_ctx(step=1.0, segment_interval_s=1.0)
+    drawn = np.asarray(ctx.vessels[0].roi)
+    still = on_a_bench(SHORT)
+    bumped = np.roll(still, (30, 40), axis=(0, 1))  # the camera was knocked: everything shifted
+    await live(ctx, watcher, [still] * 6 + [bumped] * 16, quality=QualityThresholds(settle_s=2.0))
+    [moved] = [e for e in events_for_run(ctx.db, ctx.run.id) if e.kind is EventKind.CAMERA_MOVED]
+    followed = np.asarray(moved.detail["rois"][ctx.vessels[0].id])
+    assert np.allclose(followed - drawn, (40, 30), atol=3) and np.allclose(ctx.vessels[0].roi, followed)
+    after = lengths_after(ctx, moved.t_start)
+    assert after and all(abs(m.value - 20) <= m.uncertainty for m in after)  # the bar, not a false zero
+
+
+@pytest.mark.anyio
+async def test_a_moved_card_is_recalibrated_and_the_vessels_stay(make_ctx):
+    ctx, watcher = make_ctx(step=1.0)
+    drawn = list(ctx.vessels[0].roi)
+    still = on_a_bench(SHORT)
+    nudged = still.copy()
+    nudged[CARD_AREA] = np.roll(still[CARD_AREA], (8, 12), axis=(0, 1))  # someone pushed the card; the jars stayed
+    await live(ctx, watcher, [still] * 6 + [nudged] * 8)
+    [moved] = [e for e in events_for_run(ctx.db, ctx.run.id) if e.kind is EventKind.CAMERA_MOVED]
+    assert moved.detail == {"message": "card moved: recalibrated"} and list(ctx.vessels[0].roi) == drawn
+    with ctx.db.read() as c:
+        assert c.execute("SELECT COUNT(*) FROM calibrations WHERE run_id=?", (ctx.run.id,)).fetchone()[0] == 2
+
+
+@pytest.mark.anyio
+async def test_a_segmentation_owed_before_the_card_is_seen_runs_once_it_is(make_ctx):
+    ctx, _ = make_ctx()
+    # Structure only: in these white scenes the card's arrival would shift the colour reference and fire a change.
+    watcher = Watcher(ctx.vessels, WatcherSpec(signals=["ssim"]), WatcherSettings.from_recipe(ctx.recipe))
+    with_card = on_a_bench(SHORT)  # textured, so frames without the card aren't rejected as featureless
+    no_card = with_card.copy()
+    no_card[CARD_AREA] = 255  # the card isn't in view yet
+    await live(ctx, watcher, [no_card] * 4 + [with_card] * 6)
+    assert model_calls(ctx)  # not an hour later, at the next check-in

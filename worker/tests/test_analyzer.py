@@ -292,3 +292,23 @@ async def test_uncorrected_colour_is_an_open_event_until_the_card_is_back(ctx, s
         (120.0, "lab_mean_uncorrected/1"),
         (180.0, "lab_mean/1"),
     ]
+
+
+@pytest.mark.anyio
+async def test_concepts_are_segmented_at_the_same_time(ctx, scene):
+    image, _ = scene
+    ctx.recipe = Recipe.model_validate(
+        {**RECIPE.model_dump(by_alias=True), "concepts": [{"name": "root"}, {"name": "seed"}]}
+    )
+    started, both = set(), asyncio.Event()
+
+    class Meets(FakeSegmenter):
+        async def image(self, image_bgr, concept):
+            started.add(concept)
+            if len(started) == 2:
+                both.set()
+            await asyncio.wait_for(both.wait(), 2)  # each call waits for the other to have started
+            return await super().image(image_bgr, concept)
+
+    ctx.segmenter = Meets()
+    assert (await analyze_frame(ctx, 0.0, image, segment=True)).segmented
