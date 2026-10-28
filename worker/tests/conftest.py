@@ -6,6 +6,11 @@ from argus.storage.repos import add_vessels, create_experiment, create_run
 
 
 @pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.fixture
 def db(tmp_path):
     database = Database(tmp_path / "data dir é" / "argus.sqlite")
     yield database
