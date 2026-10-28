@@ -2,6 +2,17 @@
 
 > **Decided Oct 27, 2026 (D-31).** This is the main real experiment for the demo. The steel corrosion test (`06-modes-and-recipes.md` catalog) stays a **later, optional** second run if time allows.
 
+## Status and suggested tweaks (Oct 27 evening) [proposed, Q-14]
+
+**Not started yet.** Start by **Oct 29** at the latest; mung beans sprout within about a day, so 60–72 h of footage is enough and leaves Nov 1–2 for analysis. Suggested changes before starting (none needs new purchases):
+
+1. **8 beans per jar instead of 5** (48 total): sprouted-fraction steps of 12.5% instead of 20% give a better time-to-50% per jar, and 8 stays under SAM video's 16-object limit per jar crop.
+2. **Print the Argus Card** (Claude generates the printable file first) and tape it upright in the plane of the jar fronts, plus the ruler as a backup. The card gives automatic mm scale; one object of known length in frame (e.g. a measured toothpick) becomes the "measurement accuracy" row of the validation table.
+3. **Salt by weight if a kitchen scale is available:** 0, ~3 and ~12 g/L (about ⅛ and ½ tsp per cup), with the actual grams written down. Ax then works in real units (g/L).
+4. **Analysis as a dose trend across all 6 jars** (time-to-50% per jar from a fitted curve, then a regression on salt) alongside the locked pairwise prediction. This uses every jar, which matters with 2 jars per dose. A third jar per dose (9 jars) would help further if the frame still shows every bean clearly.
+5. **Start time:** film the phone clock for 5 s in **normal** mode, then switch to fast motion (at ×600 a 5 s clip is less than one recorded frame). Set the camera's date and time; the MP4's creation time is the backup.
+6. **About 24 h in, take one phone photo** of the jars from the camera's position so SAM concepts ("mung bean", "root", "sprout") can be tested on real roots before the footage is ready.
+
 ## Why this experiment
 
 - Looks like real research: a dose-response with replicates, the kind used in crop salinity-tolerance and seed testing.

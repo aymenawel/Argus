@@ -80,7 +80,7 @@ No USB microscope and no smart plug yet (see Q-05, Q-07).
 | **Shelly Plug (Gen2 and newer)** | Local HTTP RPC, no library: `GET http://<ip>/rpc/Switch.Set?id=0&on=true`, power via `/rpc/Switch.GetStatus?id=0` (`apower` in W) | **Preferred if buying a plug:** ~15 lines of our own code, local, no cloud account. Check whether device authentication is enabled. The Shelly Plus Plug US ($22.99, 1800 W, power metering) is discontinued; Shelly lists the **Plug US Gen4** as its successor. Confirm the Gen4 page lists the same local RPC API before ordering |
 | TP-Link Kasa / Tapo | `python-kasa` 0.12.0 (GPL-3.0-or-later, Python ≥3.11). CLI: `kasa --host <ip> on`. Newer firmware and all Tapo plugs need TP-Link account credentials (`KASA_USERNAME`, `KASA_PASSWORD`) | Use only if you already own one. Keep the code in an optional module because of the GPL |
 
-**No plug owned yet (Q-07).** A plug matters for the closed loop, the "Best Agentic Use-Case" bonus and the demo's final beat (Argus switching a grow light or lamp itself).
+**No plug this hackathon (Q-07 answered no, D-44).** Plug control is on the roadmap; the closed loop in the demo is the Ax next run. The control rules and safety section below still describe the intended design.
 
 ## Control rules and safety [decided]
 

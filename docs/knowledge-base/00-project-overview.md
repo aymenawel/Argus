@@ -53,7 +53,7 @@ Classroom and university labs, small R&D teams (food, cosmetics, materials), pla
 ## Status (as of Oct 27, 2026)
 
 - Accepted into the **Meta Global AI Developer Hackathon**, **Indie Developer** track, theme **Push the Frontier**. Solo builder Aymen, team name **Argus Labs**.
-- Building period **Oct 27 – Nov 4, 2026**. Submission due **Wed Nov 4, 9:00 PM ET**. No code written yet; the repo starts during the building period (new-work rule).
+- Building period **Oct 27 – Nov 4, 2026**. Submission due **Wed Nov 4, 9:00 PM ET**. Public repo **github.com/aymenawel/Argus**, first commit Oct 27 (new-work rule). Day-one API probes done Oct 27 (`16-open-questions.md`); the germination run has not started yet (Q-14).
 - The project was called **LabLoop** until it was renamed Argus. Old docs that say LabLoop mean Argus.
 - Argus is **not** the Congressional App Challenge project (that was a different app, "Whose Job?"). No code is shared between them.
 

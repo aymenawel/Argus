@@ -19,7 +19,29 @@
 
 Reasoning tokens are billed as output tokens.
 
-## Planning estimate for the whole build (rechecked)
+## Measured costs (day-one probes, Oct 27)
+
+| Call | Tokens / units | Cost | Latency |
+| --- | --- | --- | --- |
+| Muse Spark note, strict JSON, 2 snapshots at 768 px, `effort=minimal` | 2,064 in · 674 out (342 reasoning) | **$0.0054** | 3.5 s |
+| Same, `effort=low` | 2,064 in · 1,232 out (888 reasoning) | $0.0056 | 4.5 s |
+| Muse Wonder critique, strict JSON, text only, `effort=medium` | 1,116 in · 1,871 out (1,257 reasoning) | **$0.042** | 13 s |
+| 2 snapshots at 1280 px vs 768 px (same prompt) | 3,805 vs 1,725 input tokens | 768 px ≈ 55% cheaper | — |
+| Repeat call with `prompt_cache_key` | 2,161 of 2,278 input tokens cached | input −82% | — |
+| Muse Spark, short video clip (240×240, 10 fps) | ~72 input tokens per second | ~$0.0001/s | 5–7 s |
+| SAM 3.1 image (one concept) | 1 image | $0.0025 | ~6.4 s |
+| SAM 3.1 video, 60 frames | 60 frames | $0.012 | 6.7 s |
+| Voice note, 7.8 s | — | <$0.001 | 1.9 s |
+
+Output tokens (reasoning included) are now the biggest part of a routine note's cost. Snapshots default to **768 px** on the long side.
+
+**Revised estimate:** 3,000 routine notes × ~$0.005 ≈ $15 (less with cache hits on the rules/method/plan prefix) + 300 deep calls × ~$0.04 ≈ $12 + SAM (pattern-dependent, below) ≈ **$30–45 for the whole build**, well under the $150 credit.
+
+### Import cost trap [D-38]
+
+A 72 h run at one recorded frame per 20 s (×600 fast motion) is 12,960 frames. Segmenting every frame in image mode with 2 concepts = 12,960 × 2 × $0.0025 ≈ **$65**. Instead, analyze slow runs at a fixed real-time step (default **one frame per 5 real minutes** ≈ 864 frames for 72 h) and prefer **SAM video mode on one crop per vessel** (≤16 objects per crop): 864 frames × 6 vessels × $0.0002 ≈ **$1 per concept**. Image mode at the same step costs ≈ $4.30 for 2 concepts and is the fallback.
+
+## Planning estimate for the whole build (pre-probe, Oct 26)
 
 Assumptions: 3,000 reasoning calls; each 6,000 input tokens (text + 2 snapshots) and 300 output tokens; tiered = 90% routine, 10% deep with 1,000 output tokens; SAM 20 h at 1 frame/s = 72,000 frames; voice ~$1 (now known to be far less).
 

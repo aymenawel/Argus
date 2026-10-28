@@ -52,7 +52,7 @@ Judges and voters don't have the hardware. Publish a read-only page for one fini
 | 0:50 | **Live run:** a fast reaction; notes, curves and "time to target" appear |
 | 1:30 | **The catch:** lighting changes or the control also moves; Argus flags a rival explanation instead of calling a false success |
 | 2:00 | **The long run:** imported multi-day germination footage → curves, verdict with error bars, timelapse with overlay |
-| 2:30 | **The loop:** Ax proposes the next batch; Argus switches the grow light on schedule; validation slide (accuracy, events caught) |
+| 2:30 | **The loop:** Ax proposes the next batch and Muse explains the pick (multi-round loop on the fast experiment, D-42); validation slide (accuracy, events caught). No smart plug this hackathon (D-44) |
 | 2:50 | **Close:** one webcam and a printed card did what usually needs an expensive imaging system. "Everything shown was built Oct 27 – Nov 4." |
 
 ## Video rules

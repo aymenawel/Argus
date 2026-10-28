@@ -24,7 +24,6 @@
 - Phone alerts via ntfy (event + clip link)
 - **Ask Argus**: chat that answers by querying the measurement/event database, every answer linked to rows and frames
 - Report (Markdown/PDF) + CSV export + run record
-- Smart-plug rule (Plant mode light schedule), AI proposes / human approves, hard limits
 - Design-of-experiments planner and replicate calculator
 - Researcher review: confirm/dismiss every alert; reports stay **draft until approved**
 
@@ -76,6 +75,7 @@
 
 ## Later (roadmap)
 
+- Smart-plug rules (Plant mode light schedule, "heater off if foam > 50 mm"), AI proposes / human approves, hard limits (moved from Should: no plug this hackathon, D-44)
 - Sensors (Bluetooth thermometers, Arduino serial, instrument-display reading, instrument log import), cross-checks between sources, sensor health
 - More cameras (top + side), phone as camera, microscope profiles, OpenFlexure
 - Lab-notebook and RO-Crate exports, share links, "Replicate this", recipe library, recipe builder from plain words

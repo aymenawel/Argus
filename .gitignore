@@ -16,6 +16,7 @@ web/out/
 
 # Experiment data (large; keep out of the public repo)
 data/
+worker/probes/out/
 *.mp4
 *.mov
 *.sqlite

@@ -4,8 +4,20 @@
 
 ## Runtime versions
 
-- **Python 3.12** for the worker. Why: Ax needs ≥3.11, ruptures supports <3.14, the K-Dense skill scripts target ≥3.12.
-- Node LTS + Next.js + TypeScript for the dashboard.
+- **Python 3.12** for the worker. Why: Ax needs ≥3.11, ruptures supports <3.14, the K-Dense skill scripts target ≥3.12. The machine had only 3.11/3.13/3.14, so **uv** (0.13.1, already installed) provides CPython 3.12.15; `worker/pyproject.toml` pins `>=3.12,<3.13` and `uv.lock` pins every version (D-45). Run with `uv run --env-file ../.env ...` from `worker/`.
+- Node LTS (v24.13 installed) + Next.js + TypeScript for the dashboard.
+
+### Installed and verified Oct 27
+
+| Package | Version | Note |
+| --- | --- | --- |
+| `openai` | 3.40.0 | Responses API with `text`, `reasoning`, `prompt_cache_key`, `prompt_cache_retention`, `input_tokens.count`. No longer pulls in `httpx` |
+| `meta-sam-parser` | 0.1.0 | Works with `AsyncOpenAI` streams; see `04` |
+| `opencv-python` | 5.0.0 | ArUco detector included |
+| `numpy` / `scipy` / `scikit-image` | 2.5.4 / 1.18.1 / 0.26.0 | — |
+| `requests` | 2.34.2 | Used for the multipart voice upload (and ntfy later) |
+| `ax-platform` | 1.3.1 (torch 2.14.1+cpu, botorch 0.18.1) | Installs on Windows + 3.12 in ~45 s. Default strategy Center → Sobol → BoTorch ("MBM"); `attach_trial` + `complete_trial` on finished vessels skips the random start (verified: 6 attached trials → next batch came from MBM). `configure_optimization(objective=..., outcome_constraints=["sprouted_pct >= 80"])` works |
+| ffmpeg | 9.0.2 (gyan.dev build, on PATH) | `imageio-ffmpeg` dropped; worker checks for ffmpeg at startup |
 
 ## Core stack
 
@@ -25,7 +37,7 @@
 | Worker API | FastAPI + uvicorn | USE [proposed] | REST + SSE + MJPEG from one process that owns the camera |
 | Storage | SQLite (stdlib `sqlite3`) + files | USE | Single writer, zero setup |
 | Dashboard | Next.js + TypeScript, Server-Sent Events | USE | Same pattern as FoodLine DC |
-| Video (timelapse, reel, clips) | **ffmpeg binary called with `subprocess`**; binary from `imageio-ffmpeg` (0.6.0, BSD-2, ships Windows ffmpeg) or `winget install Gyan.FFmpeg` | USE | See ffmpeg-python below |
+| Video (timelapse, reel, clips) | **ffmpeg binary called with `subprocess`**; ffmpeg 9.0.2 already on PATH (`winget install Gyan.FFmpeg` on a new machine). `imageio-ffmpeg` not needed (D-45) | USE | See ffmpeg-python below |
 | Alerts | ntfy via `requests.post` | USE (Should) | One HTTP call; free apps; topic name acts as a password |
 | Smart plug | Shelly local HTTP RPC (our own ~15 lines) **or** `python-kasa` 0.12.0 (GPL-3.0+) | BUILD / OPTIONAL | See `10-hardware-and-control.md` |
 
@@ -92,11 +104,12 @@ Limits: needs **one number** to optimize; suggestions mean little before 2–3 c
 | Installed skills | MIT / CC BY 4.0 | Attribution in `THIRD_PARTY_NOTICES.md` |
 | what-if-oracle skill | CC BY-NC-SA 4.0 | Not copied or adapted |
 
-## Install sketch [proposed]
+## Install [decided, D-45]
 
 ```bash
-py -3.12 -m venv .venv && .venv\Scripts\activate
-pip install openai meta-sam-parser opencv-python scikit-image numpy scipy statsmodels uncertainties ax-platform ruptures fastapi uvicorn requests imageio-ffmpeg
+cd worker
+uv sync                       # Python 3.12 + locked versions from uv.lock
+uv run --env-file ../.env python -m probes.sam
 ```
 
-Pin exact versions in `worker/requirements.txt` after the first working install.
+Add packages with `uv add <name>` (only ones with a USE verdict here, or after approval); `uv.lock` is committed. `uv export > requirements.txt` if a plain list is ever needed.

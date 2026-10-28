@@ -50,7 +50,7 @@ The "Best Build on Meta Open Weight Models" prize requires Muse Glimmer or Muse 
 
 Glimmer alternative: Fireworks lists `accounts/fireworks/models/muse-glimmer-30b` (image input, 131k context) but says it is being deprecated on **serverless** starting Sep 25, 2026, leaving paid on-demand deployments. Not worth it for this build. Self-hosting Glimmer on Modal is possible but costs setup time.
 
-**One code path for both providers:** Meta's API also supports Chat Completions, so `reason()` uses Chat Completions for every provider (structured output there uses `response_format` with a JSON schema; verify on day one). SAM 3.1 stays on Meta's Responses API inside `segment()`.
+**Protocol [decided, D-36]:** `reason()` uses Meta's **Responses API** (structured output via `text.format`, `reasoning.effort`, `prompt_cache_key`, cached-token usage are all documented there). D-28's single Chat Completions path existed only to share code with Baseten, which D-33 dropped. If the Baseten option ever returns, add a Chat Completions adapter behind the same `reason()` signature. SAM 3.1 also runs on the Responses API inside `segment()`.
 
 ## Images to a reasoning model
 
@@ -91,11 +91,15 @@ r = client.responses.create(
 
 ## Reasoning effort
 
-`reasoning={"effort": "low"}` on the Responses API. Values: `minimal`, `low`, `medium`, `high`, `xhigh`, `max` (`none` returns HTTP 400 on Muse models; `max` not on contributor). Reasoning tokens are **billed as output tokens** and count toward `max_output_tokens`. Suggested: `low` for routine notes, `high` for deep calls; tune with real costs.
+`reasoning={"effort": "low"}` on the Responses API. Values: `minimal`, `low`, `medium`, `high`, `xhigh`, `max` (`none` returns HTTP 400 on Muse models; `max` not on contributor). Reasoning tokens are **billed as output tokens** and count toward `max_output_tokens`.
+
+**Measured Oct 27 (probes):** with `low` and `max_output_tokens=600`, Muse Spark spent 598 tokens reasoning and returned **empty text**; with 1,500 a strict-JSON note was **cut off mid-string**. Even `minimal` sometimes reasons ~300 tokens. Rule: routine JSON notes use `effort="minimal"` with `max_output_tokens=4000` (a note took 674 output tokens, 342 of them reasoning, 3.5 s); deep calls use `medium` (critique: 1,871 output, 1,257 reasoning, 13 s). Always check `status`/truncation before parsing.
 
 ## Prompt caching
 
-Automatic, no flags. Put stable content first (rules → method card → locked plan → summary → new data). Optional `prompt_cache_retention="24h"` (a hint). Check hits in `usage.input_tokens_details.cached_tokens`.
+Prefix-based. Put stable content first (rules → method card → locked plan → summary → new data). Check hits in `usage.input_tokens_details.cached_tokens`.
+
+**Measured Oct 27:** identical repeat calls got **0 cached tokens without `prompt_cache_key`**. With `prompt_cache_key` set, the 2nd and 3rd calls had 2,161 of 2,278 input tokens cached (input cost −82%); images in the prefix are cached too (3,441 of 3,514). `prompt_cache_retention="24h"` made no difference over a few seconds. **Rule [D-39]: every `reason()` call sends a `prompt_cache_key` scoped to the stable prefix (e.g. `argus:{experiment_id}:{tier}:{prompt_version}`).**
 
 ## SAM 3.1
 
@@ -114,12 +118,13 @@ Request (image):
 - `mask_encoding`: `lossless` (default) or `one_bit` (several times smaller). Box/point prompts always return `one_bit`.
 - **Video:** `input_video` with `video_url` or `file_id`; MP4/MOV with H.264, H.265 or MPEG-4 (no VP9/WebM); up to **15,000 frames (~10 min) per request**; up to 16 tracked objects; **billed at least 50 frames per request**. `metadata.propagation_direction`: `both` | `forward` | `backward`.
 - With concept prompts, the leading integer per record is an object ordinal; the docs don't promise it stays the same across frames, so Argus matches IDs itself in image mode.
-- **Parsing:** output is a custom text grammar streamed in the Responses output-text lane. Use the official **`meta-sam-parser`** (`pip install meta-sam-parser`; Python ≥3.10, no dependencies): `decode_mask_to_raster`, `decode_mask_to_rle`, `build_object_prompt`. Writing your own parser is possible but not worth the time.
+- **Parsing:** output is a custom text grammar streamed in the Responses output-text lane. Use the official **`meta-sam-parser`** (0.1.0; Python ≥3.10, no dependencies). Pattern that works (probe `worker/probes/sam.py`): `stream = await AsyncOpenAI(...).responses.create(model="sam-3.1", input=[...], metadata={...}, stream=True)` → `await parse_responses_stream(stream, image_segmentation_format()).final_result()` (or `video_segmentation_format()`). Records are `SegmentationBoxRecord` and `SegmentationMaskRecord`; masks are **box-local** (mask width/height equal the box size), so place `decode_mask_to_raster(record.mask)` (row-major bytes, `mask.height × mask.width`) at `record.bounds.left/top`. `decode_mask_to_svg_path` exists but returns pixel-staircase paths; simplify contours with OpenCV for the UI (D-43).
+- **Measured Oct 27:** image call on scikit-image's `coins` photo (384×303) with concept `coin`: **24 of 24 coins**, confidence 0.93–0.95, **~6.4 s** per call; usage reports `images_processed: 1` (token fields are 0). Video call (60-frame H.264 clip, 10 fps): masks on all 60 frames, **capped at 16 objects**, object IDs stable across frames (12 of the 16 present at the end, the rest panned out of view); usage reports `video_frames_processed: 60`; 6.7 s. Event stream includes `response.completed`, so usage can be captured while the parser consumes the stream.
 - Docs: https://dev.meta.ai/docs/sam/segmenting · https://dev.meta.ai/docs/sam/reading-segmentation · https://dev.meta.ai/docs/sam/client-libraries
 
 ## Voice notes
 
-`POST https://api.meta.ai/v1/asr/transcribe` (multipart: `request` JSON + `audio` WAV), header `Authorization: Bearer $MODEL_API_KEY`. Audio must be **WAV, mono, 16-bit PCM, 16 or 24 kHz**, ≤10 min, ≤32 MB. Convert with `ffmpeg -i in.m4a -ac 1 -ar 24000 -c:a pcm_s16le out.wav`. Response JSON has `transcript` and `turns`. Docs: https://dev.meta.ai/docs/speech-to-text
+`POST https://api.meta.ai/v1/asr/transcribe` (multipart: `request` JSON part + `audio` WAV part), header `Authorization: Bearer $MODEL_API_KEY`. The `request` part used: `{"model": "muse-voice-transcribe-1.0", "audioEncoding": "WAV"}` (`mode` defaults to `PUSH_TO_TALK`; `ENDPOINTING`/`DIARIZATION` fill `turns`; optional `languageBias`, `keywords`). Audio must be **WAV, mono, 16-bit PCM, 16 or 24 kHz**, ≤10 min, ≤32 MB. Convert with `ffmpeg -i in.m4a -ac 1 -ar 24000 -c:a pcm_s16le out.wav`. Response: `sessionId`, `transcript`, `audioDurationMs`, `turns`. **Measured Oct 27:** a 7.8 s note transcribed word for word in 1.9 s, with numbers normalized ("ten milliliters … three fifteen" → "10 milliliters … 3:15"). Docs: https://dev.meta.ai/docs/speech-to-text
 
 ## Rate limits (per team, per model)
 
@@ -135,11 +140,12 @@ Request (image):
 
 `01_api_fundamentals` (vision input, structured output, prompt caching, reasoning tokens, error handling/retry), `02_agent_patterns` (perceive-decide-act loop, alert-fatigue copilot), `06_muse_voice`, `07_sam` (image and video segmentation basics).
 
-## Day-one API checks (do these before building on them)
+## Day-one API checks (done Oct 27; scripts in `worker/probes/`, total spend ≈ $0.19)
 
-- [ ] One `muse-spark-1.3` call with 2 snapshots → read `usage` (input, cached, output tokens)
-- [ ] Same with `muse-wonder-1.0` (confirm image input works for you)
-- [ ] One strict JSON-schema call with `prompts/schemas/note.json`
-- [ ] One SAM 3.1 image call on a real frame, parsed with `meta-sam-parser`
-- [ ] One short MP4 to SAM video and to Muse Spark (token/frame cost)
-- [ ] One voice note through `/v1/asr/transcribe`
+- [x] `muse-spark-1.3` with 2 snapshots: **3,805 input tokens at 1280 px, 1,725 at 768 px** (incl. ~500 tokens of rules + question). The `input_tokens/count` endpoint said 1,868 for the 768 px call (slight overestimate)
+- [x] Same on `muse-wonder-1.0`: image input works; same token counts; $0.019–0.027 per call
+- [x] Strict JSON (`text.format`, `strict: true`) works on both models with `note.json` and `verdict_critique.json` (sent with `$comment` removed). Wonder's critique of a deliberately flawed synthetic draft found all five planted problems and downgraded SUPPORTED → INCONCLUSIVE
+- [x] SAM 3.1 image + video, parsed with `meta-sam-parser` (results above)
+- [x] Short MP4 to Muse Spark: **~72 input tokens per second** of 240×240, 10 fps video (6 s clip = 906 tokens total, 12 s = 1,338)
+- [x] Voice note through `/v1/asr/transcribe` (results above)
+- [ ] SAM concept quality on real experiment frames (seeds, roots, foam, liquid level): needs the real setup

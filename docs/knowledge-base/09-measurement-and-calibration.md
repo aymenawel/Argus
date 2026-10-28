@@ -18,7 +18,7 @@ det = cv2.aruco.ArucoDetector(d, cv2.aruco.DetectorParameters())
 corners, ids, _ = det.detectMarkers(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
 ```
 
-ArUco detection is in OpenCV's `objdetect` module (`cv2.aruco.ArucoDetector`, OpenCV ≥4.7). Day-one check: `python -c "import cv2; print(cv2.__version__, cv2.aruco.ArucoDetector)"`. If it is missing, install `opencv-contrib-python` instead of `opencv-python` (never both).
+ArUco detection is in OpenCV's `objdetect` module (`cv2.aruco.ArucoDetector`, OpenCV ≥4.7). **Checked Oct 27:** `opencv-python` 5.0.0 has it; `generateImageMarker` + `ArucoDetector.detectMarkers` found all 4 card markers (IDs 0–3) on a perspective-warped page (`worker/probes/camera.py`). No contrib package needed.
 
 **Pipeline:** detect markers → homography (straight-on view) → mm per pixel → color correction from neutral/color patches → measure inside each vessel mask.
 
@@ -42,6 +42,8 @@ Auto-exposure, auto white balance and autofocus make color and brightness drift.
 4. If nothing works: warn the researcher that brightness/color readings will drift, rely more on the card's neutral patches, and record "unlocked" in the run record.
 
 Values and support differ by camera and driver; treat these as starting points, not facts.
+
+**Checked Oct 27 on the laptop's built-in HP Wide Vision HD camera** (the Nuroum V11 was not connected): MJPEG 1280×720 @ 30 fps delivered (its maximum). `set()` returned `True` for every property, but only white balance read back as locked (`AUTO_WB` 1 → 0, `WB_TEMPERATURE` 4000 → 4500); `AUTO_EXPOSURE` reads back `-1` (unsupported), so exposure lock is **unknown** on this driver. Lesson: a `True` from `set()` proves nothing; Argus records each property as locked / not locked / unknown from the read-back, and leans on the card's neutral patch when exposure can't be confirmed. The Nuroum test (2560×1440 MJPEG, exposure lock, closest sharp distance) is still open.
 
 ## Frame-quality checks
 
