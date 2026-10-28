@@ -1,0 +1,122 @@
+/* Argus design tokens, v2 "soft instrument" (spec §9.1; canvas Foundations board).
+   Light by default; dark when chosen, or when the system prefers dark and nothing was chosen. */
+
+:root {
+  --font: var(--font-inter), system-ui, sans-serif;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-body: 14px;
+  --fs-section: 16px;
+  --fs-lead: 18px;
+  --fs-title: 26px;
+  --r-card: 20px;
+  --r-tile: 14px;
+  --r-media: 16px;
+  --r-small: 10px;
+  --r-pill: 999px;
+  --gap: 12px;
+  --pad: 22px;
+  --control-h: 36px;
+  --dur-fast: 150ms;
+  --dur: 220ms;
+  --dur-slow: 320ms;
+  --dur-reveal: 600ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  --ground: #eceff2;
+  --surface: #ffffff;
+  --raised: #f4f6f8;
+  --active: #e5e9ed;
+  --sunk: #e9edf1;
+  --border: #e3e7ec;
+  --rule: #eef1f4;
+  --control: #d3d9e0;
+  --text: #0b1220;
+  --muted: #535e6e;
+  --faint: #66717f;
+  --accent: #0fa3a3;
+  --accent-ink: #0b7d7d;
+  --accent-tint: #dbf3f1;
+  --accent-soft: #b9e8e3;
+  --primary-bg: #0b1220;
+  --primary-ink: #ffffff;
+  --pos: #1f7a4d;
+  --pos-bg: #dcf6e6;
+  --neg: #b4232a;
+  --neg-bg: #fdebe8;
+  --warn: #8a4b08;
+  --warn-bg: #fff3d6;
+  --grid: #e6eaee;
+  --frame: #0b0b0c;
+  --shadow-tile: 0 1px 2px rgba(11, 18, 32, 0.07), 0 0 0 1px rgba(11, 18, 32, 0.03);
+  --shadow-float: 0 10px 30px rgba(11, 18, 32, 0.14);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0d0e10;
+  --surface: #17181b;
+  --raised: #1f2125;
+  --active: #2a2c31;
+  --sunk: #121316;
+  --border: #26282d;
+  --rule: #222429;
+  --control: #3a3d43;
+  --text: #f5f7fa;
+  --muted: #aab0b9;
+  --faint: #9097a1;
+  --accent: #2dd4bf;
+  --accent-ink: #5eead4;
+  --accent-tint: #123330;
+  --accent-soft: #1d4d47;
+  --primary-bg: #f5f7fa;
+  --primary-ink: #0b0b0c;
+  --pos: #4ade80;
+  --pos-bg: #12291b;
+  --neg: #f0707f;
+  --neg-bg: #2c171c;
+  --warn: #f5b544;
+  --warn-bg: #2b2211;
+  --grid: #26282d;
+  --frame: #000000;
+  --shadow-tile: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --ground: #0d0e10;
+    --surface: #17181b;
+    --raised: #1f2125;
+    --active: #2a2c31;
+    --sunk: #121316;
+    --border: #26282d;
+    --rule: #222429;
+    --control: #3a3d43;
+    --text: #f5f7fa;
+    --muted: #aab0b9;
+    --faint: #9097a1;
+    --accent: #2dd4bf;
+    --accent-ink: #5eead4;
+    --accent-tint: #123330;
+    --accent-soft: #1d4d47;
+    --primary-bg: #f5f7fa;
+    --primary-ink: #0b0b0c;
+    --pos: #4ade80;
+    --pos-bg: #12291b;
+    --neg: #f0707f;
+    --neg-bg: #2c171c;
+    --warn: #f5b544;
+    --warn-bg: #2b2211;
+    --grid: #26282d;
+    --frame: #000000;
+    --shadow-tile: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+    --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.5);
+  }
+}
