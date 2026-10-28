@@ -16,6 +16,16 @@
 | — | Nov 5–8 | Share the X post and gallery link (engagement counts until **Nov 8 EOD**) | — |
 | — | Mon Nov 9, 12 PM | Closing ceremony and live final round (top 5 per track) | — |
 
+## Progress
+
+**Phase 1, foundation: done Oct 28** on branch `phase-1` (plan `docs/superpowers/plans/2026-10-28-phase-1-foundation.md`).
+
+- **Worker:** config, domain records, SQLite (WAL, one writer, immutable measurements and locked plans, audit chain), four TOML recipes, live events with resume across restarts, card detection with print check and ruler fallback, colour reference and drift, geometry and colour metrics in mm with ±, and `python -m argus dev`.
+- **Web:** v2 tokens, rail and shell, `/kit` with every shared component, and the Experiments page end to end.
+- **Evidence:** 89 worker tests pass; ruff, ESLint, TypeScript and the Next build are clean. Browser checks at 1440 and 390 px in light and dark. Live: a new experiment reached a second tab over the event stream; with the worker down the page showed its URL and Retry; after a worker restart the open page reloaded its list by itself.
+- **Final review:** a fresh reviewer found 1 Critical (inverted print-scale correction) and 7 Important issues. All Critical and Important issues were fixed with a failing test first, except `rectify` sizing, which moves to phase 2. 13 minors are deferred.
+- **Against the day plan:** the SQLite schema (day 2), measurements and ArUco scale (day 3) and the UI foundation (day 5) are in place. The capture loop and the watcher (day 2) are not started; phase 2 begins with them, then `segment()`.
+
 ## Today: start the chosen experiment
 
 **Salt-stress germination dose-response, side view on the Canon XA50 (no stand needed).** Full protocol: `20-demo-experiment-germination.md`. Start tonight (Oct 27), stop Thursday evening (Oct 30).
