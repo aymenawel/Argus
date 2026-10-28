@@ -1,0 +1,119 @@
+.scroll {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-body);
+}
+
+.table th {
+  padding: 0 12px 10px;
+  text-align: left;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 13px 12px;
+  border-top: 1px solid var(--rule);
+  vertical-align: middle;
+}
+
+.table th:first-child,
+.table td:first-child {
+  padding-left: 0;
+}
+
+.table th:last-child,
+.table td:last-child {
+  padding-right: 0;
+}
+
+.table .right {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.title {
+  display: block;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.sub {
+  display: block;
+  font-size: var(--fs-xs);
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+.draft {
+  color: var(--muted);
+}
+
+.locked .dot {
+  background: var(--text);
+}
+
+.running {
+  color: var(--accent-ink);
+}
+
+.running .dot {
+  background: var(--accent);
+}
+
+.finished .dot {
+  background: var(--pos);
+}
+
+.bar {
+  display: inline-block;
+  height: 10px;
+  max-width: 100%;
+  border-radius: var(--r-pill);
+  background: var(--sunk);
+  vertical-align: middle;
+  animation: wait 1.4s var(--ease-in-out) infinite;
+}
+
+@keyframes wait {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    animation: none;
+  }
+}

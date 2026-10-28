@@ -1,0 +1,98 @@
+.dialog {
+  width: min(460px, calc(100vw - 32px));
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-card);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-float);
+}
+
+.dialog[open] {
+  animation: rise var(--dur-slow) var(--ease-out);
+}
+
+.dialog::backdrop {
+  background: rgba(11, 18, 32, 0.42);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: var(--pad);
+}
+
+.heading {
+  font-size: var(--fs-lead);
+  line-height: 24px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.lead {
+  margin-top: -10px;
+  color: var(--muted);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.input {
+  height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r-small);
+  background: var(--raised);
+  box-shadow: inset 0 0 0 1px var(--border);
+  font-size: var(--fs-body);
+}
+
+.input::placeholder {
+  color: var(--faint);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+
+.input[aria-invalid="true"] {
+  box-shadow: inset 0 0 0 1.5px var(--neg);
+}
+
+.error {
+  padding: 10px 14px;
+  border-radius: var(--r-tile);
+  background: var(--neg-bg);
+  color: var(--neg);
+  font-size: var(--fs-sm);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog[open] {
+    animation: none;
+  }
+}
