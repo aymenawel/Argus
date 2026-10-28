@@ -263,17 +263,16 @@ async def analyze_frame(
 
     current_reference = await _colour_reference(ctx, t, image_bgr, frame_id)
 
-    # Segmentation: injected (video mode) or one image call per concept.
+    # Segmentation: injected (video mode, per vessel) or one image call per concept (covers every vessel).
+    # `keyed` holds what came back per vessel and concept; an empty list means SAM answered and found nothing.
     keyed: dict[str, dict[str, list[tuple[str, MaskPatch]]]] = {}
     confidence: dict[int, float | None] = {}
-    segmented_concepts: set[str] = set()
     failed: list[str] = []
     backend = "sam-3.1/video"
     if masks is not None:
         for vessel_id, by_concept in masks.items():
             for concept, patches in by_concept.items():
                 keyed.setdefault(vessel_id, {})[concept] = list(patches)
-                segmented_concepts.add(concept)
     elif segment:
         backend = "sam-3.1/image"
         for concept in (c.name for c in ctx.recipe.concepts):
@@ -290,19 +289,20 @@ async def analyze_frame(
                 own = [patches[i] for i in assignment[vessel.id]]
                 keys = ctx.matcher.match(vessel, concept, own)
                 keyed.setdefault(vessel.id, {})[concept] = list(zip(keys, own, strict=True))
-            segmented_concepts.add(concept)
     if keyed:
         await asyncio.to_thread(_store_detections, ctx, frame_id, keyed, confidence, backend)
     for vessel_id, by_concept in keyed.items():
         for concept, patches in by_concept.items():
             ctx.last_masks.setdefault(vessel_id, {})[concept] = _union(patches, shape)
 
-    # Measurement: geometry only for concepts segmented on this frame; colour on the newest masks there are.
-    geometry_recipe = ctx.recipe.model_copy(
-        update={"measurements": [m for m in ctx.recipe.measurements if m.source in segmented_concepts]}
-    )
+    # Measurement: geometry only where this vessel's concept was segmented on this frame (a vessel missing from
+    # `keyed` is a gap, not a zero); colour on the newest masks there are.
     drafts: list[MeasurementDraft] = []
     for vessel in ctx.vessels:
+        segmented_here = set(keyed.get(vessel.id, {}))
+        geometry_recipe = ctx.recipe.model_copy(
+            update={"measurements": [m for m in ctx.recipe.measurements if m.source in segmented_here]}
+        )
         vessel_masks = ctx.last_masks.get(vessel.id, {})
         baselines = ctx.baselines.setdefault(vessel.id, {})
         common = dict(t=t, frame_id=frame_id, current_reference=current_reference, baselines=baselines)
@@ -341,4 +341,4 @@ async def analyze_frame(
                 "display": format_measurement(row.value, row.uncertainty, row.unit),
             },
         )
-    return AnalysisOutcome(frame_id, bool(segmented_concepts), len(rows), failed)
+    return AnalysisOutcome(frame_id, bool(keyed), len(rows), failed)

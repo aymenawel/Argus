@@ -243,3 +243,13 @@ async def test_frames_are_analyzed_concurrently_without_mixing(ctx, scene):
     a = ctx.vessels[0].id
     times = sorted(m.t for m in measurements_for_run(ctx.db, ctx.run.id, metric="length") if m.vessel_id == a)
     assert times == [0.0, 60.0, 120.0]
+
+
+@pytest.mark.anyio
+async def test_injected_masks_are_per_vessel_a_missing_vessel_is_a_gap(ctx, scene):
+    image, _ = scene
+    a, b = (v.id for v in ctx.vessels)
+    # A's segmentation came back with nothing found; B's never came back (failed): A is a zero, B a gap.
+    out = await analyze_frame(ctx, 0.0, image, segment=False, masks={a: {"root": []}})
+    lengths = {m.vessel_id: m.value for m in measurements_for_run(ctx.db, ctx.run.id, metric="length")}
+    assert out.segmented and lengths == {a: 0.0}
