@@ -18,6 +18,7 @@
 | M10 | Ax next-run suggestion, batched | Several vessels = several trials per round; Muse explains the pick |
 | M11 | Import video (moved up from Should, D-29) | MP4 or photo folder through the same pipeline; **time-scale factor** for in-camera fast motion (XA50 ×600/×1200) plus a start time, so frames get real timestamps. Needed for the multi-day demo run |
 | M12 | Public replay page (D-30) | Read-only static export of one finished run (timelapse + overlay, timeline, charts, verdict, validation) that judges and voters can open without hardware |
+| M13 | View catalog, AI-picked views (D-49) | Fixed frame on every experiment plus data views from a catalog; Muse picks in setup (strict JSON, catalog IDs only), code checks each pick against its data needs, the researcher confirms or swaps. 12 views for the hackathon |
 
 ## Should have
 
