@@ -36,6 +36,7 @@ from argus.storage.repos import (
     add_frame,
     add_measurements,
     add_model_call,
+    close_event,
     mark_frame_analyzed,
     run_spend_usd,
 )
@@ -95,7 +96,7 @@ class RunContext:
     retry_delays_s: tuple[float, ...] = (1.0, 4.0)
     cap_reported: bool = False
     calibration_reported: bool = False
-    drift_reported: bool = False
+    uncorrected_event: str | None = None  # the open event while colour can't be corrected against the card
     semaphore: asyncio.Semaphore = field(init=False)
     spend_lock: asyncio.Lock = field(init=False, default_factory=asyncio.Lock)
     reserved_usd: float = 0.0  # expected cost of the calls in flight, not yet logged
@@ -115,7 +116,7 @@ class RunContext:
         *,
         vessel_id: str | None = None,
         frame_ids: Sequence[str] = (),
-    ) -> None:
+    ) -> str:
         event = await asyncio.to_thread(
             add_event,
             self.db,
@@ -128,6 +129,7 @@ class RunContext:
             frame_ids=frame_ids,
         )
         self.publish("event", {"t": t, "id": event.id, "kind": str(kind), "vessel_id": vessel_id, "detail": detail})
+        return event.id
 
 
 @dataclass(frozen=True)
@@ -263,22 +265,41 @@ def _union(patches: Sequence[tuple[str, MaskPatch]], shape: tuple[int, int]) -> 
 
 
 async def _colour_reference(ctx: RunContext, t: float, image_bgr: np.ndarray, frame_id: str) -> ColourReference | None:
+    """The card's patches in this frame, to correct colour with; None when colour can't be corrected. Each stretch
+    without correction is one quality event, open until correction is possible again."""
     cal = ctx.calibration
     if cal is None or cal.detection is None or cal.reference is None:
-        return None
+        return None  # no card at the start: colour is never corrected in this run, and every reading says so
     card = await asyncio.to_thread(detect_card, image_bgr, (cal.detection.spec,))
-    if card is None:
+    current = await asyncio.to_thread(read_patches, image_bgr, card) if card is not None else None
+    drift = neutral_drift(cal.reference, current) if current is not None else None
+    if current is None or drift is None or drift > COLOUR_DRIFT_MAX:
+        if ctx.uncorrected_event is None:
+            if card is None:
+                detail: dict = {"message": "colour not corrected: the card is not in view"}
+            elif drift is None:
+                detail = {"message": "colour not corrected: no neutral patch of the card can be read"}
+            else:  # beyond correction: colour stays uncorrected rather than wrongly corrected
+                detail = {
+                    "message": "colour not corrected: the card's neutrals drifted",
+                    "colour_drift": round(drift, 2),
+                }
+            ctx.uncorrected_event = await ctx.event(t, EventKind.QUALITY, "quality", detail, frame_ids=[frame_id])
         return None
-    current = await asyncio.to_thread(read_patches, image_bgr, card)
-    drift = neutral_drift(cal.reference, current)
-    if drift is None:
-        return None
-    if drift > COLOUR_DRIFT_MAX:
-        if not ctx.drift_reported:
-            ctx.drift_reported = True
-            await ctx.event(t, EventKind.QUALITY, "quality", {"colour_drift": round(drift, 2)}, frame_ids=[frame_id])
-        return None  # beyond correction: colour stays uncorrected rather than wrongly corrected
-    ctx.drift_reported = False
+    if ctx.uncorrected_event is not None:
+        event = await asyncio.to_thread(close_event, ctx.db, ctx.uncorrected_event, t)
+        ctx.uncorrected_event = None
+        ctx.publish(
+            "event",
+            {
+                "t": event.t_start,
+                "t_end": t,
+                "id": event.id,
+                "kind": str(event.kind),
+                "vessel_id": None,
+                "detail": event.detail,
+            },
+        )
     return current
 
 

@@ -105,3 +105,19 @@ def test_a_colour_change_triggers_on_colour_alone():
     frames = [scene_with_disc(40)] * 3 + [scene_with_disc(40, colour=(160, 60, 40))] * 5  # same shape, new colour
     changes = [(t, trig) for t, trig in run(w, frames) if trig.reason == "change"]
     assert [trig.vessel_id for _, trig in changes] == [A.id] and changes[0][1].colour_shift > 1.5
+
+
+def test_a_colour_change_in_one_vessel_leaves_the_others_quiet():
+    def dish(label, x0):
+        roi = [(x0, 100), (x0 + 240, 100), (x0 + 240, 500), (x0, 500)]
+        return Vessel(id=f"ves_{label}", run_id="r", label=label, role=Role.TREATMENT, roi=roi)
+
+    dishes = [dish("A", 20), dish("B", 280), dish("C", 540)]  # three dishes filling a close-up view
+    base = BACKGROUND.copy()
+    base[100:500, 20:780] = np.clip(base[100:500, 20:780].astype(int) + np.array((-30, 30, -30)), 0, 255)
+    dyed = base.copy()
+    dyed[100:500, 20:260] = np.clip(dyed[100:500, 20:260].astype(int) + np.array((-40, -40, 90)), 0, 255)
+    w = Watcher(dishes, SPEC, WatcherSettings(mode="smart_trigger", interval_s=60.0))
+    w.observe(0.0, base)
+    changed = {trig.vessel_id for i in range(1, 5) for trig in w.observe(i * 60.0, dyed) if trig.reason == "change"}
+    assert changed == {"ves_A"}

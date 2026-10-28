@@ -29,10 +29,17 @@ HEIGHT_BOUNDARY_PX = 1.0
 
 @dataclass(frozen=True)
 class ColourBaseline:
-    """A vessel's mean colour in one frame, with the standard error of that mean (Lab units)."""
+    """A vessel's mean colour in one frame, with the standard error of that mean (Lab units), and whether it was
+    corrected against the card (readings of the two kinds are labelled apart and never compared)."""
 
     lab: tuple[float, float, float]
     se: float
+    corrected: bool
+
+
+def baseline_key(measurement_id: str, corrected: bool) -> str:
+    """Where a reading's ΔE baseline is kept: corrected and uncorrected readings each have their own."""
+    return measurement_id if corrected else f"{measurement_id}:uncorrected"
 
 
 @dataclass(frozen=True)
@@ -78,11 +85,21 @@ def _perimeter_px(mask: np.ndarray) -> float:
     return float(sum(cv2.arcLength(c, True) for c in contours))
 
 
-def _length_boundary_px(mask: np.ndarray, length_px: float) -> float:
-    """A thinning skeleton stops short of square ends and runs into round ones, so its ends are uncertain by
-    about the object's width: the mean width (area / length), and never less than a pixel per end."""
-    width_px = float(np.count_nonzero(mask)) / length_px if length_px > 0 else 0.0
-    return max(LENGTH_BOUNDARY_PX, width_px)
+def _length_boundary_px(mask: np.ndarray) -> float:
+    """A thinning skeleton stops short of square ends and runs into round ones, so each object's ends are
+    uncertain by about its width: its mean width (area / length), never less than a pixel per end. The bias
+    has the same sign for every object, so a vessel's objects (ten roots in a dish) add up linearly."""
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(mask.astype(np.uint8), connectivity=8)
+    total = 0.0
+    for i in range(1, count):
+        x, y, w, h = (
+            int(stats[i, k]) for k in (cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT)
+        )
+        own = labels[y : y + h, x : x + w] == i
+        length_px = skeleton_length_mm(own, 1.0).value
+        width_px = float(stats[i, cv2.CC_STAT_AREA]) / length_px if length_px > 0 else 0.0
+        total += max(LENGTH_BOUNDARY_PX, width_px)
+    return total
 
 
 def _colour(
@@ -94,9 +111,10 @@ def _colour(
     lab = rgb2lab(pixels[:, ::-1].astype(np.float64).reshape(-1, 1, 3) / 255.0).reshape(-1, 3)
     mean = lab.mean(axis=0)
     se = lab.std(axis=0, ddof=1) / math.sqrt(len(lab)) if len(lab) > 1 else np.zeros(3)
-    if cal.reference is not None and current is not None:
+    corrected = cal.reference is not None and current is not None
+    if corrected:
         mean = correct_lab(mean, cal.reference, current)
-    reading = ColourBaseline((float(mean[0]), float(mean[1]), float(mean[2])), float(np.linalg.norm(se)))
+    reading = ColourBaseline((float(mean[0]), float(mean[1]), float(mean[2])), float(np.linalg.norm(se)), corrected)
     return reading, se
 
 
@@ -159,7 +177,7 @@ def measure_vessel(
                 sized(spec, metric, HEIGHT_BOUNDARY_PX * mmpp if present else 0.0, power=1)
             elif spec.method == "skeleton_length":
                 metric = skeleton_length_mm(view, mmpp)
-                sized(spec, metric, _length_boundary_px(view, metric.value / mmpp) * mmpp if present else 0.0, power=1)
+                sized(spec, metric, _length_boundary_px(view) * mmpp if present else 0.0, power=1)
             else:
                 metric = component_count(view, mmpp, min_area_mm2=MIN_COUNT_AREA_MM2)
                 draft(spec.id, metric.value, 0.0, metric.unit, metric.method_version)
@@ -168,12 +186,14 @@ def measure_vessel(
             if reading is None:
                 continue
             colour, se = reading
-            lab[spec.id] = colour
+            key = baseline_key(spec.id, colour.corrected)
+            lab[key] = colour
+            kind = "" if colour.corrected else "_uncorrected"
             if spec.method == "lab_mean":
                 for i, (suffix, unit) in enumerate((("l", "L*"), ("a", "a*"), ("b", "b*"))):
-                    draft(f"{spec.id}_{suffix}", colour.lab[i], float(se[i]), unit, "lab_mean/1")
-            elif spec.method == "delta_e" and spec.id in baselines:
-                base = baselines[spec.id]
+                    draft(f"{spec.id}_{suffix}", colour.lab[i], float(se[i]), unit, f"lab_mean{kind}/1")
+            elif spec.method == "delta_e" and key in baselines:
+                base = baselines[key]
                 value = float(deltaE_ciede2000(np.array(colour.lab), np.array(base.lab)))
-                draft(spec.id, value, math.hypot(colour.se, base.se), "dE00", "delta_e/1")
+                draft(spec.id, value, math.hypot(colour.se, base.se), "dE00", f"delta_e{kind}/1")
     return VesselMeasurements(drafts, lab)

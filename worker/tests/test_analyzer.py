@@ -271,3 +271,24 @@ async def test_concurrent_calls_never_spend_past_the_cap(ctx, tmp_path):
     with ctx.db.read() as c:
         spent = c.execute("SELECT SUM(cost_usd) FROM model_calls WHERE run_id=?", (ctx.run.id,)).fetchone()[0]
     assert spent <= 1.0
+
+
+@pytest.mark.anyio
+async def test_uncorrected_colour_is_an_open_event_until_the_card_is_back(ctx, scene):
+    image, _ = scene
+    x0, y0 = (int(min(c)) for c in zip(*ctx.vessels[0].roi, strict=True))
+    x1, y1 = (int(max(c)) for c in zip(*ctx.vessels[0].roi, strict=True))
+    hidden = np.full_like(image, 128)  # the card is covered: only vessel A's region is left as it was
+    hidden[y0:y1, x0:x1] = image[y0:y1, x0:x1]
+    for t, frame in ((0.0, image), (60.0, hidden), (120.0, hidden), (180.0, image)):
+        await analyze_frame(ctx, t, frame, segment=True)
+    [episode] = [e for e in events_for_run(ctx.db, ctx.run.id) if e.kind == "quality"]
+    assert (episode.t_start, episode.t_end) == (60.0, 180.0) and "card" in episode.detail["message"]
+    a = ctx.vessels[0].id
+    rows = [m for m in measurements_for_run(ctx.db, ctx.run.id, metric="colour_l") if m.vessel_id == a]
+    assert [(m.t, m.method_version) for m in rows] == [
+        (0.0, "lab_mean/1"),
+        (60.0, "lab_mean_uncorrected/1"),
+        (120.0, "lab_mean_uncorrected/1"),
+        (180.0, "lab_mean/1"),
+    ]

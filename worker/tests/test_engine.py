@@ -41,17 +41,21 @@ def vessel_around(mask: np.ndarray, margin: int = 30) -> Vessel:
     return Vessel(id="ves_A", run_id="run_1", label="A", role=Role.TREATMENT, roi=roi)
 
 
-def measure(image, mask, *, baselines=None, families=frozenset({"size", "count", "colour"}), masks=None):
+def measure(
+    image, mask, *, baselines=None, families=frozenset({"size", "count", "colour"}), masks=None, corrected=True
+):
+    """Corrected colour reads the card in this same frame (an identity correction); uncorrected has no card."""
+    cal = calibrate(image)
     return measure_vessel(
         RECIPE,
         vessel_around(mask),
         {"root": mask} if masks is None else masks,
         image,
-        calibrate(image),
+        cal,
         t=0.0,
         frame_id="frm_1",
         baselines=baselines or {},
-        current_reference=None,
+        current_reference=cal.reference if corrected else None,
         families=families,
     )
 
@@ -128,3 +132,28 @@ def test_lab_mean_requires_the_lab_unit():
         MeasurementSpec.model_validate(
             {"id": "c", "family": "colour", "method": "lab_mean", "from": "object", "unit": "L*"}
         )
+
+
+def test_the_length_of_many_roots_carries_every_roots_end_uncertainty():
+    image, bar = scene_with_bar_on_card_plane(STANDARD, length_mm=40, width_mm=2)
+    rows = np.nonzero(bar.any(axis=1))[0]
+    step = 4 * (rows.max() - rows.min() + 1)
+    roots = np.zeros_like(bar)
+    for k in range(10):  # ten separate 40 mm roots in one vessel: the union is measured
+        roots |= np.roll(bar, k * step, axis=0)
+    m = {d.metric: d for d in measure(image, roots, masks={"root": roots}).drafts}
+    assert m["pieces"].value == 10
+    assert m["length"].value == pytest.approx(400, abs=m["length"].uncertainty)
+
+
+def test_uncorrected_colour_is_labelled_and_compared_only_with_its_kind():
+    green, mask = scene_with_bar_on_card_plane(STANDARD, length_mm=40, width_mm=4, colour=(40, 140, 50))
+    blue, _ = scene_with_bar_on_card_plane(STANDARD, length_mm=40, width_mm=4, colour=(160, 60, 40))
+    colour = frozenset({"colour"})
+    corrected = measure(green, mask, families=colour)
+    assert {d.method_version for d in corrected.drafts} == {"lab_mean/1"} and corrected.lab["change"].corrected
+    raw = measure(blue, mask, baselines=corrected.lab, families=colour, corrected=False)
+    assert {d.method_version for d in raw.drafts} == {"lab_mean_uncorrected/1"}  # no ΔE against a corrected base
+    later = measure(green, mask, baselines={**corrected.lab, **raw.lab}, families=colour, corrected=False)
+    change = next(d for d in later.drafts if d.metric == "change")
+    assert change.method_version == "delta_e_uncorrected/1" and change.value > 20

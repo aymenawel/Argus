@@ -4,8 +4,9 @@ the previous one, so slow change adds up until it crosses a threshold.
 Two light-normalized signals:
 - structure: SSIM of the ROI's grey levels after z-scoring (immune to brightness gain and offset; with
   strong normalization each tile of a 4 x 4 grid is z-scored on its own, for uneven light);
-- colour: the ROI's mean rg-chromaticity relative to the whole frame's, in percentage points (immune to
-  brightness gain, and to a tint that changes the whole scene, such as a lamp of another colour).
+- colour: the ROI's mean rg-chromaticity relative to the scene outside every vessel, in percentage points
+  (immune to brightness gain and to a lamp of another colour; a vessel changing colour doesn't move the
+  others' signal, as it would if the reference included the vessels).
 A change must last `debounce` observations, then the vessel rests for `cooldown_s`.
 """
 
@@ -22,7 +23,7 @@ from skimage.metrics import structural_similarity
 
 from argus.domain import Vessel
 from argus.recipes.model import Recipe, WatcherSpec
-from argus.rois import roi_box
+from argus.rois import roi_box, roi_mask
 
 Mode = Literal["continuous", "smart_trigger", "hybrid"]
 TILES = 4
@@ -33,7 +34,7 @@ class WatcherSettings:
     mode: Mode
     interval_s: float
     ssim_min: float = 0.90
-    colour_shift_max: float = 1.5  # rg-chromaticity, percentage points, relative to the whole frame
+    colour_shift_max: float = 1.5  # rg-chromaticity, percentage points, relative to the scene outside the vessels
     debounce: int = 3
     cooldown_s: float = 60.0
     checkin_s: float = 3600.0
@@ -56,11 +57,12 @@ class Trigger:
 @dataclass(frozen=True)
 class _Signature:
     grey: np.ndarray  # z-scored, float32
-    chroma: np.ndarray  # (r, g) chromaticity minus the frame's, in percentage points
+    chroma: np.ndarray  # (r, g) chromaticity minus the scene's outside the vessels, in percentage points
 
 
-def _chromaticity(bgr: np.ndarray) -> np.ndarray:
-    means = bgr.reshape(-1, 3).astype(np.float64).mean(axis=0)
+def _chromaticity(bgr: np.ndarray, where: np.ndarray | None = None) -> np.ndarray:
+    pixels = bgr.reshape(-1, 3) if where is None else bgr[where]
+    means = pixels.astype(np.float64).mean(axis=0)
     total = means.sum() or 1.0
     return np.array([means[2] / total, means[1] / total]) * 100.0
 
@@ -89,11 +91,23 @@ class Watcher:
         self._last_checkin = 0.0
         self._last_tick = 0.0
         self._started = False
+        self._outside: tuple[tuple[int, int], np.ndarray | None] | None = None
+
+    def _outside_vessels(self, height: int, width: int, small: tuple[int, int]) -> np.ndarray | None:
+        """The scene outside every ROI at the small size; None (use the whole frame) when the vessels fill it."""
+        if self._outside is None or self._outside[0] != (height, width):
+            inside = np.zeros((height, width), np.uint8)
+            for vessel in self.vessels:
+                inside |= roi_mask(vessel, height, width).astype(np.uint8)
+            outside = cv2.resize(inside, small, interpolation=cv2.INTER_NEAREST) == 0
+            self._outside = ((height, width), outside if outside.mean() >= 0.02 else None)
+        return self._outside[1]
 
     def _signatures(self, image_bgr: np.ndarray) -> dict[str, _Signature]:
         height, width = image_bgr.shape[:2]
-        small = cv2.resize(image_bgr, (max(width // 4, 1), max(height // 4, 1)), interpolation=cv2.INTER_AREA)
-        frame_chroma = _chromaticity(small)
+        size = (max(width // 4, 1), max(height // 4, 1))
+        small = cv2.resize(image_bgr, size, interpolation=cv2.INTER_AREA)
+        frame_chroma = _chromaticity(small, self._outside_vessels(height, width, size))
         tiles = TILES if self.spec.light_normalization == "strong" else 1
         signatures = {}
         for vessel in self.vessels:
