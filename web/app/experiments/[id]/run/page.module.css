@@ -6,6 +6,10 @@
   padding: 8px;
 }
 
+.timelinePanel {
+  margin-top: 12px;
+}
+
 .faint {
   color: var(--faint);
 }

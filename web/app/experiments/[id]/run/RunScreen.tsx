@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { Readouts } from "@/components/run/Readouts";
 import { RunFrame } from "@/components/run/RunFrame";
+import { Timeline } from "@/components/run/Timeline";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -28,7 +30,7 @@ function finding(snapshot: RunSnapshot): string {
   const last = analyzed.at(-1)?.t ?? 0;
   if (view.running) {
     if (progress?.stage === "measure" && progress.t != null && progress.t_end != null) {
-      return `Analyzing ${formatRunTime(progress.t)} of ${formatRunTime(progress.t_end)} · ${progress.speed ?? 0}× real time`;
+      return `Analyzing ${formatRunTime(progress.t, progress.t_end)} of ${formatRunTime(progress.t_end)} · ${progress.speed ?? 0}× real time`;
     }
     if (progress?.stage === "segment") return `Segmenting with SAM 3.1 · ${progress.done} of ${progress.total} clips`;
     if (progress?.stage === "scan" && progress.t != null) {
@@ -187,11 +189,19 @@ export function RunScreen() {
       )}
       <Panel className={styles.panel}>
         {ready && load.state === "ready" ? (
-          <RunFrame snapshot={snapshot} source={load.source} mainMetric={load.mainMetric} />
+          <>
+            <RunFrame snapshot={snapshot} source={load.source} mainMetric={load.mainMetric} />
+            <Readouts snapshot={snapshot} mainMetric={load.mainMetric} />
+          </>
         ) : (
           <div className={styles.placeholder} aria-busy="true" />
         )}
       </Panel>
+      {ready && load.state === "ready" && (
+        <Panel title="Timeline" className={styles.timelinePanel}>
+          <Timeline snapshot={snapshot} source={load.source} mainMetric={load.mainMetric} />
+        </Panel>
+      )}
     </>
   );
 }

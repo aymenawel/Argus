@@ -106,6 +106,7 @@ def test_import_run_end_to_end_over_the_api(client, experiment, clip):
     frame = timeline["frames"][-1]
     image = client.get(f"/api/runs/{run_id}/frames/{frame['id']}.jpg", params={"w": 160})
     assert image.status_code == 200 and image.headers["content-type"] == "image/jpeg"
+    assert "immutable" in image.headers["cache-control"]  # frames are evidence: they never change
     decoded = cv2.imdecode(np.frombuffer(image.content, np.uint8), cv2.IMREAD_COLOR)
     assert decoded.shape[1] == 160
     detections = client.get(f"/api/runs/{run_id}/frames/{frame['id']}/detections").json()

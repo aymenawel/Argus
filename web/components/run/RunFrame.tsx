@@ -40,6 +40,7 @@ export function RunFrame({ snapshot, source, mainMetric }: Props) {
   const selected = usePlayhead((p) => p.selectedVesselId);
   const analyzed = useMemo(() => snapshot.frames.filter((f) => f.analyzed), [snapshot.frames]);
   const frame = atOrBefore(analyzed, t) ?? analyzed[0] ?? null;
+  const span = Math.max(analyzed.at(-1)?.t ?? 0, snapshot.progress?.t_end ?? 0);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const [outlines, setOutlines] = useState<{ frameId: string; items: DetectionOutline[] } | null>(null);
   const reading = useReadings(snapshot, mainMetric, t);
@@ -69,7 +70,7 @@ export function RunFrame({ snapshot, source, mainMetric }: Props) {
         <img
           className={styles.image}
           src={source.frameUrl(frame.id)}
-          alt={`Frame at ${formatRunTime(frame.t)}`}
+          alt={`Frame at ${formatRunTime(frame.t, span)}`}
           onLoad={(e) => setSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
         />
       ) : (
@@ -130,7 +131,7 @@ export function RunFrame({ snapshot, source, mainMetric }: Props) {
         <span className={`${styles.hudText} num`}>{calibrationText(snapshot)}</span>
       </div>
       <div className={`${styles.hud} ${styles.bottomLeft}`}>
-        <span className={`${styles.hudText} num`}>{formatRunTime(frame?.t ?? t)}</span>
+        <span className={`${styles.hudText} num`}>{formatRunTime(frame?.t ?? t, span)}</span>
       </div>
       <div className={`${styles.hud} ${styles.bottomRight}`}>
         <span className={`${styles.hudText} num`}>

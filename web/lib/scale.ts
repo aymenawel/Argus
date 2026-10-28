@@ -13,10 +13,12 @@ export function linearScale(domain: [number, number], range: [number, number]): 
 
 const pad = (n: number) => String(Math.floor(n)).padStart(2, "0");
 
-/** Run time t (seconds): "41:20" (hours:minutes) from an hour on, "3:05" (minutes:seconds) below. */
-export function formatRunTime(t: number): string {
+/** Run time t (seconds): "41:20" (hours:minutes) when the run spans an hour or more, "3:05" (minutes:seconds)
+ *  below. Pass the run's span so every time on one screen uses the same form ("0:38 of 1:35", never "38:00 of
+ *  1:35"). */
+export function formatRunTime(t: number, span: number = t): string {
   const s = Math.max(0, t);
-  if (s >= 3600) return `${Math.floor(s / 3600)}:${pad((s % 3600) / 60)}`;
+  if (Math.max(span, s) >= 3600) return `${Math.floor(s / 3600)}:${pad((s % 3600) / 60)}`;
   return `${Math.floor(s / 60)}:${pad(s % 60)}`;
 }
 

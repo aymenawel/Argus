@@ -1,0 +1,205 @@
+/* The editor-style timeline (canvas .tl): ruler, filmstrip, a lane per vessel, a playhead with a time handle. */
+.timeline {
+  min-width: 0;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+}
+
+.clock {
+  font-size: var(--fs-section);
+  font-weight: 600;
+}
+
+.faint {
+  color: var(--faint);
+  font-weight: 500;
+}
+
+.grid {
+  --label-w: 120px;
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--label-w) minmax(0, 1fr);
+  row-gap: 6px;
+  margin-top: 30px; /* room for the playhead's time handle */
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding-right: 12px;
+  font-size: var(--fs-sm);
+  line-height: 17px;
+  white-space: nowrap;
+}
+
+.label b {
+  font-weight: 600;
+}
+
+.label :global(.num) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.ruler {
+  position: relative;
+  height: 28px;
+  border-radius: var(--r-small);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.ruler:focus-visible {
+  outline-offset: 2px;
+}
+
+.tick {
+  position: absolute;
+  bottom: 4px;
+  transform: translateX(-50%);
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.tick:first-child {
+  transform: none;
+}
+
+.film {
+  display: flex;
+  gap: 4px;
+  height: 52px;
+  padding: 4px;
+  overflow: hidden;
+  border-radius: var(--r-small);
+  background: var(--raised);
+}
+
+.thumb {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 7px;
+  background: var(--frame);
+  cursor: pointer;
+}
+
+.lane {
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-small);
+  background: var(--raised);
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.lane:hover {
+  background: var(--active);
+}
+
+.lane svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.selected,
+.selected:hover {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.line {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.selected .line {
+  stroke: var(--accent);
+  stroke-width: 2.2;
+}
+
+.mark {
+  rx: 3;
+}
+
+.change {
+  fill: var(--accent-tint);
+}
+
+.intervention,
+.camera_moved {
+  fill: var(--warn-bg);
+}
+
+.segment_failed {
+  fill: var(--neg-bg);
+}
+
+/* Out of the grid flow (absolute), over the track column: an explicitly placed grid item would push the
+   auto-placed ruler and filmstrip into the label column. */
+.playheadLayer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--label-w);
+  right: 0;
+  pointer-events: none;
+}
+
+.playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.knob {
+  position: absolute;
+  top: -26px;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 22px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: #04211e;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: auto;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+@media (max-width: 720px) {
+  .grid {
+    --label-w: 64px;
+  }
+
+  .label :global(.num) {
+    display: none;
+  }
+}

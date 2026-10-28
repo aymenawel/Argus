@@ -36,6 +36,9 @@ from argus.segment.outline import outline_polygons
 from argus.storage import repos
 from argus.storage.db import Database
 
+# A stored frame never changes (it is evidence), so browsers may keep it: scrubbing back doesn't refetch.
+IMMUTABLE = {"Cache-Control": "public, max-age=31536000, immutable"}
+
 
 class VesselIn(BaseModel):
     label: str = Field(min_length=1, max_length=8)
@@ -193,13 +196,13 @@ def register_run_routes(app: FastAPI, *, db: Database, settings: Settings, jobs:
     def frame_jpeg(run_id: str, frame_id: str, w: int | None = Query(None, ge=16, le=1920)) -> Response:
         path = settings.data_dir / frame_or_404(run_id, frame_id).path
         if w is None:
-            return Response(path.read_bytes(), media_type="image/jpeg")
+            return Response(path.read_bytes(), media_type="image/jpeg", headers=IMMUTABLE)
         image = cv2.imread(str(path))
         height = max(1, round(image.shape[0] * w / image.shape[1]))
         ok, encoded = cv2.imencode(
             ".jpg", cv2.resize(image, (w, height), interpolation=cv2.INTER_AREA), [cv2.IMWRITE_JPEG_QUALITY, 80]
         )
-        return Response(encoded.tobytes(), media_type="image/jpeg")
+        return Response(encoded.tobytes(), media_type="image/jpeg", headers=IMMUTABLE)
 
     @app.get("/api/runs/{run_id}/frames/{frame_id}/detections")
     def detections(run_id: str, frame_id: str) -> list[dict]:
