@@ -6,7 +6,7 @@ unknown from what the driver reports afterwards, so the run record says honestly
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -73,10 +73,14 @@ def open_webcam(
     return capture, properties
 
 
-def list_cameras(max_index: int = 4, *, capture_factory: Callable[..., Any] = cv2.VideoCapture) -> list[int]:
-    """Camera indexes 0..max_index that open."""
+def list_cameras(
+    max_index: int = 4, *, skip: Sequence[int] = (), capture_factory: Callable[..., Any] = cv2.VideoCapture
+) -> list[int]:
+    """Camera indexes 0..max_index that open (indexes in `skip`, already open elsewhere, are not probed)."""
     found = []
     for index in range(max_index + 1):
+        if index in skip:
+            continue
         capture = capture_factory(index, cv2.CAP_DSHOW)
         if capture.isOpened():
             found.append(index)

@@ -1,0 +1,260 @@
+"""Run routes (spec §10): start a live or imported run, stop it, and read its timeline, frames and outlines."""
+
+from __future__ import annotations
+
+import asyncio
+from datetime import datetime
+from pathlib import Path
+from typing import Literal
+
+import cv2
+import numpy as np
+from fastapi import FastAPI, HTTPException, Query, Response
+from pydantic import BaseModel, Field, model_validator
+
+from argus.calibration.run import RulerInput
+from argus.capture.webcam import CameraSettings
+from argus.config import Settings
+from argus.domain import (
+    Calibration,
+    Condition,
+    Role,
+    Run,
+    RunMode,
+    RunSource,
+    RunStatus,
+    SourceKind,
+    Vessel,
+    VesselDraft,
+)
+from argus.measure.uncertainty import format_measurement
+from argus.pipeline.imported import ImportRequest
+from argus.pipeline.jobs import RunJobs
+from argus.pipeline.live import CameraHub
+from argus.segment import SegmentError
+from argus.segment.outline import outline_polygons
+from argus.storage import repos
+from argus.storage.db import Database
+
+
+class VesselIn(BaseModel):
+    label: str = Field(min_length=1, max_length=8)
+    role: Role
+    condition: Condition | None = None
+    roi: list[tuple[float, float]] = Field(min_length=3)
+
+
+class RunCreate(BaseModel):
+    mode: Literal["live", "imported"]
+    camera_index: int | None = Field(None, ge=0)
+    paths: list[str] = []
+    time_scale: float = Field(1.0, gt=0)
+    start_time: datetime | None = None
+    vessels: list[VesselIn] = Field(min_length=1, max_length=16)
+    print_check_mm: float | None = Field(None, ge=90, le=110)
+    ruler: RulerInput | None = None
+
+    @model_validator(mode="after")
+    def source_fits_mode(self) -> RunCreate:
+        if self.mode == "live" and self.camera_index is None:
+            raise ValueError("a live run needs camera_index")
+        if self.mode == "imported" and not self.paths:
+            raise ValueError("an imported run needs paths")
+        labels = [v.label for v in self.vessels]
+        if len(set(labels)) != len(labels):
+            raise ValueError("vessel labels must be unique")
+        return self
+
+
+class RunView(BaseModel):
+    run: Run
+    vessels: list[Vessel]
+    calibration: Calibration | None
+    spend_usd: float
+    running: bool
+
+
+class VesselDetect(BaseModel):
+    concept: str = Field(min_length=1)
+    camera_index: int | None = Field(None, ge=0)
+    path: str | None = None
+    video_s: float = Field(0.0, ge=0)
+
+    @model_validator(mode="after")
+    def one_source(self) -> VesselDetect:
+        if (self.camera_index is None) == (self.path is None):
+            raise ValueError("give either camera_index or path")
+        return self
+
+
+class VesselProposal(BaseModel):
+    roi: list[tuple[float, float]]
+    confidence: float | None
+
+
+def register_run_routes(app: FastAPI, *, db: Database, settings: Settings, jobs: RunJobs, hub: CameraHub) -> None:
+    def view(run: Run) -> RunView:
+        return RunView(
+            run=run,
+            vessels=repos.vessels_for_run(db, run.id),
+            calibration=repos.latest_calibration(db, run.id, float("inf")),
+            spend_usd=round(repos.run_spend_usd(db, run.id), 4),
+            running=jobs.running(run.id),
+        )
+
+    def run_or_404(run_id: str) -> Run:
+        run = repos.get_run(db, run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="run not found")
+        return run
+
+    @app.post("/api/experiments/{experiment_id}/runs", status_code=201)
+    async def start_run(experiment_id: str, body: RunCreate) -> RunView:
+        experiment = await asyncio.to_thread(repos.get_experiment, db, experiment_id)
+        if experiment is None:
+            raise HTTPException(status_code=404, detail="experiment not found")
+        for path in body.paths:
+            if not Path(path).is_file():
+                raise HTTPException(status_code=422, detail=f"file not found: {path}")
+        if any(jobs.running(r.id) for r in await asyncio.to_thread(repos.runs_for_experiment, db, experiment_id)):
+            raise HTTPException(status_code=409, detail="a run is already running for this experiment")
+        live = body.mode == "live"
+        source = RunSource(
+            kind=SourceKind.WEBCAM if live else SourceKind.VIDEO,
+            camera_index=body.camera_index,
+            paths=body.paths,
+            start_time=body.start_time,
+            start_time_source="researcher" if body.start_time else "run_start",
+        )
+        mode = RunMode.LIVE if live else RunMode.IMPORTED
+        run = await asyncio.to_thread(repos.create_run, db, experiment_id, mode, source, body.time_scale)
+        drafts = [VesselDraft(**v.model_dump()) for v in body.vessels]
+        vessels = await asyncio.to_thread(repos.add_vessels, db, run.id, drafts)
+        try:
+            if live:
+                jobs.start_live(
+                    run,
+                    vessels,
+                    body.camera_index,
+                    CameraSettings(),
+                    print_check_mm=body.print_check_mm,
+                    ruler=body.ruler,
+                )
+            else:
+                request = ImportRequest(
+                    paths=[Path(p) for p in body.paths],
+                    time_scale=body.time_scale,
+                    print_check_mm=body.print_check_mm,
+                    ruler=body.ruler,
+                )
+                jobs.start_import(run, vessels, request)
+        except RuntimeError as error:  # the camera didn't open
+            await asyncio.to_thread(repos.set_run_status, db, run.id, RunStatus.STOPPED)
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        return await asyncio.to_thread(view, run)
+
+    @app.get("/api/experiments/{experiment_id}/runs")
+    def list_runs(experiment_id: str) -> list[RunView]:
+        return [view(r) for r in repos.runs_for_experiment(db, experiment_id)]
+
+    @app.get("/api/runs/{run_id}")
+    def get_run(run_id: str) -> RunView:
+        return view(run_or_404(run_id))
+
+    @app.post("/api/runs/{run_id}/stop")
+    async def stop_run(run_id: str) -> RunView:
+        await asyncio.to_thread(run_or_404, run_id)
+        if not await jobs.stop(run_id):
+            raise HTTPException(status_code=409, detail="the run is not running")
+        return await asyncio.to_thread(view, run_or_404(run_id))
+
+    @app.get("/api/runs/{run_id}/timeline")
+    def timeline(run_id: str, t_from: float | None = None, t_to: float | None = None) -> dict:
+        run_or_404(run_id)
+        measurements = repos.measurements_for_run(db, run_id, t_from=t_from, t_to=t_to)
+        return {
+            "frames": [
+                f.model_dump(include={"id", "t", "analyzed", "quality_flags"})
+                for f in repos.frames_for_run(db, run_id, t_from, t_to)
+            ],
+            "measurements": [
+                {**m.model_dump(), "display": format_measurement(m.value, m.uncertainty, m.unit)} for m in measurements
+            ],
+            "events": [e.model_dump(mode="json") for e in repos.events_for_run(db, run_id, t_from, t_to)],
+        }
+
+    def frame_or_404(run_id: str, frame_id: str):
+        frame = repos.get_frame(db, frame_id)
+        if frame is None or frame.run_id != run_id:
+            raise HTTPException(status_code=404, detail="frame not found")
+        return frame
+
+    @app.get("/api/runs/{run_id}/frames/{frame_id}.jpg")
+    def frame_jpeg(run_id: str, frame_id: str, w: int | None = Query(None, ge=16, le=1920)) -> Response:
+        path = settings.data_dir / frame_or_404(run_id, frame_id).path
+        if w is None:
+            return Response(path.read_bytes(), media_type="image/jpeg")
+        image = cv2.imread(str(path))
+        height = max(1, round(image.shape[0] * w / image.shape[1]))
+        ok, encoded = cv2.imencode(
+            ".jpg", cv2.resize(image, (w, height), interpolation=cv2.INTER_AREA), [cv2.IMWRITE_JPEG_QUALITY, 80]
+        )
+        return Response(encoded.tobytes(), media_type="image/jpeg")
+
+    @app.get("/api/runs/{run_id}/frames/{frame_id}/detections")
+    def detections(run_id: str, frame_id: str) -> list[dict]:
+        frame_or_404(run_id, frame_id)
+        fields = {"vessel_id", "track_key", "concept", "outline", "confidence"}
+        return [d.model_dump(include=fields) for d in repos.detections_for_frame(db, frame_id)]
+
+    @app.post("/api/experiments/{experiment_id}/vessels/detect")
+    async def detect_vessels(experiment_id: str, body: VesselDetect) -> list[VesselProposal]:
+        if await asyncio.to_thread(repos.get_experiment, db, experiment_id) is None:
+            raise HTTPException(status_code=404, detail="experiment not found")
+        image = await asyncio.to_thread(_frame_from, hub, body)
+        try:
+            result = await jobs.segmenter.image(image, body.concept)
+        except SegmentError as error:
+            await asyncio.to_thread(
+                repos.add_model_call, db, None, None, error.call.model_copy(update={"function": "vessel_detect"})
+            )
+            raise HTTPException(status_code=502, detail=f"segmentation failed: {error}") from error
+        await asyncio.to_thread(
+            repos.add_model_call, db, None, None, result.call.model_copy(update={"function": "vessel_detect"})
+        )
+        proposals = []
+        for track in result.tracks:
+            frame = track.frames[0]
+            polygons = outline_polygons(frame.patch, epsilon_px=3.0)
+            if polygons:
+                largest = max(polygons, key=lambda p: cv2.contourArea(_contour(p)))
+                proposals.append(VesselProposal(roi=largest, confidence=frame.confidence))
+        return proposals
+
+
+def _contour(polygon: list[tuple[float, float]]) -> np.ndarray:
+    return np.asarray(polygon, np.float32).reshape(-1, 1, 2)
+
+
+def _frame_from(hub: CameraHub, body: VesselDetect):
+    if body.path is not None:
+        if not Path(body.path).is_file():
+            raise HTTPException(status_code=422, detail=f"file not found: {body.path}")
+        capture = cv2.VideoCapture(body.path)
+        capture.set(cv2.CAP_PROP_POS_MSEC, body.video_s * 1000.0)
+        ok, image = capture.read()
+        capture.release()
+        if not ok:
+            raise HTTPException(status_code=422, detail=f"no frame at {body.video_s} s in {body.path}")
+        return image
+    try:
+        source, _ = hub.acquire(body.camera_index)
+    except RuntimeError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    try:
+        image = source.read()
+    finally:
+        source.close()
+    if image is None:
+        raise HTTPException(status_code=503, detail=f"camera {body.camera_index} gave no frame")
+    return image

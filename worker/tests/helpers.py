@@ -7,7 +7,7 @@ perspective warp of the whole frame, like a camera that isn't square to the card
 import cv2
 import numpy as np
 
-from argus.calibration.card import CardSpec, aruco_dictionary, render_raster
+from argus.calibration.card import STANDARD, CardSpec, aruco_dictionary, render_raster
 
 FRAME_W, FRAME_H = 1600, 1200
 ORIGIN = np.array([200.0, 150.0])
@@ -132,3 +132,31 @@ def scene_with_bar_on_card_plane(
     if tilt is not None:
         mask = cv2.warpPerspective(mask, tilt, (FRAME_W, FRAME_H), flags=cv2.INTER_LINEAR)
     return _tilted(frame, tilt), mask > 0.5
+
+
+def write_growing_bar_clip(path, *, frames: int = 40, fps: int = 10, start_mm: float = 10.0, end_mm: float = 40.0):
+    """An MP4 (mp4v) of the card with a bar on its plane that grows from start_mm to end_mm."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    writer = None
+    for i in range(frames):
+        length = start_mm + (end_mm - start_mm) * i / max(frames - 1, 1)
+        image, _ = scene_with_bar_on_card_plane(STANDARD, length_mm=length, width_mm=2)
+        if writer is None:
+            writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), fps, image.shape[1::-1])
+        writer.write(image)
+    writer.release()
+    return path
+
+
+def rois_around_the_bar(length_mm: float = 40.0, margin: int = 40):
+    """Vessel A's ROI around the full-grown bar, and vessel B's, the same box 300 px lower (empty)."""
+    _, mask = scene_with_bar_on_card_plane(STANDARD, length_mm=length_mm, width_mm=2)
+    ys, xs = np.nonzero(mask)
+    a = [
+        (xs.min() - margin, ys.min() - margin),
+        (xs.max() + margin, ys.min() - margin),
+        (xs.max() + margin, ys.max() + margin),
+        (xs.min() - margin, ys.max() + margin),
+    ]
+    a = [(float(x), float(y)) for x, y in a]
+    return a, [(x, y + 300.0) for x, y in a]

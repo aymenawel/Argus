@@ -117,6 +117,10 @@ class CameraHub:
             del self._cameras[index]
         camera.close()
 
+    def open_indexes(self) -> list[int]:
+        with self._lock:
+            return sorted(self._cameras)
+
     def latest_jpeg(self, index: int, quality: int = 80) -> bytes | None:
         camera = self._cameras.get(index)
         frame = camera.latest() if camera else None

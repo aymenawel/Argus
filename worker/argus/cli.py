@@ -1,6 +1,7 @@
 """Argus command line. From worker/:
 
 uv run python -m argus dev              start the worker API and the web app together
+uv run python -m argus run FILE.json    start a run described in a JSON file (the worker must be running)
 uv run python -m argus card --out PATH  export the printable Argus Card sheet
 """
 
@@ -8,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import json
 import os
 import shutil
 import signal
@@ -16,6 +18,8 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+
+import requests
 
 from argus.config import REPO_ROOT
 
@@ -114,16 +118,34 @@ def run_dev(repo: Path) -> int:
         _stop(web)
 
 
+def post_run(path: Path, api: str) -> int:
+    """POST the file's run to the worker. The file holds RunCreate fields plus `experiment_id`."""
+    body = json.loads(path.read_text(encoding="utf-8"))
+    experiment_id = body.pop("experiment_id")
+    response = requests.post(f"{api.rstrip('/')}/api/experiments/{experiment_id}/runs", json=body, timeout=30)
+    if response.status_code != 201:
+        print(f"The worker refused the run ({response.status_code}): {response.text}", file=sys.stderr)
+        return 1
+    run_id = response.json()["run"]["id"]
+    print(f"Run {run_id} started. Watch it at http://localhost:3000/experiments/{experiment_id}/run")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="argus", description="Argus command line")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("dev", help="start the worker API and the web app together")
+    run = sub.add_parser("run", help="start a run described in a JSON file (the worker must be running)")
+    run.add_argument("file", type=Path, help="RunCreate fields plus experiment_id, as JSON")
+    run.add_argument("--api", default="http://localhost:8000", help="the worker's address")
     card = sub.add_parser("card", help="export the printable Argus Card sheet (SVG, PDF, PNG preview)")
     card.add_argument("--out", type=Path, required=True, help="folder to write the files into")
     args = parser.parse_args(argv)
 
     if args.command == "dev":
         return run_dev(REPO_ROOT)
+    if args.command == "run":
+        return post_run(args.file, args.api)
     from argus.calibration import card_export  # needs a Chromium browser, so only loaded on demand
 
     for path in card_export.export(args.out):

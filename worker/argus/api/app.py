@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -10,9 +11,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from argus.api.cameras import register_camera_routes
 from argus.api.events import EventBroker, event_stream
+from argus.api.runs import register_run_routes
 from argus.config import Settings, load_settings
 from argus.domain import Experiment
+from argus.pipeline.jobs import RunJobs
+from argus.pipeline.live import CameraHub
 from argus.recipes.loader import load_all
 from argus.recipes.model import Recipe
 from argus.storage import repos
@@ -39,11 +44,19 @@ def create_app(
     broker: EventBroker,
     recipes: dict[str, Recipe],
     *,
+    jobs: RunJobs | None = None,
+    hub: CameraHub | None = None,
     close_db_on_shutdown: bool = False,
 ) -> FastAPI:
+    hub = hub or CameraHub()
+    jobs = jobs or RunJobs(db, broker, settings, recipes, hub)
+
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        # Runs still marked running were cut off when the worker last stopped (argus dev restarts it on save).
+        await asyncio.to_thread(repos.stop_interrupted_runs, db)
         yield
+        await jobs.shutdown()
         if close_db_on_shutdown:
             db.close()
 
@@ -86,6 +99,8 @@ def create_app(
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
+    register_run_routes(app, db=db, settings=settings, jobs=jobs, hub=hub)
+    register_camera_routes(app, hub=hub)
     return app
 
 
