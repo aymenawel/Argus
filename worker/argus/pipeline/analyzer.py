@@ -100,6 +100,7 @@ class RunContext:
     semaphore: asyncio.Semaphore = field(init=False)
     spend_lock: asyncio.Lock = field(init=False, default_factory=asyncio.Lock)
     reserved_usd: float = 0.0  # expected cost of the calls in flight, not yet logged
+    limit_reported: set[str] = field(default_factory=set)  # concepts that hit SAM's object limit
 
     def __post_init__(self) -> None:
         self.semaphore = asyncio.Semaphore(self.settings.sam_concurrency)
@@ -212,6 +213,14 @@ async def segment_with_retries(
             finally:
                 ctx.reserved_usd -= expected
         if result is not None:
+            limit = ctx.settings.sam_max_objects
+            if len(result.tracks) >= limit and concept not in ctx.limit_reported:
+                ctx.limit_reported.add(concept)  # SAM keeps the first `limit`: there may be more than it found
+                message = (
+                    f"SAM 3.1 returns at most {limit} objects per request: there may be more '{concept}' than found"
+                )
+                detail = {"message": message, "concept": concept, "objects": len(result.tracks)}
+                await ctx.event(t, EventKind.QUALITY, "quality", detail, frame_ids=frame_ids)
             return result
         if attempt < attempts - 1:
             await asyncio.sleep(ctx.retry_delays_s[attempt])

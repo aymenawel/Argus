@@ -312,3 +312,21 @@ async def test_concepts_are_segmented_at_the_same_time(ctx, scene):
 
     ctx.segmenter = Meets()
     assert (await analyze_frame(ctx, 0.0, image, segment=True)).segmented
+
+
+@pytest.mark.anyio
+async def test_a_result_at_sams_object_limit_is_flagged_once(ctx, scene):
+    image, _ = scene
+
+    class Full(FakeSegmenter):
+        async def image(self, image_bgr, concept):
+            patch = MaskPatch(0, 0, np.ones((2, 2), bool))
+            return SegmentResult([Track(f"obj{i}", concept, (TrackFrame(0, patch, 0.9),)) for i in range(16)], call())
+
+    ctx.segmenter = Full()
+    for t in (0.0, 60.0):
+        await analyze_frame(ctx, t, image, segment=True)
+    [limit] = [e for e in events_for_run(ctx.db, ctx.run.id) if e.kind == "quality"]
+    assert (
+        limit.detail["concept"] == "root" and limit.detail["objects"] == 16 and "at most 16" in limit.detail["message"]
+    )
