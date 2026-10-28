@@ -44,6 +44,10 @@
   line-height: 20px;
 }
 
+a.title:hover {
+  color: var(--accent-ink);
+}
+
 .sub {
   display: block;
   font-size: var(--fs-xs);

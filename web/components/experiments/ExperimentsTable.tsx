@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Experiment, ExperimentStatus, RecipeSummary } from "@/lib/types";
 import styles from "./ExperimentsTable.module.css";
 
@@ -40,7 +41,9 @@ export function ExperimentsTable({ experiments, recipes }: { experiments: Experi
           {experiments.map((e) => (
             <tr key={e.id}>
               <td>
-                <span className={styles.title}>{e.title}</span>
+                <Link className={styles.title} href={`/experiments/${e.id}/run`}>
+                  {e.title}
+                </Link>
                 <span className={styles.sub}>{recipeTitle.get(e.recipe_id) ?? e.recipe_id}</span>
               </td>
               <td>

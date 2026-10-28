@@ -1,0 +1,174 @@
+/* The camera frame (canvas .frame): dark media corners, outlines in frame pixels, pills on top. */
+.frame {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: var(--r-media);
+  background: var(--frame);
+}
+
+.image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #aab0b9;
+  font-size: var(--fs-sm);
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.roi {
+  fill: transparent;
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 2;
+  stroke-dasharray: 8 6;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.7)); /* visible on light and dark frames */
+  transition: stroke var(--dur-fast) var(--ease-out);
+}
+
+.roi:hover {
+  stroke: rgba(255, 255, 255, 0.9);
+}
+
+.selectedRoi,
+.selectedRoi:hover {
+  stroke: #2dd4bf;
+  stroke-dasharray: none;
+}
+
+.outline {
+  fill: rgba(255, 255, 255, 0.12);
+  stroke: #ffffff;
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+  paint-order: stroke;
+  pointer-events: none;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.6));
+}
+
+.selectedOutline {
+  fill: rgba(45, 212, 191, 0.18);
+  stroke: #2dd4bf;
+  stroke-width: 2.4;
+}
+
+/* On-frame pills keep their light look in both themes: they sit on a photograph. */
+.tag {
+  position: absolute;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.94);
+  color: #0b1220;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tag b {
+  font-weight: 700;
+}
+
+.selectedTag {
+  background: #0b1220;
+  color: #ffffff;
+}
+
+.selectedTag::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2dd4bf;
+}
+
+.tag:focus-visible {
+  outline: 2px solid #2dd4bf;
+  outline-offset: 2px;
+}
+
+.hud {
+  position: absolute;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.topLeft {
+  left: 14px;
+  top: 14px;
+}
+
+.topRight {
+  right: 14px;
+  top: 14px;
+}
+
+.bottomLeft {
+  left: 14px;
+  bottom: 14px;
+}
+
+.bottomRight {
+  right: 14px;
+  bottom: 14px;
+}
+
+.hudText {
+  height: 28px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.94);
+  color: #0b1220;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .tag,
+  .topRight,
+  .bottomRight {
+    display: none;
+  }
+
+  .hud {
+    gap: 6px;
+  }
+
+  .topLeft {
+    left: 10px;
+    top: 10px;
+  }
+
+  .bottomLeft {
+    left: 10px;
+    bottom: 10px;
+  }
+}

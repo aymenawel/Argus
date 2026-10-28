@@ -75,8 +75,8 @@ function isActive(href: string, pathname: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function RailLink({ item, pathname }: { item: NavItem; pathname: string }) {
-  const active = isActive(item.href, pathname);
+function RailLink({ item, pathname }: { item: NavItem; pathname: string | null }) {
+  const active = pathname !== null && isActive(item.href, pathname);
   return (
     <Link
       href={item.href}
@@ -90,8 +90,7 @@ function RailLink({ item, pathname }: { item: NavItem; pathname: string }) {
   );
 }
 
-export function Rail() {
-  const pathname = usePathname();
+function RailNav({ pathname }: { pathname: string | null }) {
   return (
     <nav className={styles.rail} aria-label="Argus">
       <span className={styles.mark}>
@@ -105,4 +104,13 @@ export function Rail() {
       </div>
     </nav>
   );
+}
+
+export function Rail() {
+  return <RailNav pathname={usePathname()} />;
+}
+
+/** The rail before the URL is known (prerendering a page whose path has a dynamic part): nothing is active. */
+export function RailFallback() {
+  return <RailNav pathname={null} />;
 }

@@ -1,4 +1,4 @@
-import type { Experiment, RecipeSummary } from "./types";
+import type { DetectionOutline, Experiment, RecipeSummary, RunView, Timeline } from "./types";
 
 // An empty NEXT_PUBLIC_ARGUS_API counts as unset, as it does for the worker's settings.
 export function apiBase(): string {
@@ -52,4 +52,33 @@ export function getRecipes(): Promise<RecipeSummary[]> {
 
 export function createExperiment(title: string, recipeId: string): Promise<Experiment> {
   return request("/api/experiments", { method: "POST", body: JSON.stringify({ title, recipe_id: recipeId }) });
+}
+
+export function getExperiment(id: string): Promise<Experiment> {
+  return request(`/api/experiments/${encodeURIComponent(id)}`);
+}
+
+export function getRuns(experimentId: string): Promise<RunView[]> {
+  return request(`/api/experiments/${encodeURIComponent(experimentId)}/runs`);
+}
+
+export function getRun(runId: string): Promise<RunView> {
+  return request(`/api/runs/${encodeURIComponent(runId)}`);
+}
+
+export function getTimeline(runId: string): Promise<Timeline> {
+  return request(`/api/runs/${encodeURIComponent(runId)}/timeline`);
+}
+
+export function getDetections(runId: string, frameId: string): Promise<DetectionOutline[]> {
+  return request(`/api/runs/${encodeURIComponent(runId)}/frames/${encodeURIComponent(frameId)}/detections`);
+}
+
+export function stopRun(runId: string): Promise<RunView> {
+  return request(`/api/runs/${encodeURIComponent(runId)}/stop`, { method: "POST" });
+}
+
+export function frameUrl(runId: string, frameId: string, width?: number): string {
+  const path = `/api/runs/${encodeURIComponent(runId)}/frames/${encodeURIComponent(frameId)}.jpg`;
+  return `${apiBase()}${path}${width ? `?w=${width}` : ""}`;
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { Rail } from "@/components/shell/Rail";
+import { Suspense } from "react";
+import { Rail, RailFallback } from "@/components/shell/Rail";
 import { THEME_SCRIPT } from "@/lib/theme";
 import styles from "./layout.module.css";
 import "./globals.css";
@@ -24,7 +25,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           Skip to content
         </a>
         <div className={styles.app}>
-          <Rail />
+          <Suspense fallback={<RailFallback />}>
+            <Rail />
+          </Suspense>
           <main id="content" className={styles.content}>
             {children}
           </main>

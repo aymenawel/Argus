@@ -2,7 +2,16 @@ import { apiBase } from "./api";
 
 // Server-sent event types the UI listens for. EventSource only delivers named events to listeners
 // registered by name, so each new type the worker publishes is added here.
-export const EVENT_TYPES = ["experiment", "resync"] as const;
+export const EVENT_TYPES = [
+  "experiment",
+  "resync",
+  "measurement",
+  "frame_analyzed",
+  "event",
+  "run_progress",
+  "run_status",
+  "spend",
+] as const;
 
 /**
  * Listen to the worker's event stream. On a dropped connection the browser reconnects by itself

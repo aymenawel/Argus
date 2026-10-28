@@ -1,0 +1,197 @@
+"use client";
+
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { RunFrame } from "@/components/run/RunFrame";
+import { PageHeader } from "@/components/shell/PageHeader";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Panel } from "@/components/ui/Panel";
+import { ApiError, apiBase, getExperiment, getRecipes, getRuns, stopRun } from "@/lib/api";
+import { playhead } from "@/lib/playhead";
+import { LiveSource, type RunSnapshot } from "@/lib/run-source";
+import { formatRunTime } from "@/lib/scale";
+import type { Experiment, RunEvent } from "@/lib/types";
+import styles from "./page.module.css";
+
+type Load =
+  | { state: "loading" }
+  | { state: "error"; error: ApiError }
+  | { state: "empty"; experiment: Experiment }
+  | { state: "ready"; experiment: Experiment; mainMetric: string; runNumber: number; source: LiveSource };
+
+function finding(snapshot: RunSnapshot): string {
+  const { view, progress, frames } = snapshot;
+  const analyzed = frames.filter((f) => f.analyzed);
+  const count = `${analyzed.length} ${analyzed.length === 1 ? "frame" : "frames"} analyzed`;
+  const last = analyzed.at(-1)?.t ?? 0;
+  if (view.running) {
+    if (progress?.stage === "measure" && progress.t != null && progress.t_end != null) {
+      return `Analyzing ${formatRunTime(progress.t)} of ${formatRunTime(progress.t_end)} · ${progress.speed ?? 0}× real time`;
+    }
+    if (progress?.stage === "segment") return `Segmenting with SAM 3.1 · ${progress.done} of ${progress.total} clips`;
+    if (progress?.stage === "scan" && progress.t != null) {
+      return `Reading the video · ${formatRunTime(progress.t)} so far · ${progress.speed ?? 0}× real time`;
+    }
+    return view.run.mode === "live" ? `Watching live · ${count}` : "Starting the import";
+  }
+  if (view.run.status === "finished") return `Finished · ${count} over ${formatRunTime(last)}`;
+  return `Stopped at ${formatRunTime(last)} · ${count}`;
+}
+
+const NOTICES: Partial<Record<RunEvent["kind"], string>> = {
+  interrupted: "This run stopped early: the worker stopped while it was running. What it measured is kept.",
+  no_calibration: "No Argus Card or ruler in view: frames are recorded, but nothing is measured in millimetres.",
+  spend: "The spend cap was reached: segmentation paused. Frames are still recorded and colour still measured.",
+};
+
+function notice(events: RunEvent[]): string | null {
+  const latest = [...events].reverse().find((e) => e.kind in NOTICES);
+  return latest ? (NOTICES[latest.kind] ?? null) : null;
+}
+
+export function RunScreen() {
+  const { id } = useParams<{ id: string }>();
+  const [load, setLoad] = useState<Load>({ state: "loading" });
+  const [snapshot, setSnapshot] = useState<RunSnapshot | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const [stopping, setStopping] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    let unsubscribe = () => {};
+    Promise.all([getExperiment(id), getRecipes(), getRuns(id)])
+      .then(([experiment, recipes, runs]) => {
+        if (!live) return;
+        if (runs.length === 0) {
+          setLoad({ state: "empty", experiment });
+          return;
+        }
+        const source = new LiveSource(runs[0].run.id);
+        const mainMetric = recipes.find((r) => r.id === experiment.recipe_id)?.main_measurement ?? "";
+        playhead.reset();
+        unsubscribe = source.subscribe((next) => live && setSnapshot(next));
+        setLoad({ state: "ready", experiment, mainMetric, runNumber: runs.length, source });
+        return source.load().then((first) => live && setSnapshot(first));
+      })
+      .catch((error: unknown) => {
+        if (live)
+          setLoad({ state: "error", error: error instanceof ApiError ? error : new ApiError(0, String(error)) });
+      });
+    return () => {
+      live = false;
+      unsubscribe();
+    };
+  }, [id, attempt]);
+
+  // Follow the newest frame unless the researcher moved the playhead.
+  const newest = useMemo(() => snapshot?.frames.filter((f) => f.analyzed).at(-1)?.t, [snapshot]);
+  useEffect(() => {
+    if (newest !== undefined) playhead.sync(newest);
+  }, [newest]);
+
+  const title = load.state === "ready" || load.state === "empty" ? load.experiment.title : "Run";
+  const crumb = (
+    <>
+      <Link href="/">Experiments</Link>
+      <span className={styles.faint}>/</span>
+      <span>{title}</span>
+      {load.state === "ready" && (
+        <>
+          <span className={styles.faint}>/</span>
+          <span>Run {load.runNumber}</span>
+        </>
+      )}
+    </>
+  );
+
+  if (load.state === "error") {
+    return (
+      <>
+        <PageHeader crumb={crumb} title={title} />
+        <Panel className={styles.panel}>
+          <div className={styles.message} role="alert">
+            <p className={styles.messageTitle}>
+              {load.error.status === 0
+                ? `Couldn't reach the Argus worker at ${apiBase()}.`
+                : `The Argus worker answered ${load.error.status}: ${load.error.detail}`}
+            </p>
+            <Button
+              onClick={() => {
+                setLoad({ state: "loading" });
+                setAttempt((a) => a + 1);
+              }}
+            >
+              Retry
+            </Button>
+          </div>
+        </Panel>
+      </>
+    );
+  }
+
+  if (load.state === "empty") {
+    return (
+      <>
+        <PageHeader crumb={crumb} title={title} />
+        <Panel className={styles.panel}>
+          <div className={styles.message}>
+            <p className={styles.messageTitle}>No run yet</p>
+            <p className={styles.messageText}>
+              Start one with <code className={styles.code}>uv run python -m argus run run.json</code>
+            </p>
+          </div>
+        </Panel>
+      </>
+    );
+  }
+
+  const ready = load.state === "ready" && snapshot !== null;
+  const view = ready ? snapshot.view : null;
+  const problem = ready ? notice(snapshot.events) : null;
+
+  return (
+    <>
+      <PageHeader
+        crumb={crumb}
+        title={title}
+        finding={ready ? finding(snapshot) : undefined}
+        actions={
+          view && (
+            <>
+              <Badge source={view.run.mode} />
+              <span className={`${styles.spend} num`}>Spend ${view.spend_usd.toFixed(2)}</span>
+              {view.running && (
+                <Button
+                  variant="primary"
+                  disabled={stopping}
+                  onClick={() => {
+                    setStopping(true);
+                    stopRun(view.run.id)
+                      .catch(() => undefined)
+                      .finally(() => setStopping(false));
+                  }}
+                >
+                  {stopping ? "Stopping…" : "Stop run"}
+                </Button>
+              )}
+            </>
+          )
+        }
+      />
+      {problem && (
+        <p className={styles.notice} role="status">
+          {problem}
+        </p>
+      )}
+      <Panel className={styles.panel}>
+        {ready && load.state === "ready" ? (
+          <RunFrame snapshot={snapshot} source={load.source} mainMetric={load.mainMetric} />
+        ) : (
+          <div className={styles.placeholder} aria-busy="true" />
+        )}
+      </Panel>
+    </>
+  );
+}
