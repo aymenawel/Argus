@@ -1,0 +1,24 @@
+# A reaction that changes colour, such as an iodine clock or an indicator fading.
+id = "colour-reaction"
+version = 1
+title = "Colour-change reaction"
+default_mode = "continuous"
+analysis_step_s = 0.5
+main_measurement = "delta_e"
+curve = "logistic"
+rivals = ["lighting change", "camera exposure", "mixing", "temperature"]
+default_views = ["colourstrip", "curves", "target", "best"]
+
+[[concepts]]
+name = "liquid"
+
+[[measurements]]
+id = "delta_e"
+family = "colour"
+method = "delta_e"
+from = "liquid"
+unit = "dE00"
+
+[[events]]
+id = "switch"
+when = "delta_e > 20"

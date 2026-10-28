@@ -1,0 +1,20 @@
+# Foam, dough or any layer rising in a vessel, side view.
+id = "foam-height"
+version = 1
+title = "Foam or growth height"
+default_mode = "continuous"
+analysis_step_s = 5.0
+main_measurement = "height"
+curve = "logistic"
+rivals = ["temperature", "evaporation", "position in the row", "handling"]
+default_views = ["gauge", "curves", "target", "groups"]
+
+[[concepts]]
+name = "foam"
+
+[[measurements]]
+id = "height"
+family = "size"
+method = "height"
+from = "foam"
+unit = "mm"

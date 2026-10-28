@@ -1,0 +1,40 @@
+# Seeds sprouting under treatments, side view through the vessel wall (docs/knowledge-base/20).
+id = "seed-germination"
+version = 1
+title = "Seed germination"
+default_mode = "smart_trigger"
+analysis_step_s = 300.0
+main_measurement = "root_length"
+curve = "logistic"
+rivals = ["temperature", "uneven watering", "position in the row", "seed batch"]
+default_views = ["cumulative", "grid", "curves", "dose", "target"]
+
+[watcher]
+signals = ["ssim", "colour"]
+light_normalization = "strong"
+day_night = true
+
+[[concepts]]
+name = "mung bean"
+
+[[concepts]]
+name = "root"
+
+[[measurements]]
+id = "root_length"
+family = "size"
+method = "skeleton_length"
+from = "root"
+unit = "mm"
+
+[[measurements]]
+id = "sprouted"
+family = "count"
+method = "event_count"
+from = "root"
+unit = "count"
+rule = "root_length > 2"
+
+[[events]]
+id = "first_sprout"
+when = "sprouted >= 1"

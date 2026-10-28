@@ -1,0 +1,27 @@
+# Anything the researcher describes: Argus measures area and colour of what SAM finds.
+id = "general"
+version = 1
+title = "General"
+default_mode = "hybrid"
+analysis_step_s = 60.0
+main_measurement = "area"
+curve = "linear"
+rivals = ["lighting change", "camera movement", "position in the frame", "handling"]
+default_views = ["curves", "groups", "crops"]
+
+[[concepts]]
+name = "object"
+
+[[measurements]]
+id = "area"
+family = "size"
+method = "area"
+from = "object"
+unit = "mm2"
+
+[[measurements]]
+id = "colour"
+family = "colour"
+method = "lab_mean"
+from = "object"
+unit = "L*"
