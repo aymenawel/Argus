@@ -106,7 +106,12 @@ async def probe_image() -> None:
             "confidences": [round(r.confidence, 3) for r in masks if r.confidence is not None],
             "mask_area_px": areas,
             "mask_size_vs_bounds": [
-                [r.mask.width, r.mask.height, round(r.bounds.right - r.bounds.left), round(r.bounds.bottom - r.bounds.top)]
+                [
+                    r.mask.width,
+                    r.mask.height,
+                    round(r.bounds.right - r.bounds.left),
+                    round(r.bounds.bottom - r.bounds.top),
+                ]
                 for r in masks[:3]
             ],
             "svg_path_example": decode_mask_to_svg_path(masks[0].mask)[:160] if masks else None,
@@ -129,8 +134,21 @@ def _make_pan_clip(frames: int = 60, fps: int = 10) -> Any:
         cv2.imwrite(str(frame_dir / f"{i:04d}.png"), image[y : y + 240, x : x + 240])
     clip = OUT / "pan.mp4"
     subprocess.run(
-        ["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(fps), "-i", str(frame_dir / "%04d.png"),
-         "-c:v", "libx264", "-pix_fmt", "yuv420p", str(clip)],
+        [
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-framerate",
+            str(fps),
+            "-i",
+            str(frame_dir / "%04d.png"),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            str(clip),
+        ],
         check=True,
     )
     return clip
@@ -139,7 +157,10 @@ def _make_pan_clip(frames: int = 60, fps: int = 10) -> Any:
 async def probe_video() -> None:
     clip = _make_pan_clip()
     result, seen, latency = await _segment(
-        [{"type": "input_text", "text": "coin"}, {"type": "input_video", "video_url": file_data_url(clip, "video/mp4")}],
+        [
+            {"type": "input_text", "text": "coin"},
+            {"type": "input_video", "video_url": file_data_url(clip, "video/mp4")},
+        ],
         video=True,
     )
     masks = [r for r in result.records if isinstance(r, SegmentationMaskRecord)]

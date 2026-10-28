@@ -23,17 +23,26 @@ SPARK = os.environ["REASONING_ROUTINE_MODEL"]
 def probe_clip_tokens() -> list[dict[str, Any]]:
     short = OUT / "pan.mp4"
     long = OUT / "pan_12s.mp4"
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-stream_loop", "1", "-i", str(short), "-c", "copy", str(long)], check=True)
+    subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error", "-stream_loop", "1", "-i", str(short), "-c", "copy", str(long)],
+        check=True,
+    )
     rows = []
     for clip, seconds in ((short, 6), (long, 12)):
         started = time.perf_counter()
         response = client().responses.create(
             model=SPARK,
             instructions=load_prompt("system/scientific-rules.md"),
-            input=[{"type": "message", "role": "user", "content": [
-                {"type": "input_text", "text": "In one sentence: what moves in this clip?"},
-                {"type": "input_video", "video_url": file_data_url(clip, "video/mp4")},
-            ]}],
+            input=[
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": "In one sentence: what moves in this clip?"},
+                        {"type": "input_video", "video_url": file_data_url(clip, "video/mp4")},
+                    ],
+                }
+            ],
             reasoning={"effort": "minimal"},
             max_output_tokens=800,
         )
@@ -49,12 +58,20 @@ def probe_voice() -> dict[str, Any]:
     response = requests.post(
         f"{os.environ['META_BASE_URL']}/asr/transcribe",
         headers={"Authorization": f"Bearer {os.environ['MODEL_API_KEY']}"},
-        files={"request": (None, json.dumps(request), "application/json"), "audio": (audio.name, audio.read_bytes(), "audio/wav")},
+        files={
+            "request": (None, json.dumps(request), "application/json"),
+            "audio": (audio.name, audio.read_bytes(), "audio/wav"),
+        },
         timeout=60,
     )
     latency = time.perf_counter() - started
     body = response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text
-    return {"status_code": response.status_code, "latency_s": round(latency, 2), "audio_bytes": audio.stat().st_size, "response": body}
+    return {
+        "status_code": response.status_code,
+        "latency_s": round(latency, 2),
+        "audio_bytes": audio.stat().st_size,
+        "response": body,
+    }
 
 
 def main() -> None:

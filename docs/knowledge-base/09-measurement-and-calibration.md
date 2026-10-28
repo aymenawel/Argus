@@ -2,7 +2,18 @@
 
 > Calibration turns "it looks bigger" into numbers a researcher would put in a report. Card layout below is **[proposed]**; adjust after testing with the real camera.
 
-## The Argus Card [decided concept, proposed layout]
+## The Argus Card [decided, v1 built Oct 27, D-47]
+
+**Print files:** `assets/argus-card/argus-card-v1-letter.pdf` (US Letter) and `-a4.pdf`, generated from one definition in `worker/argus/calibration/card.py` (`uv run python -m argus.calibration.card_export --out ../assets/argus-card`). One page holds two cards plus a 100 mm print-check line and instructions:
+
+| Card | Size | Markers (ArUco `DICT_4X4_50`) | Use |
+| --- | --- | --- | --- |
+| Standard | 110 × 80 mm | 20 mm, IDs 0 (top-left), 1, 2, 3 clockwise | Desk and top-down views |
+| Compact | 77 × 56 mm (same layout × 0.7) | 14 mm, IDs 4–7 | Beside jars in a side view |
+
+Each card: 4 corner markers with a white quiet zone of at least one module, a 6-step neutral ramp (sRGB 255/204/153/102/51/0), 6 color patches (red, green, blue, cyan, magenta, yellow; values in `card.py`), a mm scale bar (40 mm / 30 mm) and the Argus mark. Printed colors are used as **relative** references against the first frame, so printer accuracy doesn't matter. Checked: both sizes detect with the right IDs; after a strong perspective tilt the marker homography recovers patch positions within 0.15 mm (`worker/tests/test_card.py`); in the exported artwork markers measure 19.90 / 13.97 mm against 20 / 14 (within one preview pixel).
+
+The concept notes below still apply.
 
 A free printable card placed in the frame **on the same plane as the subject, parallel to the camera** (PlantCV's docs give the same caveat for any scale card).
 

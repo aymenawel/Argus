@@ -44,14 +44,23 @@ def _call(model: str, content: list[dict[str, Any]], instructions: str, **kwargs
 def probe_image_tokens() -> list[dict[str, Any]]:
     """Two snapshots per call; the 768 px call is repeated to check prompt caching."""
     rows = []
-    question = {"type": "input_text", "text": "Snapshot 1 is a frame, snapshot 2 shows its segmentation outlines. In one sentence, do the outlines follow the objects?"}
+    question = {
+        "type": "input_text",
+        "text": (
+            "Snapshot 1 is a frame, snapshot 2 shows its segmentation outlines. "
+            "In one sentence, do the outlines follow the objects?"
+        ),
+    }
     for model in (SPARK, WONDER):
         for long_side, attempt in ((1280, 1), (768, 1), (768, 2)):
-            response, row = _call(model, [question, *_snapshots(long_side)], RULES,
-                                  reasoning={"effort": "low"}, max_output_tokens=600)
+            response, row = _call(
+                model, [question, *_snapshots(long_side)], RULES, reasoning={"effort": "low"}, max_output_tokens=600
+            )
             rows.append({**row, "snapshot_long_side_px": long_side, "attempt": attempt, "text": response.output_text})
     counted = client().responses.input_tokens.count(
-        model=SPARK, instructions=RULES, input=[{"type": "message", "role": "user", "content": [question, *_snapshots(768)]}]
+        model=SPARK,
+        instructions=RULES,
+        input=[{"type": "message", "role": "user", "content": [question, *_snapshots(768)]}],
     )
     rows.append({"input_tokens_count_endpoint_768px": counted.input_tokens})
     return rows
@@ -76,31 +85,53 @@ def _claim_check(note: dict[str, Any], rows: list[dict[str, Any]]) -> dict[str, 
     """Every cited number must match its measurement row; every number in the prose must be a known value."""
     by_id = {r["id"]: r for r in rows}
     cited_errors = [
-        n for n in note["numbers_used"]
+        n
+        for n in note["numbers_used"]
         if n["measurement_id"] not in by_id or abs(by_id[n["measurement_id"]]["value"] - n["value"]) > 1e-6
     ]
     allowed = {float(r["value"]) for r in rows}
-    prose = " ".join(note[k] for k in ("observation", "interpretation", "next_step", "question_for_researcher", "confidence_reason"))
+    prose = " ".join(
+        note[k] for k in ("observation", "interpretation", "next_step", "question_for_researcher", "confidence_reason")
+    )
     prose_numbers = [float(x.replace(",", "")) for x in NUMBER.findall(prose)]
     unknown = [x for x in prose_numbers if x not in allowed and x not in (1.0, 2.0)]  # small ordinals allowed for now
-    return {"cited_mismatches": cited_errors, "prose_numbers": prose_numbers, "unknown_prose_numbers": unknown,
-            "passed": not cited_errors and not unknown}
+    return {
+        "cited_mismatches": cited_errors,
+        "prose_numbers": prose_numbers,
+        "unknown_prose_numbers": unknown,
+        "passed": not cited_errors and not unknown,
+    }
 
 
 def probe_cache() -> list[dict[str, Any]]:
     """Repeat calls with a long stable text prefix (~2.5k tokens), with and without prompt_cache_key."""
-    prefix = RULES + "\n\n" + load_prompt("deep/verdict-critique.md") + "\n\n" + (REPO / "docs/knowledge-base/08-science-rigor.md").read_text(encoding="utf-8")
+    prefix = (
+        RULES
+        + "\n\n"
+        + load_prompt("deep/verdict-critique.md")
+        + "\n\n"
+        + (REPO / "docs/knowledge-base/08-science-rigor.md").read_text(encoding="utf-8")
+    )
     question = [{"type": "input_text", "text": "Reply with the single word: ready."}]
     rows = []
-    for label, extra in (("no_key", {}), ("cache_key", {"prompt_cache_key": "argus-probe-rules"}),
-                         ("cache_key_24h", {"prompt_cache_key": "argus-probe-rules-24h", "prompt_cache_retention": "24h"})):
+    for label, extra in (
+        ("no_key", {}),
+        ("cache_key", {"prompt_cache_key": "argus-probe-rules"}),
+        ("cache_key_24h", {"prompt_cache_key": "argus-probe-rules-24h", "prompt_cache_retention": "24h"}),
+    ):
         for attempt in (1, 2, 3):
             _, row = _call(SPARK, question, prefix, reasoning={"effort": "minimal"}, max_output_tokens=300, **extra)
             rows.append({"variant": label, "attempt": attempt, **row})
             time.sleep(2)
     for attempt in (1, 2):
-        _, row = _call(SPARK, [*_snapshots(768), *question], prefix, reasoning={"effort": "minimal"},
-                       max_output_tokens=300, prompt_cache_key="argus-probe-images")
+        _, row = _call(
+            SPARK,
+            [*_snapshots(768), *question],
+            prefix,
+            reasoning={"effort": "minimal"},
+            max_output_tokens=300,
+            prompt_cache_key="argus-probe-images",
+        )
         rows.append({"variant": "cache_key_with_images", "attempt": attempt, **row})
         time.sleep(2)
     return rows
@@ -114,8 +145,14 @@ def probe_note_json() -> list[dict[str, Any]]:
     results = []
     for effort in ("minimal", "low"):
         response, row = _call(
-            SPARK, content, RULES, reasoning={"effort": effort}, max_output_tokens=4000,
-            text={"format": {"type": "json_schema", "name": "ArgusNote", "schema": load_schema("note"), "strict": True}},
+            SPARK,
+            content,
+            RULES,
+            reasoning={"effort": effort},
+            max_output_tokens=4000,
+            text={
+                "format": {"type": "json_schema", "name": "ArgusNote", "schema": load_schema("note"), "strict": True}
+            },
         )
         note = json.loads(response.output_text)
         results.append({"effort": effort, **row, "note": note, "claim_check": _claim_check(note, rows)})
@@ -134,9 +171,19 @@ def probe_critique_json() -> dict[str, Any]:
         "Draft verdict: SUPPORTED. Warm water proves faster rising; 120 frames of the warm jar all agree."
     )
     response, row = _call(
-        WONDER, [{"type": "input_text", "text": draft}], RULES + "\n\n" + load_prompt("deep/verdict-critique.md"),
-        reasoning={"effort": "medium"}, max_output_tokens=4000,
-        text={"format": {"type": "json_schema", "name": "VerdictCritique", "schema": load_schema("verdict_critique"), "strict": True}},
+        WONDER,
+        [{"type": "input_text", "text": draft}],
+        RULES + "\n\n" + load_prompt("deep/verdict-critique.md"),
+        reasoning={"effort": "medium"},
+        max_output_tokens=4000,
+        text={
+            "format": {
+                "type": "json_schema",
+                "name": "VerdictCritique",
+                "schema": load_schema("verdict_critique"),
+                "strict": True,
+            }
+        },
     )
     return {**row, "critique": json.loads(response.output_text)}
 
