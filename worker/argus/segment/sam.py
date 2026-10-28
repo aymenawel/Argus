@@ -22,7 +22,7 @@ from meta_sam_parser import (
     parse_responses_stream,
     video_segmentation_format,
 )
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, Timeout
 
 from argus.config import Settings
 from argus.domain import ModelCallDraft
@@ -79,10 +79,17 @@ def _tracks(records: tuple, concept: str, dx: int, dy: int) -> list[Track]:
     ]
 
 
-def _client(settings: Settings) -> AsyncOpenAI:
+def sam_client(settings: Settings, *, http_client: Any = None) -> AsyncOpenAI:
+    """A client for SAM calls: no SDK retries (each pipeline attempt is one logged request) and a bounded wait."""
     if settings.model_api_key is None:
         raise RuntimeError("MODEL_API_KEY is not set")
-    return AsyncOpenAI(base_url=settings.meta_base_url, api_key=settings.model_api_key.get_secret_value())
+    return AsyncOpenAI(
+        base_url=settings.meta_base_url,
+        api_key=settings.model_api_key.get_secret_value(),
+        max_retries=0,
+        timeout=Timeout(settings.sam_timeout_s, connect=5.0),
+        http_client=http_client,
+    )
 
 
 def _parse(events: list[Any], mode: str, concept: str, dx: int, dy: int) -> tuple[Any, list[Track]]:
@@ -153,8 +160,10 @@ async def segment(
 
     started = time.perf_counter()
     responded = False
+    owned = client is None  # a one-off caller without a client gets one for this call only
     try:
-        stream = await (client or _client(settings)).responses.create(
+        client = client or sam_client(settings)
+        stream = await client.responses.create(
             model=settings.segment_model,
             input=[{"type": "message", "role": "user", "content": content}],
             metadata=metadata,
@@ -166,6 +175,9 @@ async def segment(
     except Exception as error:  # transport, API and parser errors all mean: no masks from this call
         text = f"{type(error).__name__}: {error}"
         raise SegmentError(text, call("error", started, cost_usd=cost if responded else 0.0, error=text)) from error
+    finally:
+        if owned and client is not None:
+            await client.close()
     if not isinstance(outcome, CompletedOutcome):
         text = f"stream incomplete: {outcome.reason} {outcome.detail or ''}".strip()
         raise SegmentError(text, call("error", started, cost_usd=cost, error=text))

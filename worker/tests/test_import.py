@@ -7,12 +7,15 @@ import numpy as np
 import pytest
 from pydantic import SecretStr
 
+import argus.pipeline.jobs as jobs_module
 from argus.api.events import EventBroker
 from argus.calibration.card import STANDARD
 from argus.config import Settings
 from argus.domain import ModelCallDraft, Role, RunMode, RunSource, RunStatus, SourceKind, VesselDraft
 from argus.pipeline.analyzer import RunContext
 from argus.pipeline.imported import ImportRequest, run_import
+from argus.pipeline.jobs import RunJobs
+from argus.pipeline.live import CameraHub
 from argus.recipes.model import Recipe
 from argus.segment import MaskPatch, SegmentError, SegmentResult, Track, TrackFrame
 from argus.storage.files import RunFiles
@@ -236,3 +239,39 @@ async def test_a_lamp_change_does_not_stop_the_import_measuring(ctx, dimmed_clip
     rows = lengths_of_a(ctx)
     assert rows and rows[-1].t >= SCALE * (FRAMES - 1) / FPS - ctx.recipe.analysis_step_s
     assert not [e for e in events_for_run(ctx.db, ctx.run.id) if e.kind == "intervention"]
+
+
+@pytest.mark.anyio
+async def test_stop_during_the_segment_stage_stops_sam_calls(ctx, clip):
+    cancel = asyncio.Event()
+
+    class StopsAfterTwoImages(FakeSegmenter):
+        async def image(self, image_bgr, concept):
+            if self.modes.count("image") == 2:
+                cancel.set()
+            return await super().image(image_bgr, concept)
+
+    ctx.segmenter = StopsAfterTwoImages(video_fails=True)
+    assert await run_import(ctx, request(clip), cancel=cancel) is RunStatus.STOPPED
+    assert ctx.segmenter.modes.count("image") <= 4  # the calls in flight finish; no new ones start
+    assert [e.data["status"] for e in ctx.broker.since(0) if e.type == "run_status"] == ["stopped"]
+
+
+@pytest.mark.anyio
+async def test_a_forced_stop_tells_the_page_and_logs_the_call_in_flight(ctx, clip, monkeypatch):
+    class Hangs(FakeSegmenter):
+        async def video(self, clip, concept):
+            self.modes.append("video")
+            await asyncio.sleep(3600)  # a stalled SAM stream
+
+    monkeypatch.setattr(jobs_module, "STOP_WAIT_S", 0.2)
+    jobs = RunJobs(ctx.db, ctx.broker, ctx.settings, {"seed-germination": RECIPE}, CameraHub(), segmenter=Hangs())
+    jobs.start_import(ctx.run, ctx.vessels, request(clip))
+    while "video" not in jobs.segmenter.modes:
+        await asyncio.sleep(0.05)
+    assert await jobs.stop(ctx.run.id)
+    assert get_run(ctx.db, ctx.run.id).status is RunStatus.STOPPED
+    assert [e.data["status"] for e in ctx.broker.since(0) if e.type == "run_status"] == ["stopped"]
+    with ctx.db.read() as c:
+        errors = [r["error"] for r in c.execute("SELECT error FROM model_calls WHERE run_id=?", (ctx.run.id,))]
+    assert errors and all(e == "cancelled" for e in errors)

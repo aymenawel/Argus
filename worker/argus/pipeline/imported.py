@@ -188,11 +188,15 @@ async def _segment_vessel(
     concept: str,
     shape: tuple[int, int],
     masks: dict[str, dict[str, dict]],
+    cancel: asyncio.Event,
 ) -> None:
+    """Stop is checked before every SAM call; a call already sent finishes and is logged."""
     box = roi_box(vessel, *shape, margin=CROP_MARGIN_PX)
     x0, y0, x1, y1 = box
     size = ctx.settings.sam_max_video_frames
     for index, start in enumerate(range(0, len(samples), size)):
+        if cancel.is_set():
+            return
         chunk = samples[start : start + size]
         clip = await asyncio.to_thread(_write_clip, ctx, vessel, concept, chunk, index, box)
         result = await segment_with_retries(ctx, clip, concept, t=chunk[0].t, frame_ids=[s.frame_id for s in chunk])
@@ -210,6 +214,8 @@ async def _segment_vessel(
         if result.reason == "cap":
             return
         for sample in chunk:  # video mode failed: image mode on the vessel's crop, frame by frame
+            if cancel.is_set():
+                return
             crop = (await asyncio.to_thread(cv2.imread, str(sample.path)))[y0:y1, x0:x1]
             single = await segment_with_retries(ctx, crop, concept, t=sample.t, frame_ids=[sample.frame_id])
             if isinstance(single, Skipped):
@@ -243,7 +249,7 @@ async def run_import(ctx: RunContext, request: ImportRequest, *, cancel: asyncio
 
         async def job(vessel: Vessel, concept: str) -> None:
             nonlocal done
-            await _segment_vessel(ctx, samples, vessel, concept, shape, masks)
+            await _segment_vessel(ctx, samples, vessel, concept, shape, masks, cancel)
             done += 1
             ctx.publish("run_progress", {"stage": "segment", "done": done, "total": len(jobs)})
 

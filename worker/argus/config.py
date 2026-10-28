@@ -51,6 +51,7 @@ class Settings(BaseModel):
     sam_max_objects: int = 16
     sam_max_video_frames: int = 15000
     sam_concurrency: int = 2
+    sam_timeout_s: float = 120.0  # longest wait for the next bit of a SAM response; the SDK's own retries are off
     segment_interval_s: float = 10.0  # live runs: the shortest gap between two segmentations
 
 

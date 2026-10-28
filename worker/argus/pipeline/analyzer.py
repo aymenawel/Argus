@@ -7,9 +7,10 @@ cap leaves a gap, never a zero: zero is stored only when SAM answered and found 
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 
 import cv2
 import numpy as np
@@ -19,12 +20,13 @@ from argus.calibration.colour import ColourReference, neutral_drift, read_patche
 from argus.calibration.detect import detect_card
 from argus.calibration.run import RunCalibration
 from argus.config import Settings
-from argus.domain import Detection, EventKind, MeasurementDraft, Run, Vessel, new_id
+from argus.domain import Detection, EventKind, MeasurementDraft, ModelCallDraft, Run, Vessel, new_id
 from argus.measure.engine import ColourBaseline, measure_vessel
 from argus.measure.uncertainty import format_measurement
 from argus.recipes.model import Recipe
 from argus.segment import Clip, MaskPatch, SegmentError, SegmentResult, segment
 from argus.segment.outline import outline_polygons
+from argus.segment.sam import sam_client
 from argus.segment.tracking import TrackMatcher, assign_to_vessels
 from argus.storage.db import Database
 from argus.storage.files import RunFiles
@@ -53,14 +55,27 @@ class Segmenter(Protocol):
 
 
 class SamSegmenter:
+    """The worker's SAM 3.1 access: one client for every run, closed when the worker stops."""
+
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        self._client: Any = None  # only argus.segment.sam touches the SDK
+
+    @property
+    def client(self) -> Any:
+        if self._client is None:
+            self._client = sam_client(self.settings)
+        return self._client
 
     async def image(self, image_bgr: np.ndarray, concept: str) -> SegmentResult:
-        return await segment(image_bgr, concept, mode="image", settings=self.settings)
+        return await segment(image_bgr, concept, mode="image", settings=self.settings, client=self.client)
 
     async def video(self, clip: Clip, concept: str) -> SegmentResult:
-        return await segment(clip, concept, mode="video", settings=self.settings)
+        return await segment(clip, concept, mode="video", settings=self.settings, client=self.client)
+
+    async def aclose(self) -> None:
+        if self._client is not None:
+            await self._client.close()
 
 
 @dataclass
@@ -82,6 +97,8 @@ class RunContext:
     calibration_reported: bool = False
     drift_reported: bool = False
     semaphore: asyncio.Semaphore = field(init=False)
+    spend_lock: asyncio.Lock = field(init=False, default_factory=asyncio.Lock)
+    reserved_usd: float = 0.0  # expected cost of the calls in flight, not yet logged
 
     def __post_init__(self) -> None:
         self.semaphore = asyncio.Semaphore(self.settings.sam_concurrency)
@@ -134,6 +151,24 @@ def _expected_cost(settings: Settings, media: np.ndarray | Clip) -> float:
     return max(media.frame_count, settings.sam_video_min_frames) * settings.sam_video_frame_usd
 
 
+def _cancelled_call(settings: Settings, media: np.ndarray | Clip, cost: float, started: float) -> ModelCallDraft:
+    billed = (
+        {"images": 1}
+        if isinstance(media, np.ndarray)
+        else {"frames": max(media.frame_count, settings.sam_video_min_frames)}
+    )
+    return ModelCallDraft(
+        function="segment",
+        model=settings.segment_model,
+        tier="segment",
+        cost_usd=cost,
+        latency_s=round(time.perf_counter() - started, 3),
+        status="error",
+        error="cancelled",
+        **billed,
+    )
+
+
 async def segment_with_retries(
     ctx: RunContext, media: np.ndarray | Clip, concept: str, *, t: float, frame_ids: Sequence[str] = ()
 ) -> SegmentResult | Skipped:
@@ -141,30 +176,43 @@ async def segment_with_retries(
     attempt failed (with a segment_failed event)."""
     attempts = 1 + len(ctx.retry_delays_s)
     error = ""
+    expected, cap = _expected_cost(ctx.settings, media), ctx.settings.run_spend_cap_usd
     for attempt in range(attempts):
-        spent = await asyncio.to_thread(run_spend_usd, ctx.db, ctx.run.id)
-        cap = ctx.settings.run_spend_cap_usd
-        if spent + _expected_cost(ctx.settings, media) > cap:
-            if not ctx.cap_reported:
-                ctx.cap_reported = True
-                detail = {"spent_usd": round(spent, 4), "cap_usd": cap, "message": "segmentation paused: spend cap"}
-                await ctx.event(t, EventKind.SPEND, "pipeline", detail)
-                ctx.publish("spend", {"t": t, "spent_usd": round(spent, 4), "cap_usd": cap})
-            return Skipped("cap")
-        try:
-            async with ctx.semaphore:
-                if isinstance(media, np.ndarray):
-                    result = await ctx.segmenter.image(media, concept)
-                else:
-                    result = await ctx.segmenter.video(media, concept)
-        except SegmentError as failure:
-            error = str(failure)
-            await asyncio.to_thread(add_model_call, ctx.db, ctx.run.id, t, failure.call)
-            if attempt < attempts - 1:
-                await asyncio.sleep(ctx.retry_delays_s[attempt])
-            continue
-        await asyncio.to_thread(add_model_call, ctx.db, ctx.run.id, t, result.call)
-        return result
+        async with ctx.semaphore:
+            # Check and reserve together, so calls in flight at once can't all pass the same check.
+            async with ctx.spend_lock:
+                spent = await asyncio.to_thread(run_spend_usd, ctx.db, ctx.run.id)
+                refused = spent + ctx.reserved_usd + expected > cap
+                if not refused:
+                    ctx.reserved_usd += expected
+            if refused:
+                if not ctx.cap_reported:
+                    ctx.cap_reported = True
+                    detail = {"spent_usd": round(spent, 4), "cap_usd": cap, "message": "segmentation paused: spend cap"}
+                    await ctx.event(t, EventKind.SPEND, "pipeline", detail)
+                    ctx.publish("spend", {"t": t, "spent_usd": round(spent, 4), "cap_usd": cap})
+                return Skipped("cap")
+            result: SegmentResult | None = None
+            started = time.perf_counter()
+            try:
+                try:
+                    if isinstance(media, np.ndarray):
+                        result = await ctx.segmenter.image(media, concept)
+                    else:
+                        result = await ctx.segmenter.video(media, concept)
+                    logged = result.call
+                except SegmentError as failure:
+                    error, logged = str(failure), failure.call
+                except asyncio.CancelledError:  # a forced stop: the request may be billed, so it is logged
+                    add_model_call(ctx.db, ctx.run.id, t, _cancelled_call(ctx.settings, media, expected, started))
+                    raise
+                await asyncio.to_thread(add_model_call, ctx.db, ctx.run.id, t, logged)
+            finally:
+                ctx.reserved_usd -= expected
+        if result is not None:
+            return result
+        if attempt < attempts - 1:
+            await asyncio.sleep(ctx.retry_delays_s[attempt])
     detail = {"concept": concept, "attempts": attempts, "error": error}
     await ctx.event(t, EventKind.SEGMENT_FAILED, "pipeline", detail, frame_ids=frame_ids)
     return Skipped("failed")

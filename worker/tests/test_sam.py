@@ -14,7 +14,9 @@ from pydantic import SecretStr
 from skimage import data
 
 from argus.config import Settings
+from argus.pipeline.analyzer import SamSegmenter
 from argus.segment import Clip, SegmentError, segment
+from argus.segment.sam import sam_client
 
 FIXTURES = Path(__file__).parent / "fixtures" / "sam"
 SETTINGS = Settings(model_api_key=SecretStr("test-key"))
@@ -151,3 +153,27 @@ async def test_a_stream_cut_short_is_a_failure():
     with pytest.raises(SegmentError) as caught:
         await segment(COINS, "coin", mode="image", settings=SETTINGS, client=FakeClient(events))
     assert caught.value.call.status == "error"
+
+
+@pytest.mark.anyio
+async def test_one_attempt_is_one_http_request_with_a_bounded_wait():
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(500, json={"error": {"message": "boom"}})
+
+    client = sam_client(SETTINGS, http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    assert client.timeout.read == SETTINGS.sam_timeout_s == 120.0 and client.timeout.connect == 5.0
+    with pytest.raises(SegmentError):
+        await segment(COINS, "coin", mode="image", settings=SETTINGS, client=client)
+    assert len(requests) == 1  # no hidden SDK retries: the pipeline's attempts are the only ones, each logged
+
+
+@pytest.mark.anyio
+async def test_the_segmenter_keeps_one_client_and_closes_it():
+    segmenter = SamSegmenter(SETTINGS)
+    client = segmenter.client
+    assert segmenter.client is client and client.max_retries == 0
+    await segmenter.aclose()
+    assert client.is_closed()

@@ -208,8 +208,20 @@ def set_run_status(db: Database, run_id: str, status: RunStatus) -> Run:
     return run
 
 
+def settle_experiment(db: Database, experiment_id: str, run_status: RunStatus) -> None:
+    """After a run ends, the experiment follows: finished with it, else back to locked (plan locked) or draft."""
+    if run_status is RunStatus.FINISHED:
+        settled = ExperimentStatus.FINISHED
+    elif any(plan.locked_at for plan in get_plans(db, experiment_id)):
+        settled = ExperimentStatus.LOCKED
+    else:
+        settled = ExperimentStatus.DRAFT
+    set_experiment_status(db, experiment_id, settled)
+
+
 def stop_interrupted_runs(db: Database) -> list[str]:
-    """At startup, runs still marked running were cut off (the worker stopped): mark them stopped, with an event."""
+    """At startup, runs still marked running were cut off (the worker stopped): mark them stopped, with an event,
+    and settle every experiment still marked running (nothing runs before startup ends)."""
     with db.read() as c:
         rows = c.execute("SELECT id FROM runs WHERE status=?", (RunStatus.RUNNING,)).fetchall()
     ids = [r["id"] for r in rows]
@@ -225,6 +237,10 @@ def stop_interrupted_runs(db: Database) -> list[str]:
             source="pipeline",
             detail={"reason": "the worker stopped while the run was running"},
         )
+    with db.read() as c:
+        running = c.execute("SELECT id FROM experiments WHERE status=?", (ExperimentStatus.RUNNING,)).fetchall()
+    for row in running:
+        settle_experiment(db, row["id"], RunStatus.STOPPED)
     return ids
 
 

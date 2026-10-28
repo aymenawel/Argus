@@ -21,7 +21,7 @@ from argus.pipeline.live import CameraHub, run_live
 from argus.recipes.model import Recipe
 from argus.storage.db import Database
 from argus.storage.files import RunFiles
-from argus.storage.repos import get_experiment, get_plans, set_experiment_status, set_run_status
+from argus.storage.repos import get_experiment, set_experiment_status, set_run_status, settle_experiment
 from argus.watcher import Watcher, WatcherSettings
 
 STOP_WAIT_S = 30.0
@@ -105,8 +105,9 @@ class RunJobs:
         status = RunStatus.STOPPED
         try:
             status = await job
-        except asyncio.CancelledError:
+        except asyncio.CancelledError:  # Stop's wait ran out: the page still learns the run stopped
             await asyncio.to_thread(set_run_status, self.db, ctx.run.id, RunStatus.STOPPED)
+            ctx.publish("run_status", {"status": str(RunStatus.STOPPED)})
             raise
         except Exception as error:  # a crashed job must not leave its run "running"
             detail = {"reason": "the run stopped on an error", "error": f"{type(error).__name__}: {error}"}
@@ -114,18 +115,9 @@ class RunJobs:
             await asyncio.to_thread(set_run_status, self.db, ctx.run.id, RunStatus.STOPPED)
             ctx.publish("run_status", {"status": str(RunStatus.STOPPED)})
         finally:
-            await asyncio.to_thread(self._settle_experiment, ctx.run.experiment_id, status)
+            await asyncio.to_thread(settle_experiment, self.db, ctx.run.experiment_id, status)
             self._jobs.pop(ctx.run.id, None)
         return status
-
-    def _settle_experiment(self, experiment_id: str, status: RunStatus) -> None:
-        if status is RunStatus.FINISHED:
-            settled = ExperimentStatus.FINISHED
-        elif any(plan.locked_at for plan in get_plans(self.db, experiment_id)):
-            settled = ExperimentStatus.LOCKED
-        else:
-            settled = ExperimentStatus.DRAFT
-        set_experiment_status(self.db, experiment_id, settled)
 
     async def stop(self, run_id: str) -> bool:
         job = self._jobs.get(run_id)
@@ -137,6 +129,7 @@ class RunJobs:
             await asyncio.wait_for(asyncio.shield(task), STOP_WAIT_S)
         except TimeoutError:
             task.cancel()
+            await asyncio.wait([task], timeout=5.0)  # let the job record its stop before answering
         return True
 
     async def shutdown(self) -> None:
@@ -148,3 +141,6 @@ class RunJobs:
             for task in pending:
                 task.cancel()
         self.hub.close_all()
+        close = getattr(self.segmenter, "aclose", None)
+        if close is not None:
+            await close()

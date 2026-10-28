@@ -7,7 +7,9 @@ from argus.domain import (
     CameraProperty,
     DetectionDraft,
     EventKind,
+    ExperimentStatus,
     ModelCallDraft,
+    PlanDraft,
     RunMode,
     RunSource,
     RunStatus,
@@ -25,11 +27,15 @@ from argus.storage.repos import (
     detections_for_frame,
     events_for_run,
     frames_for_run,
+    get_experiment,
     get_run,
     latest_calibration,
+    lock_plan,
     mark_frame_analyzed,
     run_spend_usd,
     runs_for_experiment,
+    save_plan_draft,
+    set_experiment_status,
     stop_interrupted_runs,
 )
 
@@ -147,3 +153,16 @@ def test_run_files_live_under_experiment_and_run(tmp_path):
     assert files.frame_path("frm_1").parent.is_dir()
     assert files.mask_path("det_1").name == "det_1.png"
     assert files.crop_path("A", "mung bean").name == "A-mung-bean.mp4"
+
+
+@pytest.mark.parametrize("locked", [False, True])
+def test_a_restart_settles_the_experiment_of_a_cut_off_run(db, exp, locked):
+    if locked:
+        save_plan_draft(
+            db, exp.id, PlanDraft(hypothesis="Salt slows roots", prediction="shorter", threshold="10%", rivals=[])
+        )
+        lock_plan(db, exp.id)
+    create_run(db, exp.id, RunMode.LIVE, RunSource(kind=SourceKind.WEBCAM, camera_index=0))
+    set_experiment_status(db, exp.id, ExperimentStatus.RUNNING)  # what RunJobs does when the run starts
+    stop_interrupted_runs(db)  # the worker was killed, so RunJobs never settled it
+    assert get_experiment(db, exp.id).status is (ExperimentStatus.LOCKED if locked else ExperimentStatus.DRAFT)

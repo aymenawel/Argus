@@ -12,9 +12,9 @@ from argus.calibration.card import STANDARD
 from argus.calibration.run import calibrate
 from argus.config import Settings
 from argus.domain import ModelCallDraft, Role, RunMode, RunSource, SourceKind, VesselDraft
-from argus.pipeline.analyzer import RunContext, analyze_frame
+from argus.pipeline.analyzer import RunContext, Skipped, analyze_frame, segment_with_retries
 from argus.recipes.model import Recipe
-from argus.segment import MaskPatch, SegmentError, SegmentResult, Track, TrackFrame
+from argus.segment import Clip, MaskPatch, SegmentError, SegmentResult, Track, TrackFrame
 from argus.storage.files import RunFiles
 from argus.storage.repos import (
     add_vessels,
@@ -253,3 +253,21 @@ async def test_injected_masks_are_per_vessel_a_missing_vessel_is_a_gap(ctx, scen
     out = await analyze_frame(ctx, 0.0, image, segment=False, masks={a: {"root": []}})
     lengths = {m.vessel_id: m.value for m in measurements_for_run(ctx.db, ctx.run.id, metric="length")}
     assert out.segmented and lengths == {a: 0.0}
+
+
+@pytest.mark.anyio
+async def test_concurrent_calls_never_spend_past_the_cap(ctx, tmp_path):
+    class SlowVideo(FakeSegmenter):
+        async def video(self, clip, concept):
+            await asyncio.sleep(0.05)  # a SAM video call takes seconds
+            return SegmentResult([], call(cost=clip.frame_count * 0.0002))
+
+    ctx.segmenter = SlowVideo()
+    ctx.settings = ctx.settings.model_copy(update={"run_spend_cap_usd": 1.0, "sam_concurrency": 6})
+    ctx.semaphore = asyncio.Semaphore(6)
+    clip = Clip(tmp_path / "c.mp4", frame_count=3000, width=10, height=10)  # $0.60 each
+    out = await asyncio.gather(*(segment_with_retries(ctx, clip, "root", t=0.0) for _ in range(6)))
+    assert sum(isinstance(r, SegmentResult) for r in out) == 1 and out.count(Skipped("cap")) == 5
+    with ctx.db.read() as c:
+        spent = c.execute("SELECT SUM(cost_usd) FROM model_calls WHERE run_id=?", (ctx.run.id,)).fetchone()[0]
+    assert spent <= 1.0
