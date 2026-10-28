@@ -156,12 +156,26 @@ class Rectified:
     origin_mm: tuple[float, float]  # card-plane mm at the image's top-left pixel
 
 
-def rectify(image_or_mask: np.ndarray, detection: CardDetection, *, px_per_mm: float = 10.0) -> Rectified:
-    """Warp the whole frame onto the card plane at a fixed scale, so lengths read straight in mm."""
+def rectify(
+    image_or_mask: np.ndarray,
+    detection: CardDetection,
+    *,
+    region_px: tuple[float, float, float, float] | None = None,
+    px_per_mm: float = 10.0,
+    max_side_px: int = 4096,
+) -> Rectified:
+    """Warp a region of the frame (default: all of it) onto the card plane at a fixed scale, so lengths read
+    straight in mm. Only the region's footprint is warped; at oblique angles the whole frame's footprint can be
+    tens of thousands of pixels wide, so the scale drops until the output fits in `max_side_px`."""
     h, w = image_or_mask.shape[:2]
-    corners_mm = detection.px_to_mm(np.array([[0, 0], [w, 0], [w, h], [0, h]], np.float64))
+    rx0, ry0, rx1, ry1 = region_px if region_px is not None else (0.0, 0.0, float(w), float(h))
+    rx0, ry0, rx1, ry1 = max(rx0, 0.0), max(ry0, 0.0), min(rx1, float(w)), min(ry1, float(h))
+    corners_mm = detection.px_to_mm(np.array([[rx0, ry0], [rx1, ry0], [rx1, ry1], [rx0, ry1]], np.float64))
     x0, y0 = corners_mm.min(axis=0)
     x1, y1 = corners_mm.max(axis=0)
+    span_mm = max(x1 - x0, y1 - y0)
+    if span_mm > 0:
+        px_per_mm = min(px_per_mm, (max_side_px - 1) / span_mm)
     to_canvas = np.array([[px_per_mm, 0, -x0 * px_per_mm], [0, px_per_mm, -y0 * px_per_mm], [0, 0, 1]])
     print_scale = np.diag([detection.print_scale, detection.print_scale, 1.0])
     matrix = to_canvas @ print_scale @ detection.image_to_card

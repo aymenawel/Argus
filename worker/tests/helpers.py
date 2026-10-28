@@ -106,3 +106,12 @@ def bounding_box_of_dark_square(image: np.ndarray) -> tuple[int, int]:
     count, _, stats, _ = cv2.connectedComponentsWithStats((gray < 100).astype(np.uint8))
     largest = max(range(1, count), key=lambda i: stats[i, cv2.CC_STAT_AREA])
     return int(stats[largest, cv2.CC_STAT_WIDTH]), int(stats[largest, cv2.CC_STAT_HEIGHT])
+
+
+def bbox_of_dark_square_in_image(image: np.ndarray, margin: int = 20) -> tuple[float, float, float, float]:
+    """Image-space box (x0, y0, x1, y1) around the largest dark blob, widened by a margin."""
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
+    count, _, stats, _ = cv2.connectedComponentsWithStats((gray < 100).astype(np.uint8))
+    i = max(range(1, count), key=lambda k: stats[k, cv2.CC_STAT_AREA])
+    x, y, w, h = (int(stats[i, k]) for k in (cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT))
+    return (float(x - margin), float(y - margin), float(x + w + margin), float(y + h + margin))
