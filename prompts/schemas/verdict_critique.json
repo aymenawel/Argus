@@ -1,0 +1,26 @@
+{
+  "$comment": "Output schema for prompts/deep/verdict-critique.md. Send as text.format json_schema with strict=true on the Responses API.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["revised_verdict", "confidence", "confidence_reason", "what_would_change_it", "findings"],
+  "properties": {
+    "revised_verdict": {"type": "string", "enum": ["SUPPORTED", "NOT_SUPPORTED", "INCONCLUSIVE", "TOO_EARLY"]},
+    "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
+    "confidence_reason": {"type": "string"},
+    "what_would_change_it": {"type": "string"},
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["item", "problem", "consequence", "fix"],
+        "properties": {
+          "item": {"type": "string", "enum": ["unit_of_analysis", "control_comparison", "measurement_validity", "confounding", "multiple_comparisons", "early_stopping", "plan_drift", "over_claiming", "numbers"]},
+          "problem": {"type": "string"},
+          "consequence": {"type": "string"},
+          "fix": {"type": "string"}
+        }
+      }
+    }
+  }
+}

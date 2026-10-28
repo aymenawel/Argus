@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Argus"><g fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M5 32 C 17 11, 47 11, 59 32 C 47 53, 17 53, 5 32 Z" stroke="currentColor" stroke-width="3.4"/>
+  <circle cx="32" cy="32" r="11.0" stroke="currentColor" stroke-width="3.4" stroke-dasharray="53.12 16.00" transform="rotate(-3.33 32 32)"/>
+</g>
+<circle cx="32" cy="32" r="3.8" fill="currentColor"/>
+<circle cx="39.78" cy="24.22" r="2.7" fill="currentColor"/></svg>

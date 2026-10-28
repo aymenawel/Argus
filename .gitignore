@@ -1,0 +1,28 @@
+# Secrets
+.env
+.env.*
+*.env
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Node / Next.js
+node_modules/
+web/.next/
+web/out/
+
+# Experiment data (large; keep out of the public repo)
+data/
+*.mp4
+*.mov
+*.sqlite
+*.db
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
