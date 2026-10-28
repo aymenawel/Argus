@@ -50,7 +50,8 @@ class VerdictLevel(StrEnum):
 
 
 class Record(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    # NaN and inf are never evidence (SQLite would store NaN as NULL and refuse the batch).
+    model_config = ConfigDict(frozen=True, allow_inf_nan=False)
 
 
 class Experiment(Record):

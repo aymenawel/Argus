@@ -15,7 +15,24 @@ def test_verdict_levels_are_the_four_spec_words():
     assert [v.value for v in VerdictLevel] == ["SUPPORTED", "NOT_SUPPORTED", "INCONCLUSIVE", "TOO_EARLY"]
 
 
-@pytest.mark.parametrize("field,value", [("uncertainty", -0.1), ("unit", ""), ("method_version", "area"), ("t", -1.0)])
+NAN, INF = float("nan"), float("inf")
+
+
+# NaN would reach SQLite as NULL and abort the whole batch; inf is not a measurement.
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("uncertainty", -0.1),
+        ("unit", ""),
+        ("method_version", "area"),
+        ("t", -1.0),
+        ("value", NAN),
+        ("value", INF),
+        ("uncertainty", NAN),
+        ("uncertainty", INF),
+        ("t", INF),
+    ],
+)
 def test_measurement_draft_rejects_bad_values(field, value):
     good = dict(
         vessel_id="ves_1",

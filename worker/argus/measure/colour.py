@@ -21,13 +21,18 @@ def delta_e(lab1, lab2) -> float:
     return float(deltaE_ciede2000(np.asarray(lab1, np.float64), np.asarray(lab2, np.float64)))
 
 
-def colour_metrics(image_bgr: np.ndarray, mask: np.ndarray, baseline_lab) -> list[MetricValue]:
+def colour_metrics(
+    image_bgr: np.ndarray, mask: np.ndarray, baseline_lab: tuple[float, float, float] | None
+) -> list[MetricValue]:
+    """Mean colour of the mask, plus its change from the baseline once there is one."""
     lab = lab_mean(image_bgr, mask)
     if lab is None:
         return []
-    return [
+    metrics = [
         MetricValue("lab_l", lab[0], "L*", "lab_mean/1"),
         MetricValue("lab_a", lab[1], "a*", "lab_mean/1"),
         MetricValue("lab_b", lab[2], "b*", "lab_mean/1"),
-        MetricValue("delta_e", delta_e(lab, baseline_lab), "dE00", "delta_e/1"),
     ]
+    if baseline_lab is not None:
+        metrics.append(MetricValue("delta_e", delta_e(lab, baseline_lab), "dE00", "delta_e/1"))
+    return metrics

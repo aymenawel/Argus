@@ -111,20 +111,26 @@ def save_plan_draft(db: Database, experiment_id: str, draft: PlanDraft) -> Plan:
 
 
 def lock_plan(db: Database, experiment_id: str) -> Plan:
-    """Freeze the latest version with a timestamp and hash; the experiment becomes locked."""
-    plans = get_plans(db, experiment_id)
-    if not plans:
-        raise ValueError(f"experiment {experiment_id} has no plan to lock")
-    latest = plans[-1]
-    if latest.locked_at is None:
-        draft = PlanDraft(**latest.model_dump(include=set(PlanDraft.model_fields)))
-        with db.write() as c:
+    """Freeze the latest version with a timestamp and hash; the experiment becomes locked.
+
+    Reading, hashing and locking share one write transaction, so a draft saved meanwhile can't end up
+    locked under the hash of other content.
+    """
+    with db.write() as c:
+        row = c.execute(
+            "SELECT * FROM plans WHERE experiment_id=? ORDER BY version DESC LIMIT 1", (experiment_id,)
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"experiment {experiment_id} has no plan to lock")
+        latest = _plan(row)
+        if latest.locked_at is None:
+            draft = PlanDraft(**latest.model_dump(include=set(PlanDraft.model_fields)))
             c.execute(
-                "UPDATE plans SET locked_at=?, sha256=? WHERE experiment_id=? AND version=?",
+                "UPDATE plans SET locked_at=?, sha256=? WHERE experiment_id=? AND version=? AND locked_at IS NULL",
                 (_now(), plan_sha256(draft), experiment_id, latest.version),
             )
             c.execute("UPDATE experiments SET status=? WHERE id=?", (ExperimentStatus.LOCKED, experiment_id))
-    return get_plans(db, experiment_id)[-1]
+    return next(p for p in get_plans(db, experiment_id) if p.version == latest.version)
 
 
 # ---- Runs, vessels, frames ----
