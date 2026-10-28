@@ -24,6 +24,7 @@ from argus.domain import (
     new_id,
     plan_sha256,
 )
+from argus.storage.audit import append_batch
 from argus.storage.db import Database
 
 
@@ -192,6 +193,7 @@ def add_measurements(db: Database, run_id: str, drafts: Sequence[MeasurementDraf
                 for m in rows
             ],
         )
+        append_batch(c, run_id, rows)
     return rows
 
 
