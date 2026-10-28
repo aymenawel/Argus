@@ -1,0 +1,40 @@
+.mark {
+  display: block;
+  flex: none;
+  color: var(--text);
+}
+
+/* Watching: the gap and the point travel round the ring together. */
+.orbit {
+  transform-box: view-box;
+  transform-origin: 32px 32px;
+  animation: orbit 2.4s linear infinite;
+}
+
+@keyframes orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Locked: the ring closes once a measurement is locked. */
+.close {
+  animation: close-ring 900ms var(--ease-out) forwards;
+}
+
+@keyframes close-ring {
+  to {
+    stroke-dasharray: 69.12 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbit {
+    animation: none;
+  }
+
+  .close {
+    animation: none;
+    stroke-dasharray: 69.12 0;
+  }
+}

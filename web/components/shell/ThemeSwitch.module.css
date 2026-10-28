@@ -1,0 +1,40 @@
+.switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  flex: none;
+  border-radius: var(--r-pill);
+  background: var(--sunk);
+}
+
+.option {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out);
+}
+
+.option:hover {
+  color: var(--text);
+}
+
+.option:focus-visible {
+  outline-offset: -2px;
+}
+
+/* --pill-on is white in light and a lifted grey in dark, where the surface would vanish into the track. */
+.on,
+.on:hover {
+  color: var(--text);
+  background: var(--pill-on);
+  box-shadow: var(--shadow-tile);
+}

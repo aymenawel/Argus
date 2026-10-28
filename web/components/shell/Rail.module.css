@@ -1,0 +1,69 @@
+.rail {
+  position: sticky;
+  top: 12px;
+  flex: 0 0 64px;
+  height: calc(100dvh - 24px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+}
+
+.mark {
+  margin: 4px 0 18px;
+}
+
+.item {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: var(--r-tile);
+  color: var(--faint);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.item:hover {
+  color: var(--text);
+  background: var(--active);
+}
+
+.active,
+.active:hover {
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--shadow-tile);
+}
+
+.bottom {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Phones: the rail becomes a top bar and keeps its links. */
+@media (max-width: 720px) {
+  .rail {
+    position: static;
+    flex: none;
+    height: 56px;
+    flex-direction: row;
+    padding: 0 12px;
+  }
+
+  .mark {
+    margin: 0 auto 0 0;
+  }
+
+  .bottom {
+    margin-top: 0;
+    flex-direction: row;
+  }
+}

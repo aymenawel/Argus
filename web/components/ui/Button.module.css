@@ -1,0 +1,67 @@
+.button {
+  height: var(--control-h);
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: none;
+  border: 0;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.button svg {
+  flex: none;
+}
+
+.primary {
+  background: var(--primary-bg);
+  color: var(--primary-ink);
+}
+
+.primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.secondary {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-tile);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--raised);
+}
+
+.text {
+  background: transparent;
+  color: var(--text);
+  padding: 0 10px;
+}
+
+.text:hover:not(:disabled) {
+  background: var(--active);
+}
+
+.iconOnly {
+  width: var(--control-h);
+  padding: 0;
+  border-radius: 12px;
+}

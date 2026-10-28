@@ -1,0 +1,45 @@
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  flex: none;
+  border: 1.5px solid transparent;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.supported {
+  background: var(--pos-bg);
+  color: var(--pos);
+}
+
+.notSupported {
+  background: var(--text);
+  color: var(--surface);
+}
+
+.inconclusive {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.tooEarly {
+  background: var(--sunk);
+  color: var(--muted);
+}
+
+.provisional {
+  border-style: dashed;
+  border-color: currentColor;
+  background: transparent;
+}
+
+/* Ink-on-ink would vanish once the fill is dropped. */
+.notSupported.provisional {
+  color: var(--text);
+}
