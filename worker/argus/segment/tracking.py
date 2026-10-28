@@ -4,20 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-import cv2
 import numpy as np
 
 from argus.domain import Vessel
+from argus.rois import roi_mask
 from argus.segment.types import MaskPatch
 
 MIN_VESSEL_SHARE = 0.5  # a detection belongs to a vessel whose ROI holds at least half of it
 MIN_IOU = 0.3
-
-
-def _roi_mask(vessel: Vessel, height: int, width: int) -> np.ndarray:
-    canvas = np.zeros((height, width), np.uint8)
-    cv2.fillPoly(canvas, [np.round(np.asarray(vessel.roi, np.float64)).astype(np.int32)], 1)
-    return canvas.astype(bool)
 
 
 def assign_to_vessels(
@@ -26,7 +20,7 @@ def assign_to_vessels(
     """Patch indices per vessel id. A patch goes to the vessel whose ROI covers most of it, if that is at least
     half; otherwise (between vessels, or outside them all) to none."""
     height, width = frame_shape
-    rois = [_roi_mask(v, height, width) for v in vessels]
+    rois = [roi_mask(v, height, width) for v in vessels]
     assigned: dict[str, list[int]] = {v.id: [] for v in vessels}
     for i, patch in enumerate(patches):
         area = patch.area_px
