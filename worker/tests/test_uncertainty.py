@@ -13,6 +13,9 @@ from argus.measure.uncertainty import combined_uncertainty, format_pm, is_real_e
         (1234, 250, "s", "1230 ± 250 s"),
         (19.23, 2.61, "mm", "19.2 ± 2.6 mm"),
         (4.63, 0.41, "mm", "4.6 ± 0.4 mm"),
+        # 0.3 / 0.1 is 2.999… in floating point; the leading digit is still 3.
+        (4.6312, 0.3, "mm", "4.6 ± 0.3 mm"),
+        (0.04012, 0.003, "mm", "0.040 ± 0.003 mm"),
     ],
 )
 def test_format_pm_follows_the_reporting_rule(v, u, unit, text):

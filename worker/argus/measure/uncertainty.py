@@ -37,8 +37,10 @@ def format_pm(value: float, uncertainty: float, unit: str) -> str:
     """'19.2 ± 2.6 mm': round the uncertainty first (2 digits if it leads with 1 or 2, else 1), then the value."""
     if not (uncertainty > 0 and math.isfinite(uncertainty)):
         raise ValueError(f"an uncertainty must be a positive number, got {uncertainty}")
-    exponent = math.floor(math.log10(uncertainty))
-    digits = 2 if int(uncertainty / 10**exponent) in (1, 2) else 1
+    # Leading digit and exponent from the decimal form: dividing (0.3 / 0.1 = 2.999…) can miss the digit.
+    mantissa, exp = f"{uncertainty:e}".split("e")
+    exponent = int(exp)
+    digits = 2 if mantissa[0] in "12" else 1
     decimals = digits - 1 - exponent
 
     def text(x: float) -> str:
