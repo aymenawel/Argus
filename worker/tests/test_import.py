@@ -305,3 +305,14 @@ async def test_after_a_camera_move_the_import_measures_where_the_vessels_went(ct
     for row in after:
         true_mm = 10 + 30 * (row.t / SCALE * FPS) / (FRAMES - 1)
         assert abs(row.value - true_mm) <= row.uncertainty, (row.t, row.value, true_mm)
+
+
+@pytest.mark.anyio
+async def test_the_image_fallback_is_one_full_frame_call_per_sample_for_every_vessel(ctx, clip):
+    ctx.segmenter = FakeSegmenter(video_fails=True)
+    await run_import(ctx, request(clip), cancel=asyncio.Event())
+    samples = frames_for_run(ctx.db, ctx.run.id)
+    assert ctx.segmenter.modes.count("image") == len(samples)  # not one per vessel: SAM sees the whole frame
+    for row in lengths_of_a(ctx):
+        true_mm = 10 + 30 * (row.t / SCALE * FPS) / (FRAMES - 1)
+        assert abs(row.value - true_mm) <= row.uncertainty, (row.t, row.value, true_mm)

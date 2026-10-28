@@ -4,7 +4,7 @@
    frames are sampled every `analysis_step_s` of run time (plus at changes), checked by the quality gate,
    calibrated and stored;
 2. segment: one H.264 crop clip per vessel and concept goes to SAM in video mode (image mode on the
-   vessel's crop, frame by frame, if video mode fails);
+   full frame, sample by sample and shared by every vessel, if video mode fails);
 3. measure: each sample goes through the frame analyzer with the masks from stage 2.
 """
 
@@ -194,6 +194,23 @@ def _keep(
     return list(zip(ctx.matcher.match(vessel, concept, own), own, strict=True))
 
 
+FullFrames = dict[tuple[str, str], asyncio.Task]  # (frame id, concept) -> the image-mode call, shared by vessels
+
+
+async def _full_frame(ctx: RunContext, sample: _Sample, concept: str, shared: FullFrames) -> SegmentResult | Skipped:
+    """Image mode on the whole frame, once per sample and concept: whichever vessel asks first makes the call, the
+    others reuse its answer (one call covers every vessel, as in live runs)."""
+    key = (sample.frame_id, concept)
+    if key not in shared:
+
+        async def call() -> SegmentResult | Skipped:
+            image = await asyncio.to_thread(cv2.imread, str(sample.path))
+            return await segment_with_retries(ctx, image, concept, t=sample.t, frame_ids=[sample.frame_id])
+
+        shared[key] = asyncio.ensure_future(call())
+    return await shared[key]
+
+
 async def _segment_vessel(
     ctx: RunContext,
     samples: list[_Sample],
@@ -202,6 +219,7 @@ async def _segment_vessel(
     shape: tuple[int, int],
     masks: dict[str, dict[str, dict]],
     cancel: asyncio.Event,
+    full_frames: FullFrames,
     *,
     first_clip: int = 0,
 ) -> None:
@@ -228,16 +246,15 @@ async def _segment_vessel(
             continue
         if result.reason == "cap":
             return
-        for sample in chunk:  # video mode failed: image mode on the vessel's crop, frame by frame
+        for sample in chunk:  # video mode failed: image mode on the full frame, sample by sample
             if cancel.is_set():
                 return
-            crop = (await asyncio.to_thread(cv2.imread, str(sample.path)))[y0:y1, x0:x1]
-            single = await segment_with_retries(ctx, crop, concept, t=sample.t, frame_ids=[sample.frame_id])
+            single = await _full_frame(ctx, sample, concept, full_frames)
             if isinstance(single, Skipped):
                 if single.reason == "cap":
                     return
                 continue
-            patches = [track.frames[0].patch.shifted(x0, y0) for track in single.tracks]
+            patches = [track.frames[0].patch for track in single.tracks]
             masks[sample.frame_id].setdefault(vessel.id, {})[concept] = _keep(ctx, vessel, concept, patches, shape)
 
 
@@ -260,6 +277,7 @@ async def run_import(ctx: RunContext, request: ImportRequest, *, cancel: asyncio
     if calibrations:  # without millimetres there is nothing to segment for
         shape = (await asyncio.to_thread(cv2.imread, str(samples[0].path))).shape[:2]
         jobs = [(v.id, c.name) for v in ctx.vessels for c in ctx.recipe.concepts]
+        full_frames: FullFrames = {}
         done = 0
 
         async def job(vessel_id: str, concept: str) -> None:
@@ -268,7 +286,9 @@ async def run_import(ctx: RunContext, request: ImportRequest, *, cancel: asyncio
             for k, ((since, vessels), until) in enumerate(zip(epochs, bounds, strict=True)):
                 vessel = next(v for v in vessels if v.id == vessel_id)  # its region in this stretch of video
                 part = [s for s in samples if since <= s.t < until]
-                await _segment_vessel(ctx, part, vessel, concept, shape, masks, cancel, first_clip=k * 1000)
+                await _segment_vessel(
+                    ctx, part, vessel, concept, shape, masks, cancel, full_frames, first_clip=k * 1000
+                )
             done += 1
             ctx.publish("run_progress", {"stage": "segment", "done": done, "total": len(jobs)})
 
