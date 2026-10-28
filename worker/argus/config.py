@@ -44,6 +44,15 @@ class Settings(BaseModel):
     recipes_dir: Path = REPO_ROOT / "recipes"
     web_origin: str = "http://localhost:3000"
 
+    # SAM 3.1 prices and limits (KB 04 and 05, checked Oct 27, 2026); not read from the environment.
+    sam_image_usd: float = 0.0025
+    sam_video_frame_usd: float = 0.0002
+    sam_video_min_frames: int = 50
+    sam_max_objects: int = 16
+    sam_max_video_frames: int = 15000
+    sam_concurrency: int = 2
+    segment_interval_s: float = 10.0  # live runs: the shortest gap between two segmentations
+
 
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     """Build settings from environment variables; unset or empty variables keep their defaults."""

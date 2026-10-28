@@ -9,15 +9,24 @@ from datetime import UTC, datetime
 from typing import Any
 
 from argus.domain import (
+    Calibration,
+    CalibrationDraft,
+    Detection,
+    DetectionDraft,
+    EventKind,
     Experiment,
     ExperimentStatus,
     Frame,
     Measurement,
     MeasurementDraft,
+    ModelCall,
+    ModelCallDraft,
     Plan,
     PlanDraft,
     Run,
+    RunEvent,
     RunMode,
+    RunSource,
     RunStatus,
     Vessel,
     VesselDraft,
@@ -136,21 +145,88 @@ def lock_plan(db: Database, experiment_id: str) -> Plan:
 # ---- Runs, vessels, frames ----
 
 
-def create_run(db: Database, experiment_id: str, mode: RunMode, time_scale: float = 1.0) -> Run:
+def create_run(db: Database, experiment_id: str, mode: RunMode, source: RunSource, time_scale: float = 1.0) -> Run:
     run = Run(
         id=new_id("run"),
         experiment_id=experiment_id,
         mode=mode,
         status=RunStatus.RUNNING,
+        source=source,
         time_scale=time_scale,
         started_at=_now(),
     )
     with db.write() as c:
         c.execute(
-            "INSERT INTO runs(id, experiment_id, mode, status, time_scale, round, started_at) VALUES (?,?,?,?,?,?,?)",
-            (run.id, experiment_id, run.mode, run.status, time_scale, run.round, run.started_at.isoformat()),
+            "INSERT INTO runs(id, experiment_id, mode, status, source, time_scale, round, started_at) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (
+                run.id,
+                experiment_id,
+                run.mode,
+                run.status,
+                source.model_dump_json(),
+                time_scale,
+                run.round,
+                run.started_at.isoformat(),
+            ),
         )
     return run
+
+
+def _run(row: sqlite3.Row) -> Run:
+    return Run(**{**dict(row), "source": RunSource.model_validate_json(row["source"])})
+
+
+def get_run(db: Database, run_id: str) -> Run | None:
+    with db.read() as c:
+        row = c.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
+    return _run(row) if row else None
+
+
+def runs_for_experiment(db: Database, experiment_id: str) -> list[Run]:
+    """Newest first."""
+    with db.read() as c:
+        rows = c.execute(
+            "SELECT * FROM runs WHERE experiment_id=? ORDER BY started_at DESC, rowid DESC", (experiment_id,)
+        ).fetchall()
+    return [_run(r) for r in rows]
+
+
+def set_run_status(db: Database, run_id: str, status: RunStatus) -> Run:
+    """A run that stops running gets its end time."""
+    ended = None if status is RunStatus.RUNNING else _now()
+    with db.write() as c:
+        c.execute("UPDATE runs SET status=?, ended_at=? WHERE id=?", (status, ended, run_id))
+    run = get_run(db, run_id)
+    if run is None:
+        raise ValueError(f"no run {run_id}")
+    return run
+
+
+def stop_interrupted_runs(db: Database) -> list[str]:
+    """At startup, runs still marked running were cut off (the worker stopped): mark them stopped, with an event."""
+    with db.read() as c:
+        rows = c.execute("SELECT id FROM runs WHERE status=?", (RunStatus.RUNNING,)).fetchall()
+    ids = [r["id"] for r in rows]
+    for run_id in ids:
+        set_run_status(db, run_id, RunStatus.STOPPED)
+        last = _last_t(db, run_id)
+        add_event(
+            db,
+            run_id,
+            vessel_id=None,
+            t_start=last,
+            kind=EventKind.INTERRUPTED,
+            source="pipeline",
+            detail={"reason": "the worker stopped while the run was running"},
+        )
+    return ids
+
+
+def _last_t(db: Database, run_id: str) -> float:
+    with db.read() as c:
+        row = c.execute("SELECT MAX(t) AS t FROM frames WHERE run_id=?", (run_id,)).fetchone()
+    return float(row["t"]) if row and row["t"] is not None else 0.0
 
 
 def add_vessels(db: Database, run_id: str, drafts: Sequence[VesselDraft]) -> list[Vessel]:
@@ -174,14 +250,234 @@ def add_vessels(db: Database, run_id: str, drafts: Sequence[VesselDraft]) -> lis
     return vessels
 
 
-def add_frame(db: Database, run_id: str, t: float, path: str, quality_flags: Sequence[str]) -> Frame:
-    frame = Frame(id=new_id("frm"), run_id=run_id, t=t, path=path, quality_flags=list(quality_flags))
+def vessels_for_run(db: Database, run_id: str) -> list[Vessel]:
+    with db.read() as c:
+        rows = c.execute("SELECT * FROM vessels WHERE run_id=? ORDER BY rowid", (run_id,)).fetchall()
+    return [
+        Vessel(
+            **{
+                **dict(r),
+                "condition": json.loads(r["condition"]) if r["condition"] else None,
+                "roi": json.loads(r["roi"]),
+            }
+        )
+        for r in rows
+    ]
+
+
+def add_frame(
+    db: Database, run_id: str, t: float, path: str, quality_flags: Sequence[str], *, frame_id: str | None = None
+) -> Frame:
+    """Store a frame record; pass `frame_id` when the image file was written under that id first."""
+    frame = Frame(id=frame_id or new_id("frm"), run_id=run_id, t=t, path=path, quality_flags=list(quality_flags))
     with db.write() as c:
         c.execute(
             "INSERT INTO frames(id, run_id, t, path, quality_flags) VALUES (?,?,?,?,?)",
             (frame.id, run_id, t, path, _json(frame.quality_flags)),
         )
     return frame
+
+
+def mark_frame_analyzed(db: Database, frame_id: str) -> None:
+    with db.write() as c:
+        c.execute("UPDATE frames SET analyzed=1 WHERE id=?", (frame_id,))
+
+
+def _frame(row: sqlite3.Row) -> Frame:
+    return Frame(**{**dict(row), "quality_flags": json.loads(row["quality_flags"]), "analyzed": bool(row["analyzed"])})
+
+
+def get_frame(db: Database, frame_id: str) -> Frame | None:
+    with db.read() as c:
+        row = c.execute("SELECT * FROM frames WHERE id=?", (frame_id,)).fetchone()
+    return _frame(row) if row else None
+
+
+def frames_for_run(db: Database, run_id: str, t_from: float | None = None, t_to: float | None = None) -> list[Frame]:
+    clauses, params = _time_window("t", run_id, t_from, t_to)
+    with db.read() as c:
+        rows = c.execute(f"SELECT * FROM frames WHERE {clauses} ORDER BY t, rowid", params).fetchall()
+    return [_frame(r) for r in rows]
+
+
+def _time_window(column: str, run_id: str, t_from: float | None, t_to: float | None) -> tuple[str, list[Any]]:
+    clauses, params = ["run_id=?"], [run_id]
+    if t_from is not None:
+        clauses.append(f"{column}>=?")
+        params.append(t_from)
+    if t_to is not None:
+        clauses.append(f"{column}<=?")
+        params.append(t_to)
+    return " AND ".join(clauses), params
+
+
+# ---- Calibrations ----
+
+
+def add_calibration(db: Database, run_id: str, draft: CalibrationDraft) -> Calibration:
+    cal = Calibration(**draft.model_dump(), id=new_id("cal"), run_id=run_id)
+    with db.write() as c:
+        c.execute(
+            "INSERT INTO calibrations(id, run_id, t, card, homography, mm_per_px, rel_uncertainty, print_scale, "
+            "colour_reference, camera_properties) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (
+                cal.id,
+                run_id,
+                cal.t,
+                cal.card,
+                _json(cal.homography) if cal.homography is not None else None,
+                cal.mm_per_px,
+                cal.rel_uncertainty,
+                cal.print_scale,
+                _json(cal.colour_reference) if cal.colour_reference is not None else None,
+                _json({k: str(v) for k, v in cal.camera_properties.items()}),
+            ),
+        )
+    return cal
+
+
+def latest_calibration(db: Database, run_id: str, t: float) -> Calibration | None:
+    """The calibration in force at time t: the newest one taken at or before t."""
+    with db.read() as c:
+        row = c.execute(
+            "SELECT * FROM calibrations WHERE run_id=? AND t<=? ORDER BY t DESC, rowid DESC LIMIT 1", (run_id, t)
+        ).fetchone()
+    if row is None:
+        return None
+    values = dict(row)
+    for key in ("homography", "colour_reference", "camera_properties"):
+        values[key] = json.loads(values[key]) if values[key] is not None else None
+    values["camera_properties"] = values["camera_properties"] or {}
+    return Calibration(**values)
+
+
+# ---- Detections ----
+
+
+def add_detections(db: Database, drafts: Sequence[DetectionDraft]) -> list[Detection]:
+    rows = [Detection(**d.model_dump(), id=new_id("det")) for d in drafts]
+    return add_detection_rows(db, rows)
+
+
+def add_detection_rows(db: Database, rows: Sequence[Detection]) -> list[Detection]:
+    """Store detections whose ids were chosen first (their mask files are named after them)."""
+    with db.write() as c:
+        c.executemany(
+            "INSERT INTO detections(id, frame_id, vessel_id, track_key, concept, outline, bbox, area_px, confidence, "
+            "backend, mask_path) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            [
+                (
+                    d.id,
+                    d.frame_id,
+                    d.vessel_id,
+                    d.track_key,
+                    d.concept,
+                    _json(d.outline),
+                    _json(d.bbox),
+                    d.area_px,
+                    d.confidence,
+                    d.backend,
+                    d.mask_path,
+                )
+                for d in rows
+            ],
+        )
+    return list(rows)
+
+
+def detections_for_frame(db: Database, frame_id: str) -> list[Detection]:
+    with db.read() as c:
+        rows = c.execute("SELECT * FROM detections WHERE frame_id=? ORDER BY rowid", (frame_id,)).fetchall()
+    return [
+        Detection(**{**dict(r), "outline": json.loads(r["outline"]), "bbox": tuple(json.loads(r["bbox"]))})
+        for r in rows
+    ]
+
+
+# ---- Events ----
+
+
+def add_event(
+    db: Database,
+    run_id: str,
+    *,
+    vessel_id: str | None,
+    t_start: float,
+    kind: EventKind,
+    source: str,
+    detail: dict,
+    frame_ids: Sequence[str] = (),
+    t_end: float | None = None,
+) -> RunEvent:
+    event = RunEvent(
+        id=new_id("evt"),
+        run_id=run_id,
+        vessel_id=vessel_id,
+        t_start=t_start,
+        t_end=t_end,
+        kind=kind,
+        source=source,
+        detail=detail,
+        frame_ids=list(frame_ids),
+    )
+    with db.write() as c:
+        c.execute(
+            "INSERT INTO events(id, run_id, vessel_id, t_start, t_end, kind, source, detail, frame_ids) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (
+                event.id,
+                run_id,
+                vessel_id,
+                t_start,
+                t_end,
+                event.kind,
+                event.source,
+                _json(event.detail),
+                _json(event.frame_ids),
+            ),
+        )
+    return event
+
+
+def _event(row: sqlite3.Row) -> RunEvent:
+    return RunEvent(**{**dict(row), "detail": json.loads(row["detail"]), "frame_ids": json.loads(row["frame_ids"])})
+
+
+def close_event(db: Database, event_id: str, t_end: float) -> RunEvent:
+    """An open event gets its end time, once."""
+    with db.write() as c:
+        c.execute("UPDATE events SET t_end=? WHERE id=?", (t_end, event_id))
+        row = c.execute("SELECT * FROM events WHERE id=?", (event_id,)).fetchone()
+    return _event(row)
+
+
+def events_for_run(db: Database, run_id: str, t_from: float | None = None, t_to: float | None = None) -> list[RunEvent]:
+    clauses, params = _time_window("t_start", run_id, t_from, t_to)
+    with db.read() as c:
+        rows = c.execute(f"SELECT * FROM events WHERE {clauses} ORDER BY t_start, rowid", params).fetchall()
+    return [_event(r) for r in rows]
+
+
+# ---- Model calls ----
+
+
+def add_model_call(db: Database, run_id: str | None, t: float | None, draft: ModelCallDraft) -> ModelCall:
+    call = ModelCall(**draft.model_dump(), id=new_id("call"), run_id=run_id, t=t, created_at=_now())
+    fields = list(ModelCall.model_fields)
+    values = [call.created_at.isoformat() if f == "created_at" else getattr(call, f) for f in fields]
+    with db.write() as c:
+        c.execute(
+            f"INSERT INTO model_calls({', '.join(fields)}) VALUES ({','.join('?' * len(fields))})",
+            values,
+        )
+    return call
+
+
+def run_spend_usd(db: Database, run_id: str) -> float:
+    """Every logged call counts, failed ones included: they can still be billed."""
+    with db.read() as c:
+        row = c.execute("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM model_calls WHERE run_id=?", (run_id,))
+        return float(row.fetchone()["spent"])
 
 
 # ---- Measurements ----
