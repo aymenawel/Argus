@@ -115,3 +115,20 @@ def bbox_of_dark_square_in_image(image: np.ndarray, margin: int = 20) -> tuple[f
     i = max(range(1, count), key=lambda k: stats[k, cv2.CC_STAT_AREA])
     x, y, w, h = (int(stats[i, k]) for k in (cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT))
     return (float(x - margin), float(y - margin), float(x + w + margin), float(y + h + margin))
+
+
+def scene_with_bar_on_card_plane(
+    spec: CardSpec, length_mm: float, width_mm: float, tilt=None, px_per_mm: float = 5.0, colour=(0, 0, 0)
+) -> tuple[np.ndarray, np.ndarray]:
+    """A card plus a filled bar of exactly length x width mm lying on the card's plane beside it, and the bar's
+    mask, both seen through the same tilt (the mask is warped smoothly, then thresholded, like a camera edge)."""
+    frame = _card_frame(spec, px_per_mm)
+    x0, y0 = ORIGIN + np.array([spec.width_mm + 20.0, 30.0]) * px_per_mm
+    rows = slice(round(y0), round(y0 + width_mm * px_per_mm))
+    cols = slice(round(x0), round(x0 + length_mm * px_per_mm))
+    mask = np.zeros(frame.shape[:2], np.float32)
+    mask[rows, cols] = 1.0
+    frame[mask > 0.5] = colour
+    if tilt is not None:
+        mask = cv2.warpPerspective(mask, tilt, (FRAME_W, FRAME_H), flags=cv2.INTER_LINEAR)
+    return _tilted(frame, tilt), mask > 0.5

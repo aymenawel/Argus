@@ -48,3 +48,16 @@ def format_pm(value: float, uncertainty: float, unit: str) -> str:
         return f"{rounded:.{decimals}f}" if decimals > 0 else str(int(rounded))
 
     return f"{text(value)} ± {text(uncertainty)} {unit}"
+
+
+def format_measurement(value: float, uncertainty: float, unit: str) -> str:
+    """The text the UI shows for a stored measurement: 'value ± u unit', or the value alone when it is exact
+    (counts) or has no uncertainty yet, to 3 significant figures. Counts carry no unit word: '3'."""
+    if uncertainty > 0:
+        return format_pm(value, uncertainty, unit)
+    if value == int(value):
+        text = str(int(value))
+    else:
+        digits = 2 - math.floor(math.log10(abs(value)))
+        text = f"{round(value, digits):g}" if digits > 0 else str(int(round(value, digits)))
+    return text if unit == "count" else f"{text} {unit}"

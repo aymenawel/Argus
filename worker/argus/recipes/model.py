@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 METHODS_BY_FAMILY = {
     "size": {"area", "height", "skeleton_length"},
@@ -38,6 +38,12 @@ class MeasurementSpec(Spec):
         if method not in allowed:
             raise ValueError(f"'{method}' is not a {family} method (allowed: {', '.join(sorted(allowed)) or 'none'})")
         return method
+
+    @model_validator(mode="after")
+    def lab_mean_reports_three_values(self) -> MeasurementSpec:
+        if self.method == "lab_mean" and self.unit != "Lab":
+            raise ValueError('lab_mean reports L*, a* and b*: use unit "Lab"')
+        return self
 
 
 class EventSpec(Spec):

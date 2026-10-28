@@ -2,7 +2,7 @@ import warnings
 
 import pytest
 
-from argus.measure.uncertainty import combined_uncertainty, format_pm, is_real_effect, noise_floor
+from argus.measure.uncertainty import combined_uncertainty, format_measurement, format_pm, is_real_effect, noise_floor
 
 
 @pytest.mark.parametrize(
@@ -42,3 +42,17 @@ def test_zero_noise_or_scale_error_works_without_warnings():
         assert combined_uncertainty(100.0, 0.0, 0.01) == pytest.approx(1.0)
         assert combined_uncertainty(100.0, 0.5, 0.0) == pytest.approx(0.5)
         assert combined_uncertainty(100.0, 0.0, 0.0) == 0.0
+
+
+@pytest.mark.parametrize(
+    "v,u,unit,text",
+    [
+        (4.6312, 0.3, "mm", "4.6 ± 0.3 mm"),
+        (3.0, 0.0, "count", "3"),
+        (12.5, 0.0, "mm", "12.5 mm"),
+        (0.0, 0.0, "mm2", "0 mm2"),
+        (1234.5678, 0.0, "s", "1230 s"),
+    ],
+)
+def test_display_strings(v, u, unit, text):
+    assert format_measurement(v, u, unit) == text
