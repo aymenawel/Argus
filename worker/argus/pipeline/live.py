@@ -19,7 +19,7 @@ import cv2
 import numpy as np
 
 from argus.calibration.run import RulerInput, calibrate
-from argus.capture.quality import assess
+from argus.capture.quality import REBASELINED, QualityGate
 from argus.capture.webcam import CameraSettings, open_webcam
 from argus.domain import CameraProperty, EventKind, RunStatus
 from argus.pipeline.analyzer import RunContext, analyze_frame
@@ -37,11 +37,13 @@ class FrameSource(Protocol):
 
 
 class _Camera:
-    """One open webcam with a thread that keeps reading, so the newest frame is always at hand."""
+    """One open webcam with a thread that keeps reading, so the newest frame is always at hand. Frames are
+    numbered, so a camera that stops delivering is noticed instead of its last frame being reused."""
 
     def __init__(self, capture: Any, properties: dict[str, CameraProperty]) -> None:
         self.capture, self.properties, self.refs = capture, properties, 0
         self._frame: np.ndarray | None = None
+        self._seq, self._at = 0, 0.0  # the newest frame's number and when it arrived (monotonic)
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._loop, daemon=True)
@@ -52,12 +54,15 @@ class _Camera:
             ok, frame = self.capture.read()
             if ok and frame is not None:
                 with self._lock:
-                    self._frame = frame
+                    self._frame, self._seq, self._at = frame, self._seq + 1, time.monotonic()
             time.sleep(0.001 if ok else 0.05)
 
-    def latest(self) -> np.ndarray | None:
+    def latest(self, *, after: int = 0, max_age_s: float = math.inf) -> tuple[int, np.ndarray] | None:
+        """The newest frame and its number, if it is newer than frame `after` and younger than `max_age_s`."""
         with self._lock:
-            return None if self._frame is None else self._frame.copy()
+            if self._frame is None or self._seq <= after or time.monotonic() - self._at > max_age_s:
+                return None
+            return self._seq, self._frame.copy()
 
     def close(self) -> None:
         self._stop.set()
@@ -67,17 +72,19 @@ class _Camera:
 
 class _HubSource:
     def __init__(self, hub: CameraHub, index: int) -> None:
-        self.hub, self.index, self._closed = hub, index, False
+        self.hub, self.index, self._closed, self._seq = hub, index, False, 0
 
     def read(self) -> np.ndarray | None:
-        deadline = time.monotonic() + 3.0
+        """The next new frame; None when none arrives within the hub's `stale_after_s` (the camera is lost)."""
+        deadline = time.monotonic() + self.hub.stale_after_s
         while time.monotonic() < deadline:
             camera = self.hub._cameras.get(self.index)
-            frame = camera.latest() if camera else None
-            if frame is not None:
+            newest = camera.latest(after=self._seq) if camera else None
+            if newest is not None:
+                self._seq, frame = newest
                 return frame
             time.sleep(0.02)
-        return None  # the camera stopped delivering frames
+        return None
 
     def close(self) -> None:
         if not self._closed:
@@ -89,9 +96,12 @@ class CameraHub:
     """Shares each webcam between previews and runs; it is opened once and closed when nobody uses it."""
 
     def __init__(
-        self, *, opener: Callable[[int, CameraSettings], tuple[Any, dict[str, CameraProperty]]] = open_webcam
+        self,
+        *,
+        opener: Callable[[int, CameraSettings], tuple[Any, dict[str, CameraProperty]]] = open_webcam,
+        stale_after_s: float = 3.0,
     ) -> None:
-        self._opener = opener
+        self._opener, self.stale_after_s = opener, stale_after_s
         self._cameras: dict[int, _Camera] = {}
         self._lock = threading.Lock()
 
@@ -123,10 +133,10 @@ class CameraHub:
 
     def latest_jpeg(self, index: int, quality: int = 80) -> bytes | None:
         camera = self._cameras.get(index)
-        frame = camera.latest() if camera else None
-        if frame is None:
+        newest = camera.latest(max_age_s=self.stale_after_s) if camera else None
+        if newest is None:
             return None
-        ok, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
+        ok, encoded = cv2.imencode(".jpg", newest[1], [cv2.IMWRITE_JPEG_QUALITY, quality])
         return encoded.tobytes() if ok else None
 
     def close_all(self) -> None:
@@ -153,16 +163,18 @@ async def run_live(
     step, interval = ctx.recipe.analysis_step_s, ctx.settings.segment_interval_s
     t0: float | None = None
     last_store = last_segment = -math.inf
-    previous_good: np.ndarray | None = None
+    gate = QualityGate(ctx.vessels)
     in_trouble: set[str] = set()  # quality problems already reported, until a good frame clears them
+    t = 0.0
     while not cancel.is_set():
         image = await asyncio.to_thread(source.read)
         if image is None:
+            await ctx.event(t, EventKind.INTERRUPTED, "pipeline", {"reason": "camera_lost"})
             break
         if t0 is None:
             t0 = clock()
         t = clock() - t0
-        report = await asyncio.to_thread(assess, image, ctx.vessels, previous_good=previous_good)
+        report = await asyncio.to_thread(gate.check, t, image)
         if not report.ok:
             problem = "occluded" if "occluded" in report.flags else "blurred"
             if problem not in in_trouble:
@@ -172,7 +184,8 @@ async def run_live(
             await sleep(1 / max_fps)
             continue
         in_trouble.clear()
-        previous_good = image
+        if "rebaselined" in report.flags:
+            await ctx.event(t, EventKind.QUALITY, "quality", {"flags": list(report.flags), "message": REBASELINED})
 
         if ctx.calibration is None:
             cal = await asyncio.to_thread(calibrate, image, print_check_mm=print_check_mm, ruler=ruler)

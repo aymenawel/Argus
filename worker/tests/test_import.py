@@ -212,3 +212,27 @@ async def test_crop_clips_are_h264_for_sam(ctx, clip):
     fourcc = int(capture.get(cv2.CAP_PROP_FOURCC)).to_bytes(4, "little").decode("ascii", "replace").lower()
     capture.release()
     assert crop.is_file() and fourcc in {"avc1", "h264"}
+
+
+@pytest.fixture
+def dimmed_clip(tmp_path):
+    """The growing bar, with the lamp dimmed to 70 % halfway through."""
+    path = tmp_path / "dimmed.mp4"
+    writer = None
+    for i in range(FRAMES):
+        image, _ = scene_with_bar_on_card_plane(STANDARD, length_mm=10 + 30 * i / (FRAMES - 1), width_mm=2)
+        if i >= FRAMES // 2:
+            image = (image.astype(np.float32) * 0.7).astype(np.uint8)
+        if writer is None:
+            writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), FPS, image.shape[1::-1])
+        writer.write(image)
+    writer.release()
+    return path
+
+
+@pytest.mark.anyio
+async def test_a_lamp_change_does_not_stop_the_import_measuring(ctx, dimmed_clip):
+    await run_import(ctx, request(dimmed_clip), cancel=asyncio.Event())
+    rows = lengths_of_a(ctx)
+    assert rows and rows[-1].t >= SCALE * (FRAMES - 1) / FPS - ctx.recipe.analysis_step_s
+    assert not [e for e in events_for_run(ctx.db, ctx.run.id) if e.kind == "intervention"]

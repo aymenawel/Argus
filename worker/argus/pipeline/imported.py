@@ -20,10 +20,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
-import numpy as np
 
 from argus.calibration.run import RulerInput, RunCalibration, calibrate, card_moved
-from argus.capture.quality import assess
+from argus.capture.quality import REBASELINED, QualityGate
 from argus.capture.video import VideoFileSource
 from argus.domain import EventKind, RunStatus, Vessel, new_id
 from argus.pipeline.analyzer import KeyedPatches, RunContext, Skipped, _write_jpeg, analyze_frame, segment_with_retries
@@ -80,7 +79,7 @@ def _scan(
     samples: list[_Sample] = []
     calibrations: list[tuple[float, RunCalibration]] = []
     next_sample = 0.0
-    previous_good: np.ndarray | None = None
+    gate = QualityGate(ctx.vessels)
     for frame in VideoFileSource(request.paths, time_scale=request.time_scale).frames():
         if cancel.is_set():
             return None
@@ -93,12 +92,13 @@ def _scan(
         for trig in changes:
             detail = {"ssim": round(trig.ssim or 0, 3), "colour_shift": round(trig.colour_shift or 0, 2)}
             _event(ctx, frame.t, EventKind.CHANGE, "watcher", detail, vessel_id=trig.vessel_id)
-        report = assess(frame.image, ctx.vessels, previous_good=previous_good)
+        report = gate.check(frame.t, frame.image)
         if not report.ok:
             kind = EventKind.INTERVENTION if "occluded" in report.flags else EventKind.QUALITY
             _event(ctx, frame.t, kind, "quality", {"flags": list(report.flags), "blur": round(report.blur, 1)})
             continue
-        previous_good = frame.image
+        if "rebaselined" in report.flags:
+            _event(ctx, frame.t, EventKind.QUALITY, "quality", {"flags": list(report.flags), "message": REBASELINED})
         watcher.mark_analyzed(frame.t, frame.image)
 
         current = calibrations[-1][1] if calibrations else None

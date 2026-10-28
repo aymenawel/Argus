@@ -1,6 +1,7 @@
 """Live runs from a list of prepared frames with a fake clock (0.5 s per frame). Fake segmenter, no camera."""
 
 import asyncio
+import time
 
 import numpy as np
 import pytest
@@ -9,7 +10,7 @@ from pydantic import SecretStr
 from argus.api.events import EventBroker
 from argus.calibration.card import STANDARD
 from argus.config import Settings
-from argus.domain import Role, RunMode, RunSource, RunStatus, SourceKind, VesselDraft
+from argus.domain import EventKind, Role, RunMode, RunSource, RunStatus, SourceKind, VesselDraft
 from argus.pipeline.analyzer import RunContext
 from argus.pipeline.live import CameraHub, run_live
 from argus.recipes.model import Recipe
@@ -200,3 +201,47 @@ def test_the_camera_hub_shares_one_capture():
     assert len(opened) == 1
     second.close()
     assert opened == []
+
+
+def test_a_camera_that_stops_delivering_ends_the_reads():
+    class DyingCapture:
+        def __init__(self):
+            self.n = 0
+
+        def read(self):
+            self.n += 1
+            return (True, np.full((48, 64, 3), self.n, np.uint8)) if self.n <= 5 else (False, None)
+
+        def release(self):
+            pass
+
+    hub = CameraHub(opener=lambda index, settings: (DyingCapture(), {}), stale_after_s=0.3)
+    source, _ = hub.acquire(0)
+    started, seen = time.monotonic(), []
+    for _ in range(10):
+        frame = source.read()
+        if frame is None:
+            break
+        seen.append(int(frame[0, 0, 0]))
+    assert seen and seen == sorted(set(seen)) and seen[-1] == 5  # each frame once; the last is never reused
+    assert time.monotonic() - started < 2.0
+    assert hub.latest_jpeg(0) is None  # previews don't show a frozen frame as live either
+    source.close()
+
+
+@pytest.mark.anyio
+async def test_a_lost_camera_ends_the_run_with_an_event(make_ctx):
+    ctx, watcher = make_ctx()
+    status, _ = await live(ctx, watcher, [SHORT] * 6)
+    assert status is RunStatus.STOPPED
+    lost = [e for e in events_for_run(ctx.db, ctx.run.id) if e.kind is EventKind.INTERRUPTED]
+    assert len(lost) == 1 and lost[0].detail == {"reason": "camera_lost"} and lost[0].t_start == pytest.approx(2.5)
+
+
+@pytest.mark.anyio
+async def test_a_lamp_change_does_not_stop_measuring(make_ctx):
+    ctx, watcher = make_ctx()
+    dimmer = (SHORT.astype(np.float32) * 0.7).astype(np.uint8)
+    await live(ctx, watcher, [SHORT] * 12 + [dimmer] * 12)
+    assert max(f.t for f in frames_for_run(ctx.db, ctx.run.id)) >= 10.0
+    assert not [e for e in events_for_run(ctx.db, ctx.run.id) if e.kind is EventKind.INTERVENTION]

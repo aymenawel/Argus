@@ -1,7 +1,8 @@
 import cv2
 import numpy as np
+import pytest
 
-from argus.capture.quality import QualityThresholds, assess
+from argus.capture.quality import QualityGate, QualityThresholds, assess
 from argus.domain import Role, Vessel
 
 A = Vessel(
@@ -48,3 +49,36 @@ def test_a_hand_outside_the_vessels_is_an_occlusion():
 def test_thresholds_are_adjustable():
     blurred = cv2.GaussianBlur(frame(), (31, 31), 10)
     assert assess(blurred, VESSELS, previous_good=None, thresholds=QualityThresholds(blur_min=0.0)).ok
+
+
+@pytest.mark.parametrize("gain", [1.3, 0.7, 0.5])
+def test_a_lamp_change_is_not_an_occlusion(gain):
+    lamp = np.clip(frame().astype(np.float32) * gain, 0, 255).astype(np.uint8)
+    report = assess(lamp, VESSELS, previous_good=frame())
+    assert "occluded" not in report.flags and report.outside_change < 0.05
+
+
+def box_on_the_bench() -> np.ndarray:
+    moved = frame()
+    moved[450:, :] = 30  # a box set down below both vessels, a third of the scene outside them
+    return moved
+
+
+def test_a_lasting_scene_change_becomes_the_new_reference():
+    gate = QualityGate(VESSELS, QualityThresholds(settle_s=10.0))
+    assert gate.check(0.0, frame()).ok
+    assert not gate.check(1.0, box_on_the_bench()).ok  # at first it looks like a hand
+    assert not gate.check(6.0, box_on_the_bench()).ok
+    settled = gate.check(11.0, box_on_the_bench())
+    assert settled.ok and "rebaselined" in settled.flags
+    assert gate.check(12.0, box_on_the_bench()).flags == ()
+
+
+def test_a_moving_hand_never_becomes_the_reference():
+    gate = QualityGate(VESSELS, QualityThresholds(settle_s=10.0))
+    gate.check(0.0, frame())
+    right, low = frame(), box_on_the_bench()
+    right[:, 560:] = 20
+    for t in range(1, 40):
+        assert not gate.check(float(t), right if t % 2 else low).ok
+    assert gate.check(40.0, frame()).flags == ()  # the hand left: the old scene is still the reference
