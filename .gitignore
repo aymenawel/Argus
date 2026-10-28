@@ -27,3 +27,6 @@ worker/probes/out/
 Thumbs.db
 .vscode/
 .idea/
+
+# Design tool working files
+.taste-skill/

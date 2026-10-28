@@ -15,6 +15,9 @@
 - [x] **Q-08 USB HDMI capture card:** no (Oct 27, D-44). The XA50 is used for recordings only.
 - [ ] **Q-12 Fast live experiment** for the live demo moment and the multi-round Ax loop (D-42). Undecided. Claude's suggestion: household iodine clock (vitamin C, 2% iodine tincture, 3% hydrogen peroxide, starch): a sharp color switch at a predictable time, rounds of a few minutes, Ax tunes amounts to hit a target time. Alternative: yeast foam height (~30 min per round)
 - [ ] **Q-13 Demo video tooling:** undecided. Aymen will use AI tools and wants Claude to render motion graphics (logo sting, overlays, title cards) for a professional edit; formats to be chosen with the animation-tool research
+- [ ] **Q-15 UI direction** (proposed Oct 27, canvas https://claude.ai/artifact/2JeEMitFwx3e3egzNbptwg): data-terminal style on the brand palette (teal only on data and as a 1px selection line), true-neutral dark, every figure in JetBrains Mono, Inter for words, icon rail, vessel tracks synced to the video, evidence chips on AI numbers. Awaiting Aymen's approval or changes
+- [ ] **Q-16 Animation tools:** recommended Motion (MIT) for UI motion plus CSS/SVG for pulses and outlines; HyperFrames (Apache-2.0) for demo-video motion graphics; skip GSAP in the app, Lottie, Rive, React Spring. Awaiting Aymen's pick
+- [ ] **Q-17 Frontend dependencies not in `11`:** Tailwind CSS v4, Radix UI primitives, lucide-react icons, d3-scale/d3-shape, openapi-typescript (dev). Awaiting approval
 - [ ] **Q-14 Germination start:** must start by **Oct 29** at the latest to have ~60–72 h of footage by Nov 1. Claude's suggested tweaks before starting are in `20-demo-experiment-germination.md`
 - [ ] **Q-09 X account** for the Most Viral post (any account works; engagement counts until Nov 8 EOD).
 - [ ] **Q-10 A real user:** can one teacher or lab instructor try Argus (or the replay page) before Nov 4 for an Impact quote?
