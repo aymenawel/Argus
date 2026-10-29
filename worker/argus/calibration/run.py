@@ -7,19 +7,10 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field
 
 from argus.calibration.colour import ColourReference, read_patches
 from argus.calibration.detect import CardDetection, RulerScale, detect_card, ruler_scale, with_print_check
-from argus.domain import CalibrationDraft, CameraProperty
-
-
-class RulerInput(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    p1: tuple[float, float]
-    p2: tuple[float, float]
-    distance_mm: float = Field(gt=0)
+from argus.domain import CalibrationDraft, CameraProperty, RulerInput  # RulerInput lives in domain (Setup holds one)
 
 
 def _marker_corners_px(detection: CardDetection) -> np.ndarray:

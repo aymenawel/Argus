@@ -24,3 +24,20 @@ def test_env_overrides_and_key_is_hidden():
 def test_invalid_spend_cap_is_rejected(bad):
     with pytest.raises(ValidationError):
         load_settings({"RUN_SPEND_CAP_USD": bad})
+
+
+def test_sam_timeout_is_read_from_the_environment():
+    assert load_settings({"SAM_TIMEOUT_S": "45"}).sam_timeout_s == 45.0
+
+
+def test_reasoning_defaults_follow_kb_04_and_05():
+    s = load_settings({})
+    assert (s.routine_effort, s.routine_max_output, s.deep_effort, s.deep_max_output) == (
+        "minimal",
+        4000,
+        "medium",
+        8000,
+    )
+    assert (s.spark_input_usd, s.spark_cached_usd, s.spark_output_usd) == (1.25, 0.15, 4.25)
+    assert (s.wonder_input_usd, s.wonder_cached_usd, s.wonder_output_usd) == (4.00, 0.20, 20.00)
+    assert s.fallback_effort == "high" and s.snapshot_px == 768 and s.reason_concurrency == 2

@@ -9,7 +9,7 @@ import hashlib
 import json
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -50,6 +50,13 @@ class VerdictLevel(StrEnum):
     TOO_EARLY = "TOO_EARLY"
 
 
+class Direction(StrEnum):
+    """Where the plan expects the treatment vessels' value to sit relative to the controls'."""
+
+    HIGHER = "higher"
+    LOWER = "lower"
+
+
 class Record(BaseModel):
     # NaN and inf are never evidence (SQLite would store NaN as NULL and refuse the batch).
     model_config = ConfigDict(frozen=True, allow_inf_nan=False)
@@ -69,6 +76,12 @@ class PlanDraft(Record):
     prediction: str
     threshold: str
     rivals: list[str]
+    # The structured prediction the verdict ceiling is computed from (spec §7.3); a plan locks only with them.
+    metric: str | None = None
+    direction: Direction | None = None
+    min_effect: float | None = Field(None, ge=0)  # the smallest effect that matters, in the metric's unit
+    checkpoint_s: float | None = Field(None, ge=0)  # run time from which a verdict may be given
+    treatment: str | None = None  # a condition value; None: every treatment vessel
 
 
 class Plan(PlanDraft):
@@ -91,6 +104,14 @@ class RunSource(Record):
     paths: list[str] = []
     start_time: datetime | None = None
     start_time_source: Literal["researcher", "file", "run_start"] = "run_start"
+
+
+class RulerInput(Record):
+    """A two-click ruler: two image points and the true distance between them."""
+
+    p1: tuple[float, float]
+    p2: tuple[float, float]
+    distance_mm: float = Field(gt=0)
 
 
 class Run(Record):
@@ -122,6 +143,18 @@ class VesselDraft(Record):
 class Vessel(VesselDraft):
     id: str
     run_id: str
+
+
+class Setup(Record):
+    """An experiment's setup while the wizard fills it in: a draft, not evidence."""
+
+    source: RunSource | None = None
+    time_scale: float = Field(1.0, gt=0)
+    vessels: list[VesselDraft] = []
+    print_check_mm: float | None = Field(None, ge=90, le=110)
+    ruler: RulerInput | None = None
+    factor: str | None = None
+    factor_unit: str | None = None
 
 
 class Frame(Record):
@@ -188,6 +221,7 @@ class EventKind(StrEnum):
     SEGMENT_FAILED = "segment_failed"
     SPEND = "spend"
     INTERRUPTED = "interrupted"
+    RULE = "rule"
 
 
 class RunEvent(Record):
@@ -197,7 +231,7 @@ class RunEvent(Record):
     t_start: float = Field(ge=0)
     t_end: float | None = None
     kind: EventKind
-    source: Literal["watcher", "quality", "pipeline", "researcher"]
+    source: Literal["watcher", "quality", "pipeline", "researcher", "rule"]
     detail: dict = {}
     frame_ids: list[str] = []
 
@@ -241,8 +275,95 @@ class Measurement(MeasurementDraft):
     id: str
 
 
+class DerivedDraft(Record):
+    """A number computed in code from other rows (a change, a difference, a noise floor), with its inputs."""
+
+    t: float = Field(ge=0)
+    kind: str
+    label: str
+    value: float
+    uncertainty: float = Field(ge=0)
+    unit: str = Field(min_length=1)
+    inputs: list[str]
+    method_version: str = Field(pattern=r"^[a-z_]+/[0-9]+$")
+
+
+class Derived(DerivedDraft):
+    id: str
+    run_id: str
+
+
+class NoteDraft(Record):
+    t: float = Field(ge=0)
+    t_end: float | None = None
+    author: Literal["ai", "researcher"]
+    level: Literal["event", "checkpoint", "insight"] | None
+    tag: Literal["observation", "intervention", "question"] | None
+    body: dict[str, Any]  # rendered sections, never raw {ref} tokens
+    refs: list[str]
+    evidence: list[str]
+    check_status: Literal["passed", "fallback", "researcher"]
+    model_call_id: str | None
+
+
+class Note(NoteDraft):
+    id: str
+    run_id: str
+
+
+class NoteAttemptDraft(Record):
+    """Every AI note answer with its claim-check result, the rejected ones included (spec §5)."""
+
+    t: float = Field(ge=0)
+    attempt: int = Field(ge=1)
+    raw: dict[str, Any]
+    reasons: list[str]
+    passed: bool
+    model_call_id: str | None
+
+
+class NoteAttempt(NoteAttemptDraft):
+    id: str
+    run_id: str
+
+
+class VerdictDraft(Record):
+    t: float = Field(ge=0)
+    provisional: bool
+    allowed: list[VerdictLevel]
+    checks: list[dict[str, Any]]
+    verdict: VerdictLevel
+    body: dict[str, Any]
+    draft: dict[str, Any]
+    critique: dict[str, Any] | None
+    refs: list[str]
+    model_call_ids: list[str]
+    fell_back: bool
+
+
+class Verdict(VerdictDraft):
+    id: str
+    run_id: str
+
+
+class ReviewDraft(Record):
+    t: float = Field(ge=0)
+    target_kind: Literal["note", "verdict", "rival", "event"]
+    target_id: str
+    action: Literal["confirm", "dismiss", "correct", "resolve"]
+    comment: str
+
+
+class Review(ReviewDraft):
+    id: str
+    run_id: str
+
+
 def plan_sha256(draft: PlanDraft) -> str:
-    """Hash of the plan's own fields, stable across key order, so a locked plan can be checked later."""
-    fields = PlanDraft.model_validate(draft.model_dump(include=set(PlanDraft.model_fields))).model_dump(mode="json")
+    """Hash of the plan's own fields, stable across key order, so a locked plan can be checked later. Unset
+    structured fields are left out, so a plan locked before they existed keeps its hash."""
+    fields = PlanDraft.model_validate(draft.model_dump(include=set(PlanDraft.model_fields))).model_dump(
+        mode="json", exclude_none=True
+    )
     canonical = json.dumps(fields, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

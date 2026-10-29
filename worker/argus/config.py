@@ -26,6 +26,7 @@ ENV_FIELDS = {
     "ARGUS_DATA_DIR": "data_dir",
     "ARGUS_RECIPES_DIR": "recipes_dir",
     "ARGUS_WEB_ORIGIN": "web_origin",
+    "SAM_TIMEOUT_S": "sam_timeout_s",
 }
 
 
@@ -53,6 +54,23 @@ class Settings(BaseModel):
     sam_concurrency: int = 2
     sam_timeout_s: float = 120.0  # longest wait for the next bit of a SAM response; the SDK's own retries are off
     segment_interval_s: float = 10.0  # live runs: the shortest gap between two segmentations
+
+    # Muse prices per 1M tokens (KB 05, checked Oct 27, 2026); reasoning tokens are billed as output.
+    spark_input_usd: float = 1.25
+    spark_cached_usd: float = 0.15
+    spark_output_usd: float = 4.25
+    wonder_input_usd: float = 4.00
+    wonder_cached_usd: float = 0.20
+    wonder_output_usd: float = 20.00
+    # reason() (KB 04, spec §7.1): measured limits below which strict JSON came back empty or cut off.
+    routine_effort: str = "minimal"
+    routine_max_output: int = 4000
+    deep_effort: str = "medium"
+    deep_max_output: int = 8000
+    fallback_effort: str = "high"
+    reason_concurrency: int = 2
+    reason_timeout_s: float = 120.0
+    snapshot_px: int = 768
 
 
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:

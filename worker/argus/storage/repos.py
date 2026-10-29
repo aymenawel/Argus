@@ -11,6 +11,8 @@ from typing import Any
 from argus.domain import (
     Calibration,
     CalibrationDraft,
+    Derived,
+    DerivedDraft,
     Detection,
     DetectionDraft,
     EventKind,
@@ -21,13 +23,22 @@ from argus.domain import (
     MeasurementDraft,
     ModelCall,
     ModelCallDraft,
+    Note,
+    NoteAttempt,
+    NoteAttemptDraft,
+    NoteDraft,
     Plan,
     PlanDraft,
+    Review,
+    ReviewDraft,
     Run,
     RunEvent,
     RunMode,
     RunSource,
     RunStatus,
+    Setup,
+    Verdict,
+    VerdictDraft,
     Vessel,
     VesselDraft,
     new_id,
@@ -99,9 +110,23 @@ def get_plans(db: Database, experiment_id: str) -> list[Plan]:
     return [_plan(r) for r in rows]
 
 
+PLAN_COLUMNS = (
+    "hypothesis",
+    "prediction",
+    "threshold",
+    "rivals",
+    "metric",
+    "direction",
+    "min_effect",
+    "checkpoint_s",
+    "treatment",
+)
+
+
 def save_plan_draft(db: Database, experiment_id: str, draft: PlanDraft) -> Plan:
     """Update the latest unlocked version, or start a new version when the latest is locked."""
-    fields = (draft.hypothesis, draft.prediction, draft.threshold, _json(draft.rivals))
+    values = draft.model_dump(mode="json")
+    fields = tuple(_json(values[c]) if c == "rivals" else values[c] for c in PLAN_COLUMNS)
     with db.write() as c:
         latest = c.execute(
             "SELECT version, locked_at FROM plans WHERE experiment_id=? ORDER BY version DESC LIMIT 1",
@@ -109,16 +134,16 @@ def save_plan_draft(db: Database, experiment_id: str, draft: PlanDraft) -> Plan:
         ).fetchone()
         if latest is not None and latest["locked_at"] is None:
             version = latest["version"]
+            assignments = ", ".join(f"{column}=?" for column in PLAN_COLUMNS)
             c.execute(
-                "UPDATE plans SET hypothesis=?, prediction=?, threshold=?, rivals=? "
-                "WHERE experiment_id=? AND version=?",
+                f"UPDATE plans SET {assignments} WHERE experiment_id=? AND version=?",
                 (*fields, experiment_id, version),
             )
         else:
             version = 1 if latest is None else latest["version"] + 1
             c.execute(
-                "INSERT INTO plans(experiment_id, version, hypothesis, prediction, threshold, rivals) "
-                "VALUES (?,?,?,?,?,?)",
+                f"INSERT INTO plans(experiment_id, version, {', '.join(PLAN_COLUMNS)}) "
+                f"VALUES ({','.join('?' * (len(PLAN_COLUMNS) + 2))})",
                 (experiment_id, version, *fields),
             )
     return next(p for p in get_plans(db, experiment_id) if p.version == version)
@@ -145,6 +170,30 @@ def lock_plan(db: Database, experiment_id: str) -> Plan:
             )
             c.execute("UPDATE experiments SET status=? WHERE id=?", (ExperimentStatus.LOCKED, experiment_id))
     return next(p for p in get_plans(db, experiment_id) if p.version == latest.version)
+
+
+def first_locked_plan(db: Database, experiment_id: str) -> Plan | None:
+    """The plan a verdict is judged against: the first version that was locked (later edits are new versions)."""
+    return next((p for p in get_plans(db, experiment_id) if p.locked_at is not None), None)
+
+
+# ---- Setups (the wizard's draft; not evidence) ----
+
+
+def save_setup(db: Database, experiment_id: str, setup: Setup) -> Setup:
+    with db.write() as c:
+        c.execute(
+            "INSERT INTO setups(experiment_id, body, updated_at) VALUES (?,?,?) "
+            "ON CONFLICT(experiment_id) DO UPDATE SET body=excluded.body, updated_at=excluded.updated_at",
+            (experiment_id, setup.model_dump_json(), _now()),
+        )
+    return setup
+
+
+def get_setup(db: Database, experiment_id: str) -> Setup:
+    with db.read() as c:
+        row = c.execute("SELECT body FROM setups WHERE experiment_id=?", (experiment_id,)).fetchone()
+    return Setup() if row is None else Setup.model_validate_json(row["body"])
 
 
 # ---- Runs, vessels, frames ----
@@ -544,3 +593,104 @@ def measurements_for_run(
     )
     with db.read() as c:
         return [Measurement(**dict(r)) for r in c.execute(sql, params).fetchall()]
+
+
+# ---- The explanation layer: derived numbers, notes, attempts, verdicts, reviews ----
+
+
+def _insert(c: sqlite3.Connection, table: str, record: Any, json_fields: Sequence[str]) -> None:
+    values = record.model_dump(mode="json")
+    columns = list(values)
+    row = [_json(values[k]) if k in json_fields else values[k] for k in columns] + [_now()]
+    c.execute(
+        f"INSERT INTO {table}({', '.join(columns)}, created_at) VALUES ({','.join('?' * (len(columns) + 1))})",
+        row,
+    )
+
+
+def _load(cls: Any, row: sqlite3.Row, json_fields: Sequence[str]) -> Any:
+    values = {k: row[k] for k in cls.model_fields}
+    return cls(**{k: json.loads(v) if k in json_fields and v is not None else v for k, v in values.items()})
+
+
+DERIVED_JSON = ("inputs",)
+NOTE_JSON = ("body", "refs", "evidence")
+ATTEMPT_JSON = ("raw", "reasons")
+VERDICT_JSON = ("allowed", "checks", "body", "draft", "critique", "refs", "model_call_ids")
+
+
+def add_derived(db: Database, run_id: str, drafts: Sequence[DerivedDraft]) -> list[Derived]:
+    rows = [Derived(**d.model_dump(), id=new_id("drv"), run_id=run_id) for d in drafts]
+    with db.write() as c:
+        for row in rows:
+            _insert(c, "derived", row, DERIVED_JSON)
+    return rows
+
+
+def derived_for_run(db: Database, run_id: str) -> list[Derived]:
+    with db.read() as c:
+        rows = c.execute("SELECT * FROM derived WHERE run_id=? ORDER BY t, rowid", (run_id,)).fetchall()
+    return [_load(Derived, r, DERIVED_JSON) for r in rows]
+
+
+def add_note(db: Database, run_id: str, draft: NoteDraft) -> Note:
+    note = Note(**draft.model_dump(), id=new_id("note"), run_id=run_id)
+    with db.write() as c:
+        _insert(c, "notes", note, NOTE_JSON)
+    return note
+
+
+def extend_note(db: Database, note_id: str, t_end: float) -> Note:
+    """A quiet "no change" note covers a longer stretch: its end time is set, once."""
+    with db.write() as c:
+        c.execute("UPDATE notes SET t_end=? WHERE id=?", (t_end, note_id))
+        row = c.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
+    return _load(Note, row, NOTE_JSON)
+
+
+def notes_for_run(db: Database, run_id: str, t_from: float | None = None, t_to: float | None = None) -> list[Note]:
+    clauses, params = _time_window("t", run_id, t_from, t_to)
+    with db.read() as c:
+        rows = c.execute(f"SELECT * FROM notes WHERE {clauses} ORDER BY t, rowid", params).fetchall()
+    return [_load(Note, r, NOTE_JSON) for r in rows]
+
+
+def add_note_attempt(db: Database, run_id: str, draft: NoteAttemptDraft) -> NoteAttempt:
+    attempt = NoteAttempt(**draft.model_dump(), id=new_id("att"), run_id=run_id)
+    with db.write() as c:
+        _insert(c, "note_attempts", attempt, ATTEMPT_JSON)
+    return attempt
+
+
+def note_attempts_for_run(db: Database, run_id: str) -> list[NoteAttempt]:
+    with db.read() as c:
+        rows = c.execute("SELECT * FROM note_attempts WHERE run_id=? ORDER BY t, rowid", (run_id,)).fetchall()
+    return [_load(NoteAttempt, r, ATTEMPT_JSON) for r in rows]
+
+
+def add_verdict(db: Database, run_id: str, draft: VerdictDraft) -> Verdict:
+    verdict = Verdict(**draft.model_dump(), id=new_id("vrd"), run_id=run_id)
+    with db.write() as c:
+        _insert(c, "verdicts", verdict, VERDICT_JSON)
+    return verdict
+
+
+def latest_verdict(db: Database, run_id: str) -> Verdict | None:
+    with db.read() as c:
+        row = c.execute(
+            "SELECT * FROM verdicts WHERE run_id=? ORDER BY t DESC, rowid DESC LIMIT 1", (run_id,)
+        ).fetchone()
+    return None if row is None else _load(Verdict, row, VERDICT_JSON)
+
+
+def add_review(db: Database, run_id: str, draft: ReviewDraft) -> Review:
+    review = Review(**draft.model_dump(), id=new_id("rev"), run_id=run_id)
+    with db.write() as c:
+        _insert(c, "reviews", review, ())
+    return review
+
+
+def reviews_for_run(db: Database, run_id: str) -> list[Review]:
+    with db.read() as c:
+        rows = c.execute("SELECT * FROM reviews WHERE run_id=? ORDER BY t, rowid", (run_id,)).fetchall()
+    return [_load(Review, r, ()) for r in rows]
