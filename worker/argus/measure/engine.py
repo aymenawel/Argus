@@ -104,18 +104,20 @@ def _length_boundary_px(mask: np.ndarray) -> float:
 
 def _colour(
     image_bgr: np.ndarray, mask: np.ndarray, cal: RunCalibration, current: ColourReference | None
-) -> tuple[ColourBaseline, np.ndarray] | None:
+) -> tuple[ColourBaseline, ColourBaseline, np.ndarray] | None:
+    """The reading (corrected when the card allows), the uncorrected reading, and the standard error per axis."""
     pixels = image_bgr[mask]
     if pixels.size == 0:
         return None
     lab = rgb2lab(pixels[:, ::-1].astype(np.float64).reshape(-1, 1, 3) / 255.0).reshape(-1, 3)
     mean = lab.mean(axis=0)
     se = lab.std(axis=0, ddof=1) / math.sqrt(len(lab)) if len(lab) > 1 else np.zeros(3)
-    corrected = cal.reference is not None and current is not None
-    if corrected:
-        mean = correct_lab(mean, cal.reference, current)
-    reading = ColourBaseline((float(mean[0]), float(mean[1]), float(mean[2])), float(np.linalg.norm(se)), corrected)
-    return reading, se
+    spread = float(np.linalg.norm(se))
+    raw = ColourBaseline((float(mean[0]), float(mean[1]), float(mean[2])), spread, False)
+    if cal.reference is None or current is None:
+        return raw, raw, se
+    fixed = correct_lab(mean, cal.reference, current)
+    return ColourBaseline((float(fixed[0]), float(fixed[1]), float(fixed[2])), spread, True), raw, se
 
 
 def measure_vessel(
@@ -185,9 +187,10 @@ def measure_vessel(
             reading = _colour(image_bgr, mask, cal, current_reference)
             if reading is None:
                 continue
-            colour, se = reading
+            colour, raw, se = reading
             key = baseline_key(spec.id, colour.corrected)
             lab[key] = colour
+            lab[baseline_key(spec.id, False)] = raw  # so an uncorrected baseline exists from the start too
             kind = "" if colour.corrected else "_uncorrected"
             if spec.method == "lab_mean":
                 for i, (suffix, unit) in enumerate((("l", "L*"), ("a", "a*"), ("b", "b*"))):

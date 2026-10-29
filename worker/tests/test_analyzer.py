@@ -12,7 +12,7 @@ from argus.calibration.card import STANDARD
 from argus.calibration.run import calibrate
 from argus.config import Settings
 from argus.domain import ModelCallDraft, Role, RunMode, RunSource, SourceKind, VesselDraft
-from argus.pipeline.analyzer import RunContext, Skipped, analyze_frame, segment_with_retries
+from argus.pipeline.analyzer import RunContext, Skipped, analyze_frame, correction_paused, segment_with_retries
 from argus.recipes.model import Recipe
 from argus.segment import Clip, MaskPatch, SegmentError, SegmentResult, Track, TrackFrame
 from argus.storage.files import RunFiles
@@ -145,6 +145,7 @@ def calls(ctx):
 @pytest.mark.anyio
 async def test_a_frame_becomes_detections_measurements_and_events(ctx, scene):
     image, _ = scene
+    ctx.colour_reference = ctx.calibration.reference  # a run whose colour reference has already settled
     out = await analyze_frame(ctx, 0.0, image, segment=True)
     # A: length + 3 colour readings; B: SAM found nothing there, so its length is a measured 0 (no colour)
     assert out.segmented and out.failed_concepts == [] and out.measurements == 5
@@ -214,6 +215,7 @@ async def test_without_calibration_nothing_is_measured(ctx, scene):
 @pytest.mark.anyio
 async def test_colour_drift_beyond_correction_is_flagged(ctx, scene):
     image, _ = scene
+    ctx.colour_reference = ctx.calibration.reference  # a run whose colour reference has already settled
     await analyze_frame(ctx, 0.0, image, segment=True)
     tinted = image.copy()
     tinted[..., 0] = (tinted[..., 0] * 0.6).astype(np.uint8)  # less blue everywhere, card neutrals included
@@ -276,6 +278,7 @@ async def test_concurrent_calls_never_spend_past_the_cap(ctx, tmp_path):
 @pytest.mark.anyio
 async def test_uncorrected_colour_is_an_open_event_until_the_card_is_back(ctx, scene):
     image, _ = scene
+    ctx.colour_reference = ctx.calibration.reference  # a run whose colour reference has already settled
     x0, y0 = (int(min(c)) for c in zip(*ctx.vessels[0].roi, strict=True))
     x1, y1 = (int(max(c)) for c in zip(*ctx.vessels[0].roi, strict=True))
     hidden = np.full_like(image, 128)  # the card is covered: only vessel A's region is left as it was
@@ -341,3 +344,57 @@ async def test_a_vessel_with_a_hand_beside_it_gets_a_gap_not_a_reading(ctx, scen
     assert measured == {b.id}  # B is still measured
     assert {d.vessel_id for d in detections_for_frame(ctx.db, out.frame_id)} <= {b.id}
     assert a.id not in ctx.last_masks  # the hand's outline is never reused as A's mask
+
+
+RECIPE_DE = Recipe.model_validate(
+    {
+        **RECIPE.model_dump(by_alias=True),
+        "measurements": [
+            *RECIPE.model_dump(by_alias=True)["measurements"],
+            {"id": "change", "family": "colour", "method": "delta_e", "from": "root", "unit": "dE00"},
+        ],
+    }
+)
+
+
+def card_hidden(ctx, image):
+    x0, y0 = (int(min(c)) for c in zip(*ctx.vessels[0].roi, strict=True))
+    x1, y1 = (int(max(c)) for c in zip(*ctx.vessels[0].roi, strict=True))
+    hidden = np.full_like(image, 128)  # the card is covered: only vessel A's region is left as it was
+    hidden[y0:y1, x0:x1] = image[y0:y1, x0:x1]
+    return hidden
+
+
+@pytest.mark.anyio
+async def test_colour_waits_for_the_camera_to_settle(ctx, scene):
+    image, _ = scene
+    settling = image.copy()
+    settling[..., 0] = (settling[..., 0] * 0.85).astype(np.uint8)  # the camera's white balance still moving
+    ctx.recipe, ctx.calibration = RECIPE_DE, calibrate(settling)  # the run calibrated on that first frame
+    for i, frame in enumerate([settling] + [image] * 6):
+        await analyze_frame(ctx, i * 60.0, frame, segment=True)
+    colour = measurements_for_run(ctx.db, ctx.run.id, metric="colour_l")
+    assert min(m.t for m in colour) == 120.0  # nothing until the card was read on three frames
+    with ctx.db.read() as c:
+        rows = c.execute("SELECT t FROM calibrations WHERE run_id=?", (ctx.run.id,)).fetchall()
+    assert [r["t"] for r in rows] == [120.0]  # the settled reference is kept as evidence
+    change = measurements_for_run(ctx.db, ctx.run.id, metric="change")
+    assert change and all(m.value < 1.0 for m in change)  # no offset from the unsettled first frame
+
+
+def test_correction_pauses_above_6_and_resumes_below_5():
+    assert not correction_paused(5.9, paused=False) and correction_paused(6.1, paused=False)
+    assert correction_paused(5.5, paused=True) and not correction_paused(4.9, paused=True)
+    assert correction_paused(None, paused=False)
+
+
+@pytest.mark.anyio
+async def test_uncorrected_change_is_measured_from_the_start(ctx, scene):
+    image, _ = scene
+    ctx.recipe = RECIPE_DE
+    for i in range(4):  # three to settle, then corrected readings
+        await analyze_frame(ctx, i * 60.0, image, segment=True)
+    await analyze_frame(ctx, 240.0, card_hidden(ctx, image), segment=True)
+    a = ctx.vessels[0].id
+    [late] = [m for m in measurements_for_run(ctx.db, ctx.run.id, metric="change") if m.t == 240.0 and m.vessel_id == a]
+    assert late.method_version == "delta_e_uncorrected/1" and late.value < 1.0

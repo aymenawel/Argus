@@ -137,7 +137,7 @@ async def test_live_segments_on_change_and_measures_colour_every_step(make_ctx):
     stored = [f.t for f in frames_for_run(ctx.db, ctx.run.id)]
     assert len(stored) >= 12 and all(t2 - t1 <= 5.0 + 1e-6 for t1, t2 in zip(stored, stored[1:], strict=False))
     colour_times = {m.t for m in measurements_for_run(ctx.db, ctx.run.id, metric="colour_l")}
-    assert colour_times == set(stored)  # colour on every stored frame, from the newest masks
+    assert colour_times == set(stored[2:])  # every stored frame once the colour reference settled (3 readings)
     lengths = measurements_for_run(ctx.db, ctx.run.id, metric="length")
     assert abs(lengths[0].value - 20) <= lengths[0].uncertainty and lengths[-1].value > 35
 
@@ -303,7 +303,8 @@ async def test_a_moved_card_is_recalibrated_and_the_vessels_stay(make_ctx):
     [moved] = [e for e in events_for_run(ctx.db, ctx.run.id) if e.kind is EventKind.CAMERA_MOVED]
     assert moved.detail == {"message": "card moved: recalibrated"} and list(ctx.vessels[0].roi) == drawn
     with ctx.db.read() as c:
-        assert c.execute("SELECT COUNT(*) FROM calibrations WHERE run_id=?", (ctx.run.id,)).fetchone()[0] == 2
+        # the first calibration, the settled colour reference, and the recalibration after the nudge
+        assert c.execute("SELECT COUNT(*) FROM calibrations WHERE run_id=?", (ctx.run.id,)).fetchone()[0] == 3
 
 
 @pytest.mark.anyio

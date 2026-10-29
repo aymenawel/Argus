@@ -9,19 +9,19 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal, Protocol
 
 import cv2
 import numpy as np
 
 from argus.api.events import EventBroker
-from argus.calibration.colour import ColourReference, neutral_drift, read_patches
+from argus.calibration.colour import ColourReference, PatchReading, neutral_drift, read_patches
 from argus.calibration.detect import detect_card
 from argus.calibration.run import RunCalibration
 from argus.config import Settings
 from argus.domain import Detection, EventKind, MeasurementDraft, ModelCallDraft, Run, Vessel, new_id
-from argus.measure.engine import ColourBaseline, measure_vessel
+from argus.measure.engine import ColourBaseline, VesselMeasurements, measure_vessel
 from argus.measure.uncertainty import format_measurement
 from argus.recipes.model import Recipe
 from argus.segment import Clip, MaskPatch, SegmentError, SegmentResult, segment
@@ -31,6 +31,7 @@ from argus.segment.tracking import TrackMatcher, assign_to_vessels
 from argus.storage.db import Database
 from argus.storage.files import RunFiles
 from argus.storage.repos import (
+    add_calibration,
     add_detection_rows,
     add_event,
     add_frame,
@@ -43,6 +44,8 @@ from argus.storage.repos import (
 
 JPEG_QUALITY = 90
 COLOUR_DRIFT_MAX = 6.0  # dE00 of the card's neutral patches beyond which correction is no longer trusted
+COLOUR_DRIFT_RESUME = 5.0  # once paused, correction resumes only below this, so it doesn't flicker at the cut-off
+SETTLE_READINGS = 3  # a run's colour reference is the median of its first card readings, not its first frame
 GEOMETRY = frozenset({"size", "count"})
 COLOUR = frozenset({"colour"})
 
@@ -97,6 +100,8 @@ class RunContext:
     cap_reported: bool = False
     calibration_reported: bool = False
     uncorrected_event: str | None = None  # the open event while colour can't be corrected against the card
+    colour_reference: ColourReference | None = None  # the settled reference colour is corrected against
+    settling: list[ColourReference] = field(default_factory=list)  # card readings until it settles
     semaphore: asyncio.Semaphore = field(init=False)
     spend_lock: asyncio.Lock = field(init=False, default_factory=asyncio.Lock)
     reserved_usd: float = 0.0  # expected cost of the calls in flight, not yet logged
@@ -273,16 +278,44 @@ def _union(patches: Sequence[tuple[str, MaskPatch]], shape: tuple[int, int]) -> 
     return canvas
 
 
-async def _colour_reference(ctx: RunContext, t: float, image_bgr: np.ndarray, frame_id: str) -> ColourReference | None:
-    """The card's patches in this frame, to correct colour with; None when colour can't be corrected. Each stretch
-    without correction is one quality event, open until correction is possible again."""
+def correction_paused(drift: float | None, *, paused: bool) -> bool:
+    """Whether colour is left uncorrected on this frame: beyond 6 dE00 of drift (or no neutral to compare), and
+    once paused until the drift is back under 5."""
+    return drift is None or drift > (COLOUR_DRIFT_RESUME if paused else COLOUR_DRIFT_MAX)
+
+
+def _median_reference(readings: Sequence[ColourReference]) -> ColourReference:
+    names = sorted({p.name for reading in readings for p in reading.patches})
+    patches = []
+    for name in names:
+        labs = np.array([p.lab for reading in readings for p in reading.patches if p.name == name])
+        median = np.median(labs, axis=0)
+        patches.append(PatchReading(name, (float(median[0]), float(median[1]), float(median[2]))))
+    return ColourReference(tuple(patches))
+
+
+async def _colour_reference(
+    ctx: RunContext, t: float, image_bgr: np.ndarray, frame_id: str
+) -> tuple[ColourReference | None, bool]:
+    """The card's patches in this frame to correct colour with (None: uncorrected), and whether colour is measured
+    on this frame at all. A camera still settling its exposure and white balance when a run starts would skew
+    every reading after it, so the run's reference is the median of the card's first readings, and colour waits
+    for it. Each stretch without correction is one quality event, open until correction is possible again."""
     cal = ctx.calibration
     if cal is None or cal.detection is None or cal.reference is None:
-        return None  # no card at the start: colour is never corrected in this run, and every reading says so
+        return None, True  # no card at the start: colour is never corrected in this run, and every reading says so
     card = await asyncio.to_thread(detect_card, image_bgr, (cal.detection.spec,))
     current = await asyncio.to_thread(read_patches, image_bgr, card) if card is not None else None
-    drift = neutral_drift(cal.reference, current) if current is not None else None
-    if current is None or drift is None or drift > COLOUR_DRIFT_MAX:
+    if ctx.colour_reference is None:
+        if current is not None:
+            ctx.settling.append(current)
+        if len(ctx.settling) < SETTLE_READINGS:
+            return None, False
+        ctx.colour_reference = _median_reference(ctx.settling)
+        settled = replace(cal, reference=ctx.colour_reference).to_draft(t, {})
+        await asyncio.to_thread(add_calibration, ctx.db, ctx.run.id, settled)
+    drift = neutral_drift(ctx.colour_reference, current) if current is not None else None
+    if correction_paused(drift, paused=ctx.uncorrected_event is not None):
         if ctx.uncorrected_event is None:
             if card is None:
                 detail: dict = {"message": "colour not corrected: the card is not in view"}
@@ -294,7 +327,7 @@ async def _colour_reference(ctx: RunContext, t: float, image_bgr: np.ndarray, fr
                     "colour_drift": round(drift, 2),
                 }
             ctx.uncorrected_event = await ctx.event(t, EventKind.QUALITY, "quality", detail, frame_ids=[frame_id])
-        return None
+        return None, True
     if ctx.uncorrected_event is not None:
         event = await asyncio.to_thread(close_event, ctx.db, ctx.uncorrected_event, t)
         ctx.uncorrected_event = None
@@ -309,7 +342,7 @@ async def _colour_reference(ctx: RunContext, t: float, image_bgr: np.ndarray, fr
                 "detail": event.detail,
             },
         )
-    return current
+    return current, True
 
 
 async def analyze_frame(
@@ -339,7 +372,8 @@ async def analyze_frame(
         ctx.publish("frame_analyzed", {"frame_id": frame_id, "t": t, "quality_flags": list(quality_flags)})
         return AnalysisOutcome(frame_id, False, 0, [])
 
-    current_reference = await _colour_reference(ctx, t, image_bgr, frame_id)
+    current_reference, measure_colour = await _colour_reference(ctx, t, image_bgr, frame_id)
+    cal = ctx.calibration if ctx.colour_reference is None else replace(ctx.calibration, reference=ctx.colour_reference)
 
     # Segmentation: injected (video mode, per vessel) or one image call per concept (covers every vessel).
     # `keyed` holds what came back per vessel and concept; an empty list means SAM answered and found nothing.
@@ -397,13 +431,15 @@ async def analyze_frame(
             vessel,
             vessel_masks,
             image_bgr,
-            ctx.calibration,
+            cal,
             families=GEOMETRY,
             **common,
         )
-        colour = await asyncio.to_thread(
-            measure_vessel, ctx.recipe, vessel, vessel_masks, image_bgr, ctx.calibration, families=COLOUR, **common
-        )
+        colour = VesselMeasurements([], {})  # while the colour reference settles, colour waits
+        if measure_colour:
+            colour = await asyncio.to_thread(
+                measure_vessel, ctx.recipe, vessel, vessel_masks, image_bgr, cal, families=COLOUR, **common
+            )
         drafts += geometry.drafts + colour.drafts
         for measurement_id, reading in colour.lab.items():
             baselines.setdefault(measurement_id, reading)  # the first reading is the ΔE baseline

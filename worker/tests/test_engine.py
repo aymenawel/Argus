@@ -153,7 +153,9 @@ def test_uncorrected_colour_is_labelled_and_compared_only_with_its_kind():
     corrected = measure(green, mask, families=colour)
     assert {d.method_version for d in corrected.drafts} == {"lab_mean/1"} and corrected.lab["change"].corrected
     raw = measure(blue, mask, baselines=corrected.lab, families=colour, corrected=False)
-    assert {d.method_version for d in raw.drafts} == {"lab_mean_uncorrected/1"}  # no ΔE against a corrected base
+    # Against the start's own uncorrected reading (kept beside the corrected one), never the corrected one.
+    assert {d.method_version for d in raw.drafts} == {"lab_mean_uncorrected/1", "delta_e_uncorrected/1"}
+    assert corrected.lab["change:uncorrected"].corrected is False
     later = measure(green, mask, baselines={**corrected.lab, **raw.lab}, families=colour, corrected=False)
     change = next(d for d in later.drafts if d.metric == "change")
     assert change.method_version == "delta_e_uncorrected/1" and change.value > 20
