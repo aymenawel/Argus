@@ -1,0 +1,32 @@
+{
+  "$comment": "Output schema for prompts/setup/describe.md. Code replaces the metric enum with the recipe's measurement ids at call time. The numbers here are the researcher's intended values, not measurements; the researcher edits every field.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["hypothesis", "prediction", "threshold", "metric", "direction", "min_effect", "checkpoint_s", "treatment", "factor", "factor_unit", "conditions", "rivals", "question_for_researcher"],
+  "properties": {
+    "hypothesis": {"type": "string"},
+    "prediction": {"type": "string"},
+    "threshold": {"type": "string"},
+    "metric": {"type": "string", "enum": ["filled in at call time"]},
+    "direction": {"type": "string", "enum": ["higher", "lower"]},
+    "min_effect": {"type": "number"},
+    "checkpoint_s": {"type": "number"},
+    "treatment": {"type": "string", "description": "The condition value the prediction is about, or empty for every treatment vessel."},
+    "factor": {"type": "string"},
+    "factor_unit": {"type": "string"},
+    "conditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["value", "role"],
+        "properties": {
+          "value": {"type": "string"},
+          "role": {"type": "string", "enum": ["control", "treatment"]}
+        }
+      }
+    },
+    "rivals": {"type": "array", "items": {"type": "string"}},
+    "question_for_researcher": {"type": "string"}
+  }
+}

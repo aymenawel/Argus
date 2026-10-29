@@ -6,7 +6,12 @@ All model prompts live here, never inline in code (decision D-07 in `docs/knowle
 | --- | --- | --- | --- |
 | `system/scientific-rules.md` | Every reasoning call, as the first, stable part of the input so prompt caching applies | routine + deep | Keep under ~450 tokens |
 | `deep/verdict-critique.md` | Verdicts, next-run suggestions, final report | deep only | Output validated against a JSON schema |
-| `recipes/<recipe>/method.md` (to create) | Calls for that recipe only | both | Short method card: what to measure, typical curve, recipe-specific rival explanations |
+| `recipes/<recipe>/method.md` | Calls for that recipe only | both | Short method card (under 250 words): what is measured, typical curve, what counts as a real change, recipe-specific rivals and their checks |
+| `routine/note.md` | Event and checkpoint notes | routine | `<<LEVEL>>` is replaced by the note's level; output `schemas/note.json` (v2) |
+| `deep/verdict.md` | The verdict draft | deep | Output `schemas/verdict.json`; code computed the allowed verdicts and the checks |
+| `setup/describe.md` | The setup wizard's plan draft | routine | Output `schemas/recipe_draft.json` with the recipe's metrics filled into `metric` |
+
+**Numbers.** Models cite numbers only as `{ref:<id>}` tokens from the call's MEASUREMENTS block; the claim checker rejects any digit or quantity word outside a token, and code renders the tokens (spec §7.2). Recent notes are shown with their numbers masked as `[n]`.
 
 ## Order of a reasoning call's input (cache-friendly)
 

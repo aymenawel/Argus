@@ -1,0 +1,28 @@
+{
+  "$comment": "Output schema for prompts/deep/verdict.md (spec §7.3). Text fields cite numbers only as {ref:<id>} tokens; code keeps the verdict only if it is in the allowed set it computed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "explanation", "rivals", "what_would_change_it", "confidence", "confidence_reason", "refs_used", "evidence_ids"],
+  "properties": {
+    "verdict": {"type": "string", "enum": ["SUPPORTED", "NOT_SUPPORTED", "INCONCLUSIVE", "TOO_EARLY"]},
+    "explanation": {"type": "string", "description": "Three to five sentences; every number as a {ref:<id>} token."},
+    "rivals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "status", "reason"],
+        "properties": {
+          "name": {"type": "string"},
+          "status": {"type": "string", "enum": ["ruled_out", "open", "unclear"]},
+          "reason": {"type": "string"}
+        }
+      }
+    },
+    "what_would_change_it": {"type": "string"},
+    "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
+    "confidence_reason": {"type": "string"},
+    "refs_used": {"type": "array", "items": {"type": "string"}},
+    "evidence_ids": {"type": "array", "items": {"type": "string"}}
+  }
+}

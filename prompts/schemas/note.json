@@ -1,30 +1,18 @@
 {
-  "$comment": "Output schema for every AI note (routine tier). The claim checker compares every entry in numbers_used against the measurements table before the note is saved (see docs/knowledge-base/07-features.md, AI notes).",
+  "$comment": "Note schema v2 (spec §7.2): text fields cite numbers only as {ref:<id>} tokens from the call's MEASUREMENTS block, and refs_used lists them. The claim checker rejects any digit or quantity word outside a token before the note is saved.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["level", "observation", "interpretation", "hypothesis_status", "confidence", "confidence_reason", "rival_explanations", "next_step", "numbers_used", "evidence_ids", "question_for_researcher"],
+  "required": ["level", "observation", "interpretation", "hypothesis_status", "confidence", "confidence_reason", "rival_explanations", "next_step", "refs_used", "evidence_ids", "question_for_researcher"],
   "properties": {
     "level": {"type": "string", "enum": ["event", "checkpoint", "insight"]},
-    "observation": {"type": "string", "description": "What was measured or seen. Numbers only from MEASUREMENTS."},
-    "interpretation": {"type": "string"},
+    "observation": {"type": "string", "description": "What was measured or seen. Every number as a {ref:<id>} token."},
+    "interpretation": {"type": "string", "description": "What it may mean. Numbers only as {ref:<id>} tokens."},
     "hypothesis_status": {"type": "string", "enum": ["SUPPORTED", "NOT_SUPPORTED", "INCONCLUSIVE", "TOO_EARLY"]},
     "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
     "confidence_reason": {"type": "string"},
     "rival_explanations": {"type": "array", "items": {"type": "string"}},
     "next_step": {"type": "string", "description": "A suggestion, labeled as such, or empty."},
-    "numbers_used": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["measurement_id", "value", "unit"],
-        "properties": {
-          "measurement_id": {"type": "string"},
-          "value": {"type": "number"},
-          "unit": {"type": "string"}
-        }
-      }
-    },
+    "refs_used": {"type": "array", "items": {"type": "string"}, "description": "Every ref id cited in the text."},
     "evidence_ids": {"type": "array", "items": {"type": "string"}, "description": "Frame or event ids the note rests on."},
     "question_for_researcher": {"type": "string", "description": "One specific question, or empty."}
   }
