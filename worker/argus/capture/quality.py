@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 
 from argus.domain import Vessel
-from argus.rois import roi_mask
+from argus.rois import roi_box, roi_mask
 
 SATURATED_LEVEL = 250
 CHANGED_GREY = 40  # grey levels a pixel must move by to count as changed (after matching brightness)
@@ -22,7 +22,7 @@ GAIN_MIN_GREY = 16  # pixels darker than this are too noisy to estimate a lamp's
 
 @dataclass(frozen=True)
 class QualityThresholds:
-    blur_min: float = 60.0  # variance of the Laplacian below this is blurred
+    blur_min: float = 60.0  # variance of the Laplacian around the vessels below this is blurred
     saturated_max: float = 0.05  # share of a vessel's ROI pixels at the top of the range
     occlusion_change_min: float = 0.25  # share of the scene outside the vessels that changed at once
     settle_s: float = 60.0  # a change outside the vessels that holds still this long is the new scene
@@ -55,7 +55,16 @@ def assess(
     grey = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
     flags: list[str] = []
 
-    blur = float(cv2.Laplacian(grey, cv2.CV_64F).var())
+    # Sharpness where it matters: around the vessels. A plain wall, a good background, has no edges to measure, so
+    # over the whole frame it pulls a sharp picture under the threshold.
+    region = grey
+    if vessels:
+        boxes = [roi_box(vessel, height, width) for vessel in vessels]
+        x0, y0 = min(b[0] for b in boxes), min(b[1] for b in boxes)
+        x1, y1 = max(b[2] for b in boxes), max(b[3] for b in boxes)
+        if x1 - x0 >= 3 and y1 - y0 >= 3:
+            region = grey[y0:y1, x0:x1]
+    blur = float(cv2.Laplacian(region, cv2.CV_64F).var())
     if blur < thresholds.blur_min:
         flags.append("blurred")
 

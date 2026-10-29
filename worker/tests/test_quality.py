@@ -82,3 +82,14 @@ def test_a_moving_hand_never_becomes_the_reference():
     for t in range(1, 40):
         assert not gate.check(float(t), right if t % 2 else low).ok
     assert gate.check(40.0, frame()).flags == ()  # the hand left: the old scene is still the reference
+
+
+def test_sharpness_is_judged_on_the_vessels_not_a_plain_wall():
+    scene = np.full((600, 800, 3), 200, np.uint8)  # a plain wall: no edges anywhere, however sharp the camera
+    faint = (200 + (frame().astype(np.int16) - 130) * 0.3).astype(np.uint8)  # glass edges: sharp but faint
+    for vessel in VESSELS:
+        (x0, y0), (x1, y1) = ((int(x), int(y)) for x, y in (vessel.roi[0], vessel.roi[2]))
+        scene[y0 : y1 + 1, x0 : x1 + 1] = faint[y0 : y1 + 1, x0 : x1 + 1]
+    assert "blurred" not in assess(scene, VESSELS, previous_good=None).flags
+    soft = cv2.GaussianBlur(scene, (31, 31), 10)
+    assert "blurred" in assess(soft, VESSELS, previous_good=None).flags
