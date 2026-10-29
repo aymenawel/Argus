@@ -260,3 +260,13 @@ def test_rivals_are_resolved_by_their_checks_or_by_the_researcher(judged):
     )
     add_event(db, run.id, vessel_id=None, t_start=80.0, kind=EventKind.INTERVENTION, source="researcher", detail={})
     assert rival_states(db, run, ["camera movement", "handling"]) == {"camera movement": "open", "handling": "open"}
+
+
+@pytest.mark.anyio
+async def test_a_plan_locked_after_the_run_started_is_not_judged_against(db, exp):
+    run = create_run(db, exp.id, RunMode.LIVE, RunSource(kind=SourceKind.WEBCAM, camera_index=0))
+    save_plan_draft(db, exp.id, plan())
+    lock_plan(db, exp.id)  # after the run began: written with the data in view, so not a prediction
+    draft = verdict_draft("TOO_EARLY", explanation="The plan came after the data.", refs_used=[])
+    verdict = await judge(db, run, FakeReasoner([draft, critique("TOO_EARLY")]))
+    assert verdict.allowed == [VerdictLevel.TOO_EARLY] and verdict.checks[0]["id"] == "plan"

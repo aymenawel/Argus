@@ -95,7 +95,8 @@ def verdict_inputs(db: Database, run: Run, refs: RefTable, *, plan: Plan | None,
     return VerdictInputs(
         t=t,
         running=run.status is RunStatus.RUNNING,
-        locked=plan is not None and plan.locked_at is not None,
+        # Locked before the run began, or it isn't a prediction: a plan written with the data in view can't be tested.
+        locked=plan is not None and plan.locked_at is not None and plan.locked_at <= run.started_at,
         checkpoint_s=plan.checkpoint_s if plan is not None else None,
         controls=len(controls),
         treatments=len(compared),
