@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Literal
@@ -18,6 +19,7 @@ from argus.analyze.ceiling import NOISE_FACTOR
 from argus.claims.checker import TOKEN, check_note, render_note
 from argus.claims.fallback import fallback_note
 from argus.claims.refs import NOTABLE, RefTable, build_refs
+from argus.claims.schema import schema_errors
 from argus.domain import ModelCallDraft, Note, NoteAttemptDraft, NoteDraft, RunEvent, VerdictLevel
 from argus.pipeline.verdict import allowed_now
 from argus.reason import ReasonError
@@ -37,6 +39,7 @@ from argus.storage.repos import (
 if TYPE_CHECKING:
     from argus.pipeline.analyzer import RunContext
 
+log = logging.getLogger(__name__)
 Level = Literal["event", "checkpoint"]
 EXPECTED_NOTE_USD = 0.02  # a Muse Spark note with one snapshot (KB 05: under a cent)
 TRIGGERS = frozenset({"intervention", "rule", "camera_moved", "segment_failed"})  # never a watcher change alone
@@ -143,6 +146,29 @@ class NoteWriter:
         return note
 
     async def write(self, t: float, level: Level, *, image_bgr: np.ndarray) -> Note | None:
+        """A note at t, checked, retried once, or written by code. Notes are an add-on to measuring: an unexpected
+        error becomes a code-written note that says what failed (or no note), never an end to the run."""
+        try:
+            return await self._write(t, level, image_bgr=image_bgr)
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            log.exception("note at t=%s failed", t)
+            reason = f"the note failed: {type(error).__name__}: {error}"
+            try:
+                plan = await asyncio.to_thread(first_locked_plan, self.ctx.db, self.ctx.run.experiment_id)
+                refs = await asyncio.to_thread(
+                    build_refs, self.ctx.db, self.ctx.run.id, t, recipe=self.ctx.recipe, plan=plan
+                )
+                body = fallback_note(level, refs, reason=reason)
+                return await self._add(
+                    t, level, refs, body, body["refs_used"], [], check_status="fallback", model_call_id=None
+                )
+            except Exception:
+                log.exception("the code-written note at t=%s failed too", t)
+                return None
+
+    async def _write(self, t: float, level: Level, *, image_bgr: np.ndarray) -> Note | None:
         ctx = self.ctx
         self.last_t, self.event_waiting = t, False
         if ctx.reasoner is None or self.paused:
@@ -190,7 +216,10 @@ class NoteWriter:
                         task, tier="routine", schema=load_schema("note"), schema_name="ArgusNote", images=images
                     )
                     data, logged = result.data, [*result.failed_calls, result.call]
-                    reasons = check_note(data, refs, allowed=allowed, evidence={e.id for e in events})
+                    # The schema first: a wrong shape is a reason to retry, never a crash in the checks after it.
+                    reasons = schema_errors(data, load_schema("note")) or check_note(
+                        data, refs, allowed=allowed, evidence={e.id for e in events}
+                    )
                 except ReasonError as error:
                     data, logged, reasons = {}, [error.call], [str(error)]
                 except asyncio.CancelledError:  # a forced stop: the request may be billed, so it is logged

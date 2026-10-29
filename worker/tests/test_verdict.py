@@ -291,11 +291,171 @@ async def test_a_draft_with_an_unknown_verdict_is_retried(judged):
     db, run = judged
     reasoner = FakeReasoner([verdict_draft("PROVEN"), verdict_draft("SUPPORTED"), critique("SUPPORTED")])
     verdict = await judge(db, run, reasoner)
-    assert "unknown verdict: PROVEN" in reasoner.tasks[1].variable[-1] and verdict.verdict is VerdictLevel.SUPPORTED
+    assert (
+        "verdict: 'PROVEN' is not one of" in reasoner.tasks[1].variable[-1]
+        and verdict.verdict is VerdictLevel.SUPPORTED
+    )
 
 
 @pytest.mark.anyio
 async def test_a_critique_with_an_unknown_verdict_is_dropped(judged):
     db, run = judged
     verdict = await judge(db, run, FakeReasoner([verdict_draft("SUPPORTED"), critique("MAYBE")]))
-    assert verdict.critique is None and "unknown verdict: MAYBE" in verdict.body["critique_dropped"]
+    assert verdict.critique is None
+    assert any(r.startswith("revised_verdict: 'MAYBE' is not one of") for r in verdict.body["critique_dropped"])
+
+
+@pytest.mark.anyio
+async def test_a_malformed_draft_is_retried_and_a_malformed_critique_dropped(judged):
+    db, run = judged
+    broken = verdict_draft("SUPPORTED")
+    del broken["explanation"]
+    bad_critique = critique(
+        "INCONCLUSIVE", findings=[{"item": "vibes", "problem": "x", "consequence": "y", "fix": "z"}]
+    )
+    reasoner = FakeReasoner([broken, verdict_draft("SUPPORTED"), bad_critique])
+    verdict = await judge(db, run, reasoner)
+    assert "missing field: explanation" in reasoner.tasks[1].variable[-1]
+    assert verdict.critique is None and any(r.startswith("findings[0].item") for r in verdict.body["critique_dropped"])
+
+
+@pytest.mark.anyio
+async def test_the_rivals_shown_are_the_plans_with_codes_state(judged):
+    db, run = judged
+    draft = verdict_draft(
+        "SUPPORTED",
+        rivals=[
+            {"name": "Lighting changes from lamps", "status": "open", "reason": "Paraphrased."},
+            {"name": "a rival nobody planned", "status": "ruled_out", "reason": "Invented."},
+        ],
+    )
+    verdict = await judge(db, run, FakeReasoner([draft, critique("SUPPORTED")]))
+    # The plan names one rival, "lighting change", and code resolved it (colour was corrected throughout).
+    assert [(r["name"], r["status"]) for r in verdict.body["rivals"]] == [("lighting change", "ruled_out")]
+    assert "Paraphrased" not in str(verdict.body["rivals"]) and "Invented" not in str(verdict.body["rivals"])
+
+
+@pytest.mark.anyio
+async def test_a_rival_keeps_the_models_reason_when_name_and_status_agree(judged):
+    db, run = judged
+    draft = verdict_draft(
+        "SUPPORTED",
+        rivals=[{"name": "lighting change", "status": "ruled_out", "reason": "Colour was corrected throughout."}],
+    )
+    verdict = await judge(db, run, FakeReasoner([draft, critique("SUPPORTED")]))
+    assert verdict.body["rivals"] == [
+        {"name": "lighting change", "status": "ruled_out", "reason": "Colour was corrected throughout."}
+    ]
+
+
+@pytest.mark.anyio
+async def test_treatment_vessels_without_readings_count_for_nothing(db, exp):
+    save_plan_draft(db, exp.id, plan())
+    lock_plan(db, exp.id)
+    run = create_run(db, exp.id, RunMode.LIVE, RunSource(kind=SourceKind.WEBCAM, camera_index=0))
+    drafts = [
+        VesselDraft(label=label, role=role, condition=Condition(factor="t", value=value), roi=[(0, 0), (9, 0), (9, 9)])
+        for label, role, value in (
+            ("A", Role.CONTROL, "room"),
+            ("B", Role.CONTROL, "room"),
+            ("C", Role.TREATMENT, "warm"),
+            ("D", Role.TREATMENT, "warm"),
+        )
+    ]
+    vessels = {v.label: v for v in add_vessels(db, run.id, drafts)}
+    rows = [
+        MeasurementDraft(
+            vessel_id=vessels[label].id,
+            frame_id=None,
+            t=t,
+            metric="delta_e",
+            value=0.5 + 0.01 * (i % 3),
+            uncertainty=0.05,
+            unit="dE00",
+            method_version="delta_e/1",
+        )
+        for label in ("A", "B")
+        for i, t in enumerate((0.0, 10.0, 20.0, 30.0, 600.0))
+    ]
+    add_measurements(db, run.id, rows)  # the treatment vessels were never measured
+    verdict = await judge(
+        db,
+        run,
+        FakeReasoner([verdict_draft("INCONCLUSIVE", refs_used=[], explanation="None."), critique("INCONCLUSIVE")]),
+    )
+    replicates = next(c for c in verdict.checks if c["id"] == "replicates")
+    assert verdict.allowed == [VerdictLevel.INCONCLUSIVE] and replicates["ok"] is False
+    assert "0 of 2" in replicates["text"]
+
+
+@pytest.mark.anyio
+async def test_an_import_recorded_before_the_plan_was_locked_is_not_judged(db, exp):
+    from datetime import UTC, datetime
+
+    save_plan_draft(db, exp.id, plan())
+    lock_plan(db, exp.id)  # locked now, but the recording started yesterday
+    source = RunSource(kind=SourceKind.VIDEO, paths=["run.mp4"], start_time=datetime(2026, 10, 28, 9, 0, tzinfo=UTC))
+    run = create_run(db, exp.id, RunMode.IMPORTED, source, time_scale=1.0)
+    verdict = await judge(db, run, FakeReasoner([]))
+    assert verdict.allowed == [VerdictLevel.TOO_EARLY] and verdict.checks[0]["id"] == "plan"
+
+
+@pytest.mark.anyio
+async def test_an_import_without_a_recording_start_says_it_cant_confirm_the_plan_came_first(db, exp):
+    save_plan_draft(db, exp.id, plan(checkpoint_s=0.0))
+    lock_plan(db, exp.id)
+    run = create_run(db, exp.id, RunMode.IMPORTED, RunSource(kind=SourceKind.VIDEO, paths=["run.mp4"]), time_scale=1.0)
+    answers = [verdict_draft("INCONCLUSIVE", explanation="Nothing measured.", refs_used=[]), critique("INCONCLUSIVE")]
+    verdict = await judge(db, run, FakeReasoner(answers))
+    flag = next(c for c in verdict.checks if c["id"] == "preregistered")
+    assert flag["ok"] is None and "recording" in flag["text"]
+
+
+@pytest.mark.anyio
+async def test_the_verdict_reads_and_writes_off_the_event_loop(judged, monkeypatch):
+    import threading
+
+    import argus.pipeline.verdict as module
+
+    on_loop: list[bool] = []
+    for name in ("build_refs", "add_verdict", "add_model_call", "run_spend_usd"):
+        real = getattr(module, name)
+
+        def spy(*args, _real=real, **kwargs):
+            on_loop.append(threading.current_thread() is threading.main_thread())
+            return _real(*args, **kwargs)
+
+        monkeypatch.setattr(module, name, spy)
+    db, run = judged
+    await judge(db, run, FakeReasoner([verdict_draft(), critique("SUPPORTED")]))
+    assert on_loop and not any(on_loop)  # live capture shares the loop: a long run's refs take seconds
+
+
+@pytest.mark.anyio
+async def test_only_one_verdict_is_written_at_a_time(judged):
+    import asyncio
+
+    db, run = judged
+    release = asyncio.Event()
+
+    class Slow(FakeReasoner):
+        async def __call__(self, task, **kwargs):
+            await release.wait()
+            return await super().__call__(task, **kwargs)
+
+    first = asyncio.create_task(judge(db, run, Slow([verdict_draft(), critique("SUPPORTED")])))
+    await asyncio.sleep(0.5)
+    with pytest.raises(VerdictRefused, match="being written"):
+        await judge(db, run, FakeReasoner([]))
+    release.set()
+    assert (await first).verdict is VerdictLevel.SUPPORTED
+
+
+@pytest.mark.anyio
+async def test_the_spend_cap_is_checked_before_each_call(judged):
+    db, run = judged
+    add_model_call(db, run.id, 10.0, call(cost=SETTINGS.run_spend_cap_usd - 0.16))  # a verdict fits, just
+    costly = ReasonResult(verdict_draft(), call("verdict_draft", tier="deep", cost=0.10), "muse-wonder-1.0", False)
+    verdict = await judge(db, run, FakeReasoner([costly]))
+    assert model_calls(db, run)[-1] == ("verdict_draft", "ok") and verdict.critique is None
+    assert any("spend cap" in r for r in verdict.body["critique_dropped"])

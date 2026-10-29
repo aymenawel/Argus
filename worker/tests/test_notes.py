@@ -238,3 +238,20 @@ async def test_the_spend_cap_pauses_notes_once(ctx_at_cap):
     assert first.check_status == "fallback" and "spend cap" in first.body["reason"]
     assert await ctx_at_cap.notes.write(720.0, "checkpoint", image_bgr=FRAME) is None
     assert ctx_at_cap.reasoner.calls == 0 and len(notes_for_run(ctx_at_cap.db, ctx_at_cap.run.id)) == 1
+
+
+@pytest.mark.anyio
+async def test_a_malformed_answer_is_retried_not_crashed_on(ctx):
+    ctx.reasoner = FakeReasoner([clean_note(rival_explanations=[{"name": "lamp"}]), clean_note()])
+    note = await ctx.notes.write(600.0, "checkpoint", image_bgr=FRAME)
+    attempts = note_attempts_for_run(ctx.db, ctx.run.id)
+    assert note.check_status == "passed" and [a.passed for a in attempts] == [False, True]
+    assert "rival_explanations[0]: expected a string" in attempts[0].reasons
+
+
+@pytest.mark.anyio
+async def test_an_unexpected_error_never_stops_the_run(ctx):
+    ctx.reasoner = FakeReasoner([RuntimeError("connection reset in a place nobody expected")])
+    note = await ctx.notes.write(600.0, "checkpoint", image_bgr=FRAME)  # raises nothing
+    assert note is not None and note.check_status == "fallback" and note.body["written_by"] == "code"
+    assert "connection reset" in note.body["reason"]

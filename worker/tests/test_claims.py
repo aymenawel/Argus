@@ -135,3 +135,31 @@ def test_a_code_note_uses_only_refs_and_says_so():
     assert body["written_by"] == "code" and body["reason"] == "notes paused: spend cap"
     assert "3.7 ± 0.1 dE00" in body["observation"] and "25.1 ± 0.1 dE00" in body["observation"]
     assert fallback_note("checkpoint", RefTable({}), reason="x")["observation"] == "No readings yet."
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "The change doubled.",
+        "It halved by the end.",
+        "Glass C tripled its reading.",
+        "A twofold rise.",
+        "A tenfold change.",
+        "Hundreds of seconds later.",
+        "It stayed at zero.",
+        "A quarter of the way in.",
+        "A dozen readings.",
+        "Up ten per cent.",
+        "About ½ of the glass.",
+        "Phase Ⅲ began.",
+        "Doubling every minute.",
+        "Thousands of frames.",
+    ],
+)
+def test_inflected_and_derived_quantities_are_rejected(text):
+    assert check_note(clean_note(observation=text), REFS, allowed=ALL, evidence=set()), text
+
+
+@pytest.mark.parametrize("text", ["The dye unfolded slowly.", "Someone opened the lid.", "One glass changed."])
+def test_ordinary_words_are_not_quantities(text):
+    assert check_note(clean_note(observation=text), REFS, allowed=ALL, evidence=set()) == []

@@ -222,3 +222,9 @@ def test_a_colour_change_preview_starts_at_zero(client, clip):
     a = next(v for v in preview["vessels"] if v["label"] == "A")
     delta = [r for r in a["readings"] if r["metric"] == "delta_e"]
     assert delta and delta[0]["value"] == 0 and "±" in delta[0]["display"]  # measured against itself: the start
+
+
+def test_the_plan_locks_only_with_a_smallest_effect(client, experiment):
+    client.put(f"/api/experiments/{experiment}/plan", json=plan(min_effect=None))
+    lock = client.post(f"/api/experiments/{experiment}/plan/lock")
+    assert lock.status_code == 422 and "min_effect" in lock.json()["detail"]

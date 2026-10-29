@@ -19,6 +19,7 @@ export type WizardState = {
 const PLAN_NEEDS: [keyof PlanDraft, string][] = [
   ["metric", "Choose the metric the prediction is about."],
   ["direction", "Say whether the treatment should read higher or lower than the controls."],
+  ["min_effect", "Set the smallest effect that matters: without it, no effect can't be told from a small one."],
   ["checkpoint_s", "Set the checkpoint: the run time from which a verdict may be given."],
 ];
 

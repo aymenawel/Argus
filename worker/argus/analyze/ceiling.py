@@ -4,10 +4,11 @@ The first rule that applies sets the allowed verdicts:
 1. no locked plan, or before the plan's checkpoint → {TOO_EARLY};
 2. the plan's metric unmeasured, no control, fewer than 2 treatment vessels, or no noise floor yet → {INCONCLUSIVE};
 3. an open rival explanation → {INCONCLUSIVE};
-4. a treatment vessel shows a clear effect when its difference from the controls is in the predicted direction,
-   larger than 3 × the noise floor and at least the plan's smallest effect (clear against the prediction:
-   opposed). 2+ clear and none opposed → {SUPPORTED, INCONCLUSIVE}; none clear → {NOT_SUPPORTED, INCONCLUSIVE};
-   otherwise → {INCONCLUSIVE}.
+4. a treatment vessel shows a clear effect when its difference from the controls is larger than 3 × the noise
+   floor, twice its own ± and at least the plan's smallest effect, in the predicted direction (against it:
+   opposed); it is small when its ± rules out the smallest effect in the predicted direction. 2+ clear and none
+   opposed → {SUPPORTED, INCONCLUSIVE}; every one small or opposed → {NOT_SUPPORTED, INCONCLUSIVE}; otherwise →
+   {INCONCLUSIVE}. Without a smallest effect, nothing is small: no clear effect is not evidence of none.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from argus.claims.refs import Ref
 from argus.domain import Direction, VerdictLevel
 
 NOISE_FACTOR = 3.0  # an effect under ~3 × the noise floor is "not real yet" (KB 08)
+K_UNCERTAINTY = 2.0  # within 2 × its own ± (about 95 %) a difference could still be zero, or the smallest effect
 MIN_REPLICATES = 2
 
 SUPPORTED, NOT_SUPPORTED, INCONCLUSIVE, TOO_EARLY = (
@@ -59,14 +61,24 @@ class VerdictInputs:
     noise_display: str = ""
     min_effect_display: str = ""
     metric: str = ""
+    planned: int = 0  # treatment vessels in the comparison, measured or not
+    recording_start_known: bool = True  # an import whose recording start nobody gave can't show the plan came first
 
 
-def _effect(ref: Ref, inputs: VerdictInputs) -> Literal["clear", "opposed", "unclear"]:
-    big = abs(ref.value) > NOISE_FACTOR * (inputs.noise or 0.0) and abs(ref.value) >= inputs.min_effect
-    if not big or ref.value == 0:
-        return "unclear"
-    predicted = ref.value > 0 if inputs.direction is Direction.HIGHER else ref.value < 0
-    return "clear" if predicted else "opposed"
+def _effect(ref: Ref, inputs: VerdictInputs) -> Literal["clear", "opposed", "small", "unclear"]:
+    size = abs(ref.value)
+    toward = ref.value if inputs.direction is Direction.HIGHER else -ref.value  # signed: the predicted way is +
+    big = (
+        size > 0
+        and size > K_UNCERTAINTY * ref.uncertainty
+        and size > NOISE_FACTOR * (inputs.noise or 0.0)
+        and size >= inputs.min_effect
+    )
+    if big:
+        return "clear" if toward > 0 else "opposed"
+    if inputs.min_effect > 0 and toward + K_UNCERTAINTY * ref.uncertainty < inputs.min_effect:
+        return "small"
+    return "unclear"
 
 
 def _check(id_: str, ok: bool | None, text: str, refs: tuple[str, ...] = (), prompt: str | None = None) -> Check:
@@ -85,6 +97,15 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
         ]
     metric = inputs.metric or "the plan's metric"
     checks = [_check("checkpoint", True, "Past the plan's checkpoint.", ("plan:checkpoint",))]
+    if not inputs.recording_start_known:
+        checks.append(
+            _check(
+                "preregistered",
+                None,
+                "The recording's start time wasn't given, so Argus can't confirm the plan was locked before the data "
+                "was recorded. Give the start time when you import to settle it.",
+            )
+        )
     checks.append(
         _check(
             "measured",
@@ -110,7 +131,8 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
         _check(
             "replicates",
             enough,
-            f"{inputs.treatments} treatment vessel(s) in the comparison; at least {MIN_REPLICATES} are needed.",
+            f"{inputs.treatments} of {max(inputs.planned, inputs.treatments)} treatment vessel(s) in the comparison "
+            f"measured; at least {MIN_REPLICATES} are needed.",
             prompt="Enough treatment vessels in the comparison."
             if enough
             else "Too few treatment vessels in the comparison to count replicates.",
@@ -141,20 +163,22 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
     words = {
         "clear": "a clear effect in the predicted direction",
         "opposed": "a clear effect against the prediction",
-        "unclear": "no clear effect",
+        "small": "smaller than the smallest effect that matters, its ± included",
+        "unclear": "no clear effect, and its ± can't rule out the smallest effect",
     }
     for label, ref in inputs.effects.items():
         verdicts[label] = _effect(ref, inputs)
-        bar = f"3 × the noise floor and the smallest effect ({inputs.min_effect_display or inputs.min_effect})"
+        smallest = inputs.min_effect_display or inputs.min_effect
+        bar = f"3 × the noise floor, twice its ± and the smallest effect ({smallest})"
         checks.append(
             _check(
                 f"effect:{label}",
                 verdicts[label] == "clear",
                 f"Vessel {label}: {ref.display} against the controls, {words[verdicts[label]]} "
-                f"(needs more than {bar}).",
+                f"(clear needs more than {bar}).",
                 (ref.id,),
                 prompt=f"Vessel {label}: {{ref:{ref.id}}} against the controls, {words[verdicts[label]]} (judged "
-                "against the noise floor and the smallest effect {ref:plan:min_effect}).",
+                "against the noise floor, its own ± and the smallest effect {ref:plan:min_effect}).",
             )
         )
 
@@ -166,7 +190,7 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
     opposed = sum(v == "opposed" for v in verdicts.values())
     if clear >= MIN_REPLICATES and opposed == 0:
         return {SUPPORTED, INCONCLUSIVE}, checks
-    if clear == 0:
+    if verdicts and all(v in ("small", "opposed") for v in verdicts.values()):
         return {NOT_SUPPORTED, INCONCLUSIVE}, checks
     return {INCONCLUSIVE}, checks
 

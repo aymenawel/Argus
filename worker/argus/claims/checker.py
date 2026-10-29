@@ -18,43 +18,22 @@ TOKEN = re.compile(r"\{ref:([A-Za-z0-9_:.\-]+)\}")
 # Model and product names carry digits that are not claims; they are taken out before the digit check.
 MODEL_NAMES = ("Muse Wonder 1.0", "Muse Spark 1.3", "muse-wonder-1.0", "muse-spark-1.3", "SAM 3.1", "sam-3.1")
 NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
-SPELLED = (
-    "two",
-    "three",
-    "four",
-    "five",
-    "six",
-    "seven",
-    "eight",
-    "nine",
-    "ten",
-    "eleven",
-    "twelve",
-    "thirteen",
-    "fourteen",
-    "fifteen",
-    "sixteen",
-    "seventeen",
-    "eighteen",
-    "nineteen",
-    "twenty",
-    "thirty",
-    "forty",
-    "fifty",
-    "sixty",
-    "seventy",
-    "eighty",
-    "ninety",
-    "hundred",
-    "thousand",
-    "million",
-    "twice",
-    "double",
-    "triple",
-    "half",
-    "percent",
+COUNTING = (
+    "two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|"
+    "eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|"
+    "zero|dozen|quarter"
 )
-NUMBER_WORD = re.compile(r"\b(" + "|".join(SPELLED) + r")\b|%", re.IGNORECASE)
+# Quantity words, with their plurals and inflections ("hundreds", "doubled", "halving"), "-fold" on a number word
+# ("tenfold", not "unfolded"), and percentages. "One" stays allowed: "one glass" is not a measured claim.
+NUMBER_WORD = re.compile(
+    r"\b(?:(?:" + COUNTING + r")s?"
+    r"|(?:" + COUNTING + r"|multi|many)-?fold"
+    r"|twice|half|halv(?:e|ed|es|ing)"
+    r"|doubl(?:e|ed|es|ing)|tripl(?:e|ed|es|ing)|quadrupl(?:e|ed|es|ing)"
+    r"|per\s?cent)\b|%",
+    re.IGNORECASE,
+)
+
 
 NOTE_FIELDS = (
     "level",
@@ -108,6 +87,8 @@ def check_text_fields(data: dict, fields: Sequence[str], refs: RefTable) -> list
                 bare = bare.replace(name, " ")
             for number in NUMBER.findall(bare):
                 reasons.append(f"number outside a ref in {path}: '{number}'")
+            for char in sorted({c for c in bare if c.isnumeric() and not c.isascii()}):  # ½, Ⅲ, other scripts' digits
+                reasons.append(f"number outside a ref in {path}: '{char}'")
             for match in NUMBER_WORD.finditer(bare):
                 reasons.append(f"quantity in words in {path}: '{match.group(0).lower()}'")
     return list(dict.fromkeys(reasons))

@@ -14,14 +14,14 @@ SUPPORTED, NOT_SUPPORTED, INCONCLUSIVE, TOO_EARLY = (
 )
 
 
-def diff(value: float, label: str = "C") -> Ref:
+def diff(value: float, label: str = "C", u: float = 0.1) -> Ref:
     return Ref(
         id=f"diff:{label}:delta_e",
         label=label,
         value=value,
-        uncertainty=0.1,
+        uncertainty=u,
         unit="dE00",
-        display=f"{value:g} ± 0.1 dE00",
+        display=f"{value:g} ± {u:g} dE00",
         kind="difference",
         t=600.0,
         vessel_id=f"ves_{label}",
@@ -45,7 +45,7 @@ def inputs(**overrides) -> VerdictInputs:
     )
     fields |= overrides
     if "effects" in overrides:
-        fields["effects"] = {k: diff(v.value, k) for k, v in fields["effects"].items()}
+        fields["effects"] = {k: diff(v.value, k, v.uncertainty) for k, v in fields["effects"].items()}
     return VerdictInputs(**fields)
 
 
@@ -65,7 +65,13 @@ def inputs(**overrides) -> VerdictInputs:
         (dict(effects={"C": diff(20.0), "D": diff(0.1)}), {INCONCLUSIVE}),
         (dict(effects={"C": diff(20.0), "D": diff(-20.0)}), {INCONCLUSIVE}),
         (dict(effects={"C": diff(4.0), "D": diff(4.5)}), {NOT_SUPPORTED, INCONCLUSIVE}),  # under the smallest effect
-        (dict(effects={"C": diff(2.5), "D": diff(2.9)}, min_effect=0.0), {NOT_SUPPORTED, INCONCLUSIVE}),  # < 3 × noise
+        # With no smallest effect, the absence of a clear effect isn't evidence of none.
+        (dict(effects={"C": diff(2.5), "D": diff(2.9)}, min_effect=0.0), {INCONCLUSIVE}),
+        # An effect within twice its own ± is not clear, however big it reads.
+        (dict(effects={"C": diff(6.0, u=5.0), "D": diff(7.0, u=5.0)}, noise=0.1), {INCONCLUSIVE}),
+        (dict(effects={"C": diff(0.01, u=5.0), "D": diff(0.02, u=5.0)}, noise=0.0, min_effect=0.0), {INCONCLUSIVE}),
+        # Not supported needs the ± to rule out the smallest effect, not just no clear effect.
+        (dict(effects={"C": diff(1.0, u=3.0), "D": diff(1.0, u=3.0)}), {INCONCLUSIVE}),
         (dict(effects={"C": diff(-20.0), "D": diff(-18.0)}, direction=Direction.LOWER), {SUPPORTED, INCONCLUSIVE}),
         (dict(effects={"C": diff(-20.0), "D": diff(-18.0)}), {NOT_SUPPORTED, INCONCLUSIVE}),  # clear but opposite
     ],

@@ -26,10 +26,10 @@
 
 | Verdict | When |
 | --- | --- |
-| SUPPORTED | Effect in predicted direction AND > ~3× noise floor AND seen in ≥2 replicates AND no unresolved rival |
-| NOT_SUPPORTED | Enough data and replicates, effect absent or opposite |
+| SUPPORTED | In ≥2 measured treatment vessels, a difference from the controls in the predicted direction that is > 3× the noise floor, > 2× its own ± and ≥ the plan's smallest effect; none against the prediction; no unresolved rival |
+| NOT_SUPPORTED | Enough data and replicates, and every treatment's effect either clear against the prediction or ruled below the smallest effect with its ± (difference + 2u < smallest effect). Without a smallest effect, no clear effect is not evidence of none |
 | INCONCLUSIVE | Too noisy, too few replicates, or a rival explanation is unresolved |
-| TOO_EARLY | Run still in progress or before the planned checkpoint |
+| TOO_EARLY | Before the planned checkpoint, or no plan locked before the data began (an import's recording start, when given). Written by code: no model is asked |
 
   Early verdicts during a run are labeled **provisional**.
 - **Self-critique pass:** deep tier reviews the draft verdict for pseudo-replication, confounding, multiplicity, early stopping, plan drift, over-claiming, unsupported numbers (`prompts/deep/verdict-critique.md`, output `prompts/schemas/verdict_critique.json`).

@@ -186,3 +186,16 @@ def test_a_run_with_no_readings_yet_has_only_its_time(db, exp):
 )
 def test_run_time_reads_like_the_ui(t, span, text):
     assert format_run_time(t, span) == text
+
+
+def test_an_early_run_wide_event_still_leaves_a_noise_floor(db, exp):
+    run = create_run(db, exp.id, RunMode.LIVE, RunSource(kind=SourceKind.WEBCAM, camera_index=0))
+    [a] = add_vessels(db, run.id, [vessel("A", Role.CONTROL, "room")])
+    # A slow rise with a small wobble, and the dye's jump at t = 90: no still period before the hand at t = 5.
+    rows = [(i * 10.0, 0.1 * i + 0.02 * (-1) ** i + (10.0 if i >= 9 else 0.0), 0.01) for i in range(16)]
+    store(db, run, [a], {"A": rows})
+    add_event(db, run.id, vessel_id=None, t_start=5.0, kind=EventKind.INTERVENTION, source="researcher", detail={})
+    refs = build_refs(db, run.id, 150.0, recipe=COLOUR, plan=PLAN)
+    noise = refs.get("noise:delta_e")
+    assert noise is not None and 0 < noise.value < 0.1  # the wobble, not the rise or the jump
+    assert "wobble" in noise.label

@@ -67,7 +67,7 @@ test("the check step needs the card or a ruler found", () => {
   assert.deepEqual(stepProblems("check", stateWith([{ label: "A" }], { preview: PREVIEW })), []);
 });
 
-test("the plan step needs the metric, the direction and the checkpoint", () => {
+test("the plan step needs the metric, the direction, the smallest effect and the checkpoint", () => {
   const plan = {
     hypothesis: "Warm water spreads dye faster.",
     prediction: "",
@@ -79,8 +79,8 @@ test("the plan step needs the metric, the direction and the checkpoint", () => {
     checkpoint_s: null,
     treatment: null,
   };
-  assert.equal(stepProblems("plan", stateWith([], { plan })).length, 3);
-  const done = { ...plan, metric: "delta_e", direction: "higher" as const, checkpoint_s: 300 };
+  assert.equal(stepProblems("plan", stateWith([], { plan })).length, 4);
+  const done = { ...plan, metric: "delta_e", direction: "higher" as const, checkpoint_s: 300, min_effect: 5 };
   assert.deepEqual(stepProblems("plan", stateWith([], { plan: done })), []);
   assert.deepEqual(stepProblems("plan", stateWith([])), ["Write the plan."]);
 });

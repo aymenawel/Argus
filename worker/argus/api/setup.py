@@ -29,7 +29,8 @@ from argus.segment.tracking import assign_to_vessels
 from argus.storage import repos
 from argus.storage.db import Database
 
-LOCK_NEEDS = ("metric", "direction", "checkpoint_s")  # the structured prediction a verdict is judged against
+LOCK_NEEDS = ("metric", "direction", "min_effect", "checkpoint_s")  # the prediction a verdict is judged against;
+# without a smallest effect that matters, no clear effect could never count as evidence of none
 PREVIEW_JPEG_QUALITY = 85
 
 

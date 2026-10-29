@@ -543,6 +543,17 @@ def add_model_call(db: Database, run_id: str | None, t: float | None, draft: Mod
     return call
 
 
+def run_last_t(db: Database, run_id: str) -> float:
+    """The run's time now: its newest frame or reading, 0 before any."""
+    with db.read() as c:
+        row = c.execute(
+            "SELECT MAX(t) AS t FROM (SELECT MAX(t) AS t FROM frames WHERE run_id=? "
+            "UNION ALL SELECT MAX(t) FROM measurements WHERE run_id=?)",
+            (run_id, run_id),
+        ).fetchone()
+    return float(row["t"] or 0.0)
+
+
 def run_spend_usd(db: Database, run_id: str) -> float:
     """Every logged call counts, failed ones included: they can still be billed."""
     with db.read() as c:

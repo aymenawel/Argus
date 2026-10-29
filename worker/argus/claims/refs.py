@@ -11,7 +11,7 @@ import statistics
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
-from argus.analyze.noise import noise_floor
+from argus.analyze.noise import noise_floor, wobble_floor
 from argus.domain import DerivedDraft, Measurement, Plan, Role, RunEvent, Vessel
 from argus.measure.uncertainty import format_measurement
 from argus.recipes.model import Recipe
@@ -108,6 +108,7 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
     for metric in recipe.stored_metrics():
         latest: dict[str, Measurement] = {}
         floors: list[tuple[float, list[str]]] = []
+        wobbled = False  # a vessel's floor came from its wobble, not a still period
         for vessel in vessels:
             rows = [r for r in readings if r.vessel_id == vessel.id and r.metric == metric]
             if not rows:
@@ -131,6 +132,9 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
             floor = noise_floor(rows, still_until=still)
             if floor is not None:
                 floors.append((floor, [r.id for r in rows if r.t <= still]))
+            elif (wobble := wobble_floor(rows)) is not None:  # too short a still period: an event came early
+                floors.append((wobble, [r.id for r in rows]))
+                wobbled = True
 
         controls = [latest[v.id] for v in vessels if v.role is Role.CONTROL and v.id in latest]
         if controls:
@@ -157,12 +161,13 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
             noise = DerivedDraft(
                 t=t,
                 kind="noise_floor",
-                label=f"Noise floor of {metric} (median over vessels)",
+                label=f"Noise floor of {metric} (median over vessels"
+                + (", some from the wobble of all their readings)" if wobbled else ")"),
                 value=statistics.median(f for f, _ in floors),
                 uncertainty=0.0,
                 unit=next(iter(latest.values())).unit,
                 inputs=[i for _, ids in floors for i in ids],
-                method_version="noise_floor/1",
+                method_version="noise_floor_wobble/1" if wobbled else "noise_floor/1",
             )
             pending.append((f"noise:{metric}", noise, t, None))
 
