@@ -13,11 +13,14 @@ from pydantic import BaseModel, Field
 
 from argus.api.cameras import register_camera_routes
 from argus.api.events import EventBroker, event_stream
+from argus.api.notes import register_note_routes
 from argus.api.runs import register_run_routes
+from argus.api.setup import register_setup_routes
 from argus.config import Settings, load_settings
 from argus.domain import Experiment
 from argus.pipeline.jobs import RunJobs
 from argus.pipeline.live import CameraHub
+from argus.reason import SettingsReasoner
 from argus.recipes.loader import load_all
 from argus.recipes.model import Recipe
 from argus.storage import repos
@@ -49,7 +52,9 @@ def create_app(
     close_db_on_shutdown: bool = False,
 ) -> FastAPI:
     hub = hub or CameraHub()
-    jobs = jobs or RunJobs(db, broker, settings, recipes, hub)
+    if jobs is None:
+        reasoner = SettingsReasoner(settings) if settings.model_api_key is not None else None
+        jobs = RunJobs(db, broker, settings, recipes, hub, reasoner=reasoner)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -61,6 +66,7 @@ def create_app(
             db.close()
 
     app = FastAPI(title="Argus worker", version=VERSION, lifespan=lifespan)
+    app.state.jobs = jobs
     app.add_middleware(CORSMiddleware, allow_origins=[settings.web_origin], allow_methods=["*"], allow_headers=["*"])
 
     @app.get("/api/health")
@@ -100,6 +106,8 @@ def create_app(
         )
 
     register_run_routes(app, db=db, settings=settings, jobs=jobs, hub=hub)
+    register_setup_routes(app, db=db, broker=broker, jobs=jobs, hub=hub, recipes=recipes)
+    register_note_routes(app, db=db, broker=broker, settings=settings, jobs=jobs, recipes=recipes)
     register_camera_routes(app, hub=hub)
     return app
 

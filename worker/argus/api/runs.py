@@ -38,6 +38,12 @@ from argus.storage.db import Database
 
 # A stored frame never changes (it is evidence), so browsers may keep it: scrubbing back doesn't refetch.
 IMMUTABLE = {"Cache-Control": "public, max-age=31536000, immutable"}
+MAX_VESSELS = 16
+
+
+def unique_labels(labels: list[str]) -> None:
+    if len(set(labels)) != len(labels):
+        raise ValueError("vessel labels must be unique")
 
 
 class VesselIn(BaseModel):
@@ -53,9 +59,9 @@ class RunCreate(BaseModel):
     paths: list[str] = []
     time_scale: float = Field(1.0, gt=0)
     start_time: datetime | None = None
-    vessels: list[VesselIn] = Field(min_length=1, max_length=16)
-    print_check_mm: float | None = Field(None, ge=90, le=110)
-    ruler: RulerInput | None = None
+    vessels: list[VesselIn] | None = None  # None: the experiment's saved setup's vessels
+    print_check_mm: float | None = Field(None, ge=90, le=110)  # None: the saved setup's
+    ruler: RulerInput | None = None  # None: the saved setup's
 
     @model_validator(mode="after")
     def source_fits_mode(self) -> RunCreate:
@@ -63,9 +69,10 @@ class RunCreate(BaseModel):
             raise ValueError("a live run needs camera_index")
         if self.mode == "imported" and not self.paths:
             raise ValueError("an imported run needs paths")
-        labels = [v.label for v in self.vessels]
-        if len(set(labels)) != len(labels):
-            raise ValueError("vessel labels must be unique")
+        if self.vessels is not None:
+            if not 1 <= len(self.vessels) <= MAX_VESSELS:
+                raise ValueError(f"a run has 1 to {MAX_VESSELS} vessels")
+            unique_labels([v.label for v in self.vessels])
         return self
 
 
@@ -77,17 +84,22 @@ class RunView(BaseModel):
     running: bool
 
 
-class VesselDetect(BaseModel):
-    concept: str = Field(min_length=1)
+class FrameRequest(BaseModel):
+    """One frame from a camera, or from a video at video_s."""
+
     camera_index: int | None = Field(None, ge=0)
     path: str | None = None
     video_s: float = Field(0.0, ge=0)
 
     @model_validator(mode="after")
-    def one_source(self) -> VesselDetect:
+    def one_source(self) -> FrameRequest:
         if (self.camera_index is None) == (self.path is None):
             raise ValueError("give either camera_index or path")
         return self
+
+
+class VesselDetect(FrameRequest):
+    concept: str = Field(min_length=1)
 
 
 class VesselProposal(BaseModel):
@@ -129,9 +141,17 @@ def register_run_routes(app: FastAPI, *, db: Database, settings: Settings, jobs:
             start_time=body.start_time,
             start_time_source="researcher" if body.start_time else "run_start",
         )
+        setup = await asyncio.to_thread(repos.get_setup, db, experiment_id)
+        if body.vessels is not None:
+            drafts = [VesselDraft(**v.model_dump()) for v in body.vessels]
+        elif setup.vessels:
+            drafts = list(setup.vessels)
+        else:
+            raise HTTPException(status_code=422, detail="no vessels: draw them in the setup or send them with the run")
+        print_check_mm = body.print_check_mm if body.print_check_mm is not None else setup.print_check_mm
+        ruler = body.ruler if body.ruler is not None else setup.ruler
         mode = RunMode.LIVE if live else RunMode.IMPORTED
         run = await asyncio.to_thread(repos.create_run, db, experiment_id, mode, source, body.time_scale)
-        drafts = [VesselDraft(**v.model_dump()) for v in body.vessels]
         vessels = await asyncio.to_thread(repos.add_vessels, db, run.id, drafts)
         try:
             if live:
@@ -140,15 +160,15 @@ def register_run_routes(app: FastAPI, *, db: Database, settings: Settings, jobs:
                     vessels,
                     body.camera_index,
                     CameraSettings(),
-                    print_check_mm=body.print_check_mm,
-                    ruler=body.ruler,
+                    print_check_mm=print_check_mm,
+                    ruler=ruler,
                 )
             else:
                 request = ImportRequest(
                     paths=[Path(p) for p in body.paths],
                     time_scale=body.time_scale,
-                    print_check_mm=body.print_check_mm,
-                    ruler=body.ruler,
+                    print_check_mm=print_check_mm,
+                    ruler=ruler,
                 )
                 jobs.start_import(run, vessels, request)
         except RuntimeError as error:  # the camera didn't open
@@ -214,7 +234,7 @@ def register_run_routes(app: FastAPI, *, db: Database, settings: Settings, jobs:
     async def detect_vessels(experiment_id: str, body: VesselDetect) -> list[VesselProposal]:
         if await asyncio.to_thread(repos.get_experiment, db, experiment_id) is None:
             raise HTTPException(status_code=404, detail="experiment not found")
-        image = await asyncio.to_thread(_frame_from, hub, body)
+        image = await asyncio.to_thread(frame_from, hub, body)
         try:
             result = await jobs.segmenter.image(image, body.concept)
         except SegmentError as error:
@@ -239,7 +259,7 @@ def _contour(polygon: list[tuple[float, float]]) -> np.ndarray:
     return np.asarray(polygon, np.float32).reshape(-1, 1, 2)
 
 
-def _frame_from(hub: CameraHub, body: VesselDetect):
+def frame_from(hub: CameraHub, body: FrameRequest) -> np.ndarray:
     if body.path is not None:
         if not Path(body.path).is_file():
             raise HTTPException(status_code=422, detail=f"file not found: {body.path}")
