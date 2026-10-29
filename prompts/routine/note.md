@@ -11,12 +11,12 @@ The claim checker rejects any digit or quantity word outside a {ref:<id>} token.
 
 Write for the researcher at the bench: short, plain sentences.
 
-- `observation`: what was measured or seen, every number as a `{ref:<id>}` token.
+- `observation`: what was measured or seen, every number as a `{ref:<id>}` token. Cite the few numbers that matter most (at most five), each once: never repeat a time or a value you already gave.
 - `interpretation`: what it may mean; say "consistent with", never "proves" or "caused".
 - `hypothesis_status`: one of the verdict levels allowed now (listed above the task). Before the plan's checkpoint it is TOO_EARLY.
 - `confidence` and `confidence_reason`: the one thing that limits confidence most.
 - `rival_explanations`: the plan's rivals that still matter, in words.
-- `next_step`: a suggestion, worded as one, or empty.
+- `next_step`: one suggestion, worded as one ("Consider …"), with no label in front of it, or empty.
 - `refs_used`: every ref id you cited. `evidence_ids`: frame or event ids from the EVENTS block, or empty.
 - `question_for_researcher`: one specific question when something is unclear, else empty.
 

@@ -23,6 +23,13 @@ export type RecipeSummary = {
   main_measurement: string;
 };
 
+/** What the setup wizard offers: concepts to find vessels by, metrics a plan may predict (as stored), rivals. */
+export type RecipeDetail = RecipeSummary & {
+  concepts: string[];
+  metrics: { id: string; unit: string }[];
+  rivals: string[];
+};
+
 export type RunStatus = "running" | "finished" | "stopped";
 
 export type Run = {
@@ -145,6 +152,7 @@ export type NoteBody = {
   question_for_researcher?: string;
   written_by?: "model" | "code";
   reason?: string; // why code wrote it
+  chips?: { ref: string; label: string; display: string; t: number | null; vessel_id: string | null }[];
   text?: string; // a researcher's note, as written
 };
 
@@ -233,12 +241,20 @@ export type VesselDraft = {
   roi: [number, number][];
 };
 
-export type SetupSource = { kind: "webcam" | "video"; camera_index: number | null; paths: string[] };
+/** A vessel as the wizard draws it: its role comes a step later. */
+export type SetupVessel = Omit<VesselDraft, "role"> & { role: Role | null };
+
+export type SetupSource = {
+  kind: "webcam" | "video";
+  camera_index: number | null;
+  paths: string[];
+  start_time?: string | null; // a recording's real start, if the researcher knows it
+};
 
 export type Setup = {
   source: SetupSource | null;
   time_scale: number;
-  vessels: VesselDraft[];
+  vessels: SetupVessel[];
   print_check_mm: number | null;
   ruler: RulerInput | null;
   factor: string | null;

@@ -1,0 +1,110 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--r-tile);
+  background: var(--raised);
+}
+
+/* The researcher's own notes sit on the surface, with a rule: a different voice from Argus's. */
+.mine {
+  background: var(--surface);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  font-size: var(--fs-xs);
+  line-height: 18px;
+}
+
+.author {
+  font-weight: 600;
+}
+
+.kind {
+  color: var(--muted);
+}
+
+.time {
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+
+.time:hover {
+  background: var(--active);
+  color: var(--text);
+}
+
+.checked,
+.code {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  font-weight: 600;
+}
+
+.checked {
+  color: var(--pos);
+}
+
+.code {
+  color: var(--warn);
+}
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  line-height: 19px;
+  color: var(--muted);
+}
+
+.observation,
+.text {
+  color: var(--text);
+  font-size: var(--fs-body);
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.line {
+  overflow-wrap: anywhere;
+}
+
+.label {
+  margin-right: 4px;
+  color: var(--faint);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.question {
+  padding: 8px 10px;
+  border-radius: var(--r-small);
+  background: var(--accent-tint);
+  color: var(--text);
+}
+
+.reason {
+  color: var(--warn);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

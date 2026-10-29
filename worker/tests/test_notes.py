@@ -133,6 +133,17 @@ async def test_a_checkpoint_note_is_checked_rendered_and_saved(ctx):
 
 
 @pytest.mark.anyio
+async def test_a_note_carries_a_chip_for_each_number_it_cites(ctx):
+    ctx.reasoner = FakeReasoner([clean_note(observation="C changed by {ref:chg:C:delta_e} by {ref:run:t}.")])
+    note = await ctx.notes.write(600.0, "checkpoint", image_bgr=FRAME)
+    c = next(v for v in ctx.vessels if v.label == "C")
+    chips = {chip["ref"]: chip for chip in note.body["chips"]}
+    assert chips["chg:C:delta_e"]["t"] == 600.0 and chips["chg:C:delta_e"]["vessel_id"] == c.id
+    assert "dE00" in chips["chg:C:delta_e"]["display"] and "Vessel C" in chips["chg:C:delta_e"]["label"]
+    assert chips["run:t"]["vessel_id"] is None
+
+
+@pytest.mark.anyio
 async def test_a_rejected_note_is_retried_once_with_its_reasons(ctx):
     ctx.reasoner = FakeReasoner(
         [clean_note(observation="Changed by 25."), clean_note(observation="Changed by {ref:chg:C:delta_e}.")]

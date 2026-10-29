@@ -1,0 +1,52 @@
+.feed {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+}
+
+/* The list scrolls on its own: beside the frame it fills the panel, below it it stops at a screenful. */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  max-height: 560px;
+  margin: 0;
+  padding: 0 2px 2px 0;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (min-width: 1100px) {
+  .list {
+    max-height: none;
+  }
+}
+
+.later {
+  align-self: flex-start;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.empty {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.rejected {
+  flex: none;
+  color: var(--faint);
+  font-size: var(--fs-xs);
+}

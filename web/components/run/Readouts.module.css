@@ -1,7 +1,7 @@
 /* Readout tiles (canvas .strip): one per vessel, the value at the playhead. */
 .strip {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); /* a few vessels share the row: no value cut off */
   gap: 8px;
   padding: 8px 0 0;
 }

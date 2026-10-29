@@ -7,6 +7,7 @@ import type {
   Plan,
   PlanDraft,
   Preview,
+  RecipeDetail,
   RecipeDraft,
   RecipeSummary,
   Review,
@@ -67,6 +68,10 @@ export function getExperiments(): Promise<Experiment[]> {
 
 export function getRecipes(): Promise<RecipeSummary[]> {
   return request("/api/recipes");
+}
+
+export function getRecipe(id: string): Promise<RecipeDetail> {
+  return request(`/api/recipes/${encodeURIComponent(id)}`);
 }
 
 export function createExperiment(title: string, recipeId: string): Promise<Experiment> {
@@ -131,6 +136,10 @@ export function askVerdict(runId: string): Promise<Verdict> {
   return request(`${runPath(runId)}/verdict`, send("POST"));
 }
 
+export function getReviews(runId: string): Promise<Review[]> {
+  return request(`${runPath(runId)}/reviews`);
+}
+
 export function postReview(runId: string, review: ReviewDraft): Promise<Review> {
   return request(`${runPath(runId)}/reviews`, send("POST", review));
 }
@@ -184,4 +193,24 @@ export function detectVessels(
   body: FrameRequest & { concept: string },
 ): Promise<VesselProposal[]> {
   return request(`${experimentPath(experimentId)}/vessels/detect`, send("POST", body));
+}
+
+/** A plain frame from the source as an object URL (revoke it when it's replaced): no segmentation, no cost. */
+export async function frameFromSource(experimentId: string, frame: FrameRequest): Promise<string> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiBase()}${experimentPath(experimentId)}/frame`, {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(frame),
+    });
+  } catch {
+    throw new ApiError(0, `Couldn't reach the Argus worker at ${apiBase()}`);
+  }
+  if (!response.ok) {
+    const body: unknown = await response.json().catch(() => null);
+    throw new ApiError(response.status, detailOf(body, response.statusText));
+  }
+  return URL.createObjectURL(await response.blob());
 }

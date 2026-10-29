@@ -1,7 +1,7 @@
 // The setup wizard's rules (lib/setup.ts): what each step needs before it can be left, and new vessel labels.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { nextLabel, stepProblems, type WizardState, type WizardVessel } from "../lib/setup.ts";
+import { inReadingOrder, nextLabel, stepProblems, type WizardState, type WizardVessel } from "../lib/setup.ts";
 import type { Preview } from "../lib/types.ts";
 
 const ROI: [number, number][] = [
@@ -88,4 +88,29 @@ test("the plan step needs the metric, the direction and the checkpoint", () => {
 test("new vessel labels skip the ones in use", () => {
   assert.equal(nextLabel([{ label: "A" }, { label: "C" }]), "B");
   assert.equal(nextLabel([]), "A");
+});
+
+test("regions are labelled A, B, C in reading order", () => {
+  const box = (x: number, y: number): [number, number][] => [
+    [x, y],
+    [x + 40, y],
+    [x + 40, y + 60],
+    [x, y + 60],
+  ];
+  const drawn = [box(300, 4), box(0, 0), box(150, 120), box(20, 118)].map((roi) => ({
+    label: "?",
+    role: null,
+    condition: null,
+    roi,
+  }));
+  const labelled = inReadingOrder(drawn);
+  assert.deepEqual(
+    labelled.map((v) => [v.label, v.roi[0][0]]),
+    [
+      ["A", 0],
+      ["B", 300],
+      ["C", 20],
+      ["D", 150],
+    ],
+  );
 });

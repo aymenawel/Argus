@@ -120,13 +120,18 @@ class NoteWriter:
     async def _add(
         self, t: float, level: Level, refs: RefTable, body: dict, cited: list[str], evidence: list[str], **kw: Any
     ) -> Note:
-        rows = [e for i in cited if (r := refs.get(i)) is not None for e in r.evidence]
+        used = [r for i in cited if (r := refs.get(i)) is not None]
+        rows = [e for r in used for e in r.evidence]
+        # One evidence chip per cited number: what it reads and where it sits in the run, for the feed.
+        chips = [
+            {"ref": r.id, "label": r.label, "display": r.display, "t": r.t, "vessel_id": r.vessel_id} for r in used
+        ]
         draft = NoteDraft(
             t=t,
             author="ai",
             level=level,
             tag=None,
-            body=body,
+            body=body | {"chips": chips},
             refs=cited,
             evidence=list(dict.fromkeys([*evidence, *rows])),
             **kw,

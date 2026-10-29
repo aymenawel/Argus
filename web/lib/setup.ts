@@ -1,4 +1,4 @@
-import type { Condition, PlanDraft, Preview, Role, SetupSource } from "./types";
+import type { PlanDraft, Preview, SetupSource, SetupVessel } from "./types";
 
 // The setup wizard's steps and what each needs before it can be left (spec §8). Plain TypeScript with type-only
 // imports, so Node's test runner can load it as it is.
@@ -7,8 +7,7 @@ export type StepId = "describe" | "source" | "vessels" | "roles" | "check" | "pl
 
 export const STEPS: StepId[] = ["describe", "source", "vessels", "roles", "check", "plan", "start"];
 
-/** A vessel while the wizard draws it: its role comes a step later. */
-export type WizardVessel = { label: string; role: Role | null; condition: Condition | null; roi: [number, number][] };
+export type WizardVessel = SetupVessel;
 
 export type WizardState = {
   source: SetupSource | null;
@@ -60,4 +59,26 @@ const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 export function nextLabel(vessels: { label: string }[]): string {
   const used = new Set(vessels.map((v) => v.label));
   return [...LETTERS].find((letter) => !used.has(letter)) ?? `V${vessels.length + 1}`;
+}
+
+function box(roi: [number, number][]) {
+  const xs = roi.map(([x]) => x);
+  const ys = roi.map(([, y]) => y);
+  const top = Math.min(...ys);
+  const height = Math.max(...ys) - top;
+  return { cx: (Math.min(...xs) + Math.max(...xs)) / 2, cy: top + height / 2, height };
+}
+
+/** Labels A, B, C… in reading order: rows top to bottom (centres within half a region's height share a row),
+ *  then left to right. Roles and conditions stay with their regions. */
+export function inReadingOrder<T extends { label: string; roi: [number, number][] }>(vessels: T[]): T[] {
+  const placed = vessels.map((v) => ({ v, ...box(v.roi) })).sort((a, b) => a.cy - b.cy);
+  const rows: (typeof placed)[] = [];
+  for (const item of placed) {
+    const row = rows.at(-1);
+    if (row && Math.abs(item.cy - row[0].cy) <= Math.max(row[0].height, item.height) / 2) row.push(item);
+    else rows.push([item]);
+  }
+  const ordered = rows.flatMap((row) => row.sort((a, b) => a.cx - b.cx).map((item) => item.v));
+  return ordered.map((v, i) => ({ ...v, label: i < LETTERS.length ? LETTERS[i] : `V${i + 1}` }));
 }
