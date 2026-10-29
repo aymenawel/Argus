@@ -1,0 +1,186 @@
+{
+ "id": "resp_6ae39b2690b00a7b7bb34396",
+ "access_programs": null,
+ "created_at": 1793301286.0,
+ "error": null,
+ "incomplete_details": null,
+ "instructions": null,
+ "metadata": null,
+ "model": "muse-spark-1.3",
+ "object": "response",
+ "output": [
+  {
+   "id": "rs_6ae39b2690b00a7b7bb34396:rs_3e918296-f29e-46a3-aa7e-57cf3ad45f92",
+   "summary": [],
+   "type": "reasoning",
+   "content": null,
+   "encrypted_content": null,
+   "status": "completed"
+  },
+  {
+   "id": "msg_0239d852-13a9-4af4-aff4-ca07a151f642",
+   "content": [
+    {
+     "annotations": [],
+     "text": "{\"confidence\": \"low\", \"confidence_reason\": \"only a single vessel per temperature condition so chance cannot be excluded\", \"evidence_ids\": [], \"hypothesis_status\": \"INCONCLUSIVE\", \"interpretation\": \"larger change in warm glass than cold glass at same time point is consistent with temperature influence, but with single vessels rival explanations remain unresolved\", \"level\": \"checkpoint\", \"next_step\": \"Suggestion: continue monitoring both vessels to same endpoint resting on cited change rows\", \"numbers_used\": [{\"measurement_id\": \"chg:C:delta_e\", \"unit\": \"dE\", \"value\": 0}, {\"measurement_id\": \"chg:A:delta_e\", \"unit\": \"dE\", \"value\": 0}], \"observation\": \"Glass C warm change since start was {ref:chg:C:delta_e} and Glass A cold change since start was {ref:chg:A:delta_e}\", \"question_for_researcher\": \"How many independent vessels per temperature should be included to assess replicate consistency?\", \"rival_explanations\": [\"lighting or camera drift affecting one position in frame\", \"evaporation or temperature nonuniformity\", \"handling history differences\", \"noise relative to noise floor\", \"chance due to single replicate per condition\"]}",
+     "type": "output_text",
+     "logprobs": []
+    }
+   ],
+   "role": "assistant",
+   "status": "completed",
+   "type": "message",
+   "phase": null
+  }
+ ],
+ "parallel_tool_calls": true,
+ "temperature": 1.0,
+ "tool_choice": "auto",
+ "tools": [],
+ "top_p": 1.0,
+ "background": false,
+ "completed_at": 1793301286.0,
+ "conversation": null,
+ "max_output_tokens": 4000,
+ "max_tool_calls": null,
+ "moderation": null,
+ "previous_response_id": null,
+ "prompt": null,
+ "prompt_cache_diagnostics": null,
+ "prompt_cache_key": "argus:probe:routine:record",
+ "prompt_cache_options": null,
+ "prompt_cache_retention": null,
+ "reasoning": {
+  "context": null,
+  "effort": "minimal",
+  "generate_summary": null,
+  "mode": null,
+  "summary": null
+ },
+ "safety_identifier": null,
+ "service_tier": "auto",
+ "status": "completed",
+ "text": {
+  "format": {
+   "name": "ArgusNote",
+   "schema_": {
+    "required": [
+     "level",
+     "observation",
+     "interpretation",
+     "hypothesis_status",
+     "confidence",
+     "confidence_reason",
+     "rival_explanations",
+     "next_step",
+     "numbers_used",
+     "evidence_ids",
+     "question_for_researcher"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "confidence": {
+      "enum": [
+       "low",
+       "medium",
+       "high"
+      ],
+      "type": "string"
+     },
+     "confidence_reason": {
+      "type": "string"
+     },
+     "evidence_ids": {
+      "description": "Frame or event ids the note rests on.",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "hypothesis_status": {
+      "enum": [
+       "SUPPORTED",
+       "NOT_SUPPORTED",
+       "INCONCLUSIVE",
+       "TOO_EARLY"
+      ],
+      "type": "string"
+     },
+     "interpretation": {
+      "type": "string"
+     },
+     "level": {
+      "enum": [
+       "event",
+       "checkpoint",
+       "insight"
+      ],
+      "type": "string"
+     },
+     "next_step": {
+      "description": "A suggestion, labeled as such, or empty.",
+      "type": "string"
+     },
+     "numbers_used": {
+      "items": {
+       "additionalProperties": false,
+       "properties": {
+        "measurement_id": {
+         "type": "string"
+        },
+        "unit": {
+         "type": "string"
+        },
+        "value": {
+         "type": "number"
+        }
+       },
+       "required": [
+        "measurement_id",
+        "value",
+        "unit"
+       ],
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "observation": {
+      "description": "What was measured or seen. Numbers only from MEASUREMENTS.",
+      "type": "string"
+     },
+     "question_for_researcher": {
+      "description": "One specific question, or empty.",
+      "type": "string"
+     },
+     "rival_explanations": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     }
+    },
+    "type": "object"
+   },
+   "type": "json_schema",
+   "description": null,
+   "strict": true
+  },
+  "verbosity": null
+ },
+ "top_logprobs": 0,
+ "truncation": "disabled",
+ "usage": {
+  "input_tokens": 591,
+  "input_tokens_details": {
+   "cache_write_tokens": null,
+   "cached_tokens": 0
+  },
+  "output_tokens": 1307,
+  "output_tokens_details": {
+   "reasoning_tokens": 1041
+  },
+  "total_tokens": 1898
+ },
+ "user": null,
+ "store": true
+}
