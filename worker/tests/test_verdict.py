@@ -1,5 +1,7 @@
 """The verdict pipeline: ceiling in code, a Wonder draft and critique, checked, the most cautious allowed choice."""
 
+import time
+
 import pytest
 from pydantic import SecretStr
 
@@ -265,8 +267,35 @@ def test_rivals_are_resolved_by_their_checks_or_by_the_researcher(judged):
 @pytest.mark.anyio
 async def test_a_plan_locked_after_the_run_started_is_not_judged_against(db, exp):
     run = create_run(db, exp.id, RunMode.LIVE, RunSource(kind=SourceKind.WEBCAM, camera_index=0))
+    time.sleep(0.05)  # past the clock's tick (about 15 ms on Windows): the same instant counts as before
     save_plan_draft(db, exp.id, plan())
     lock_plan(db, exp.id)  # after the run began: written with the data in view, so not a prediction
     draft = verdict_draft("TOO_EARLY", explanation="The plan came after the data.", refs_used=[])
     verdict = await judge(db, run, FakeReasoner([draft, critique("TOO_EARLY")]))
     assert verdict.allowed == [VerdictLevel.TOO_EARLY] and verdict.checks[0]["id"] == "plan"
+
+
+@pytest.mark.anyio
+async def test_too_early_is_written_by_code_without_a_model_call(db, exp):
+    save_plan_draft(db, exp.id, plan())
+    lock_plan(db, exp.id)
+    run = create_run(db, exp.id, RunMode.LIVE, RunSource(kind=SourceKind.WEBCAM, camera_index=0))
+    verdict = await judge(db, run, FakeReasoner([]))  # before the checkpoint: the only answer is Too early
+    assert verdict.verdict is VerdictLevel.TOO_EARLY and verdict.allowed == [VerdictLevel.TOO_EARLY]
+    assert verdict.body["written_by"] == "code" and "checkpoint" in verdict.body["explanation"]
+    assert model_calls(db, run) == [] and verdict.model_call_ids == []
+
+
+@pytest.mark.anyio
+async def test_a_draft_with_an_unknown_verdict_is_retried(judged):
+    db, run = judged
+    reasoner = FakeReasoner([verdict_draft("PROVEN"), verdict_draft("SUPPORTED"), critique("SUPPORTED")])
+    verdict = await judge(db, run, reasoner)
+    assert "unknown verdict: PROVEN" in reasoner.tasks[1].variable[-1] and verdict.verdict is VerdictLevel.SUPPORTED
+
+
+@pytest.mark.anyio
+async def test_a_critique_with_an_unknown_verdict_is_dropped(judged):
+    db, run = judged
+    verdict = await judge(db, run, FakeReasoner([verdict_draft("SUPPORTED"), critique("MAYBE")]))
+    assert verdict.critique is None and "unknown verdict: MAYBE" in verdict.body["critique_dropped"]

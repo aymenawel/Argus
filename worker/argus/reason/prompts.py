@@ -196,8 +196,12 @@ def critique_task(
     checks: Sequence[str],
     allowed: Sequence[str],
     draft: dict,
+    events: Sequence[RunEvent] = (),
     experiment_id: str | None = None,
+    labels: Mapping[str, str] | None = None,
 ) -> ReasonTask:
+    """The critique sees what the draft saw (measurements, events, checks), so it judges the draft's claims
+    against the same evidence."""
     return ReasonTask(
         function="verdict_critique",
         experiment_id=experiment_id or (plan.experiment_id if plan else "none"),
@@ -205,6 +209,7 @@ def critique_task(
         stable=_stable(recipe, plan),
         variable=(
             measurements_block(refs),
+            events_block(events, refs, labels),
             "CHECKS (computed in code)\n" + "\n".join(f"- {c}" for c in checks),
             "ALLOWED VERDICTS: " + ", ".join(allowed),
             "DRAFT VERDICT\n" + json.dumps(draft, ensure_ascii=False, indent=1),

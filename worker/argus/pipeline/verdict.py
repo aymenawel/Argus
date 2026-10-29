@@ -29,7 +29,7 @@ from argus.storage.repos import (
     vessels_for_run,
 )
 
-EXPECTED_VERDICT_USD = 0.10  # a Wonder draft and critique (KB 05: about $0.04 each)
+EXPECTED_VERDICT_USD = 0.15  # a Wonder draft and critique: $0.12 together on the first real run (D-68)
 DRAFT_TEXT = ("explanation", "rivals[*].reason", "what_would_change_it", "confidence_reason")
 CRITIQUE_TEXT = (
     "confidence_reason",
@@ -133,7 +133,12 @@ def _log(db: Database, run: Run, t: float, result: ReasonResult | None, error: R
     return [add_model_call(db, run.id, t, c).id for c in calls]
 
 
-def _code_draft(allowed: set[VerdictLevel], checks: list, rivals: dict[str, str]) -> dict[str, Any]:
+TWICE_REJECTED = "The model's drafts failed the claim check twice; this was written by code."
+ONLY_TOO_EARLY = "Too early is the only verdict the checks allow, so no model was asked; this was written by code."
+VERDICT_WORDS = frozenset(str(level) for level in VerdictLevel)
+
+
+def _code_draft(allowed: set[VerdictLevel], checks: list, rivals: dict[str, str], *, reason: str) -> dict[str, Any]:
     return {
         "verdict": str(TOO_EARLY if TOO_EARLY in allowed else VerdictLevel.INCONCLUSIVE),
         "explanation": " ".join(c.text for c in checks),
@@ -143,11 +148,16 @@ def _code_draft(allowed: set[VerdictLevel], checks: list, rivals: dict[str, str]
         ],
         "what_would_change_it": "",
         "confidence": "low",
-        "confidence_reason": "The model's drafts failed the claim check twice; this was written by code.",
+        "confidence_reason": reason,
         "refs_used": [],
         "evidence_ids": [],
         "written_by": "code",
     }
+
+
+def _unknown_verdict(word: object) -> list[str]:
+    """A strict schema's enum isn't proof: a word outside it is a rejection, never a crash."""
+    return [] if word in VERDICT_WORDS else [f"unknown verdict: {word}"]
 
 
 async def run_verdict(
@@ -172,52 +182,67 @@ async def run_verdict(
     fell_back = False
 
     draft: dict[str, Any] | None = None
-    rejected: list[str] = []
-    for _ in range(2):
-        task = verdict_task(
+    kept_critique: dict[str, Any] | None = None
+    dropped: list[str] = []
+    if allowed == {TOO_EARLY}:  # code already knows the only answer: no Wonder call to pay for
+        draft = _code_draft(allowed, checks, dict(inputs.rivals), reason=ONLY_TOO_EARLY)
+    else:
+        rejected: list[str] = []
+        for _ in range(2):
+            task = verdict_task(
+                recipe,
+                plan,
+                refs,
+                checks=prompts,
+                allowed=allowed_names,
+                events=events,
+                notes=notes,
+                experiment_id=run.experiment_id,
+                labels=labels,
+                rejected=rejected,
+            )
+            try:
+                result = await reasoner(task, tier="deep", schema=load_schema("verdict"), schema_name="ArgusVerdict")
+            except ReasonError as error:
+                call_ids += _log(db, run, t, None, error)
+                rejected = [str(error)]
+                continue
+            call_ids += _log(db, run, t, result, None)
+            fell_back = fell_back or result.fell_back
+            rejected = _unknown_verdict(result.data.get("verdict"))
+            rejected += check_text_fields(result.data, DRAFT_TEXT, refs)
+            rejected += [f"unknown ref: {i}" for i in result.data.get("refs_used", []) if i not in refs]
+            if not rejected:
+                draft = result.data
+                break
+        if draft is None:
+            draft = _code_draft(allowed, checks, dict(inputs.rivals), reason=TWICE_REJECTED)
+
+        task = critique_task(
             recipe,
             plan,
             refs,
             checks=prompts,
             allowed=allowed_names,
+            draft=draft,
             events=events,
-            notes=notes,
             experiment_id=run.experiment_id,
             labels=labels,
-            rejected=rejected,
         )
         try:
-            result = await reasoner(task, tier="deep", schema=load_schema("verdict"), schema_name="ArgusVerdict")
+            result = await reasoner(
+                task, tier="deep", schema=load_schema("verdict_critique"), schema_name="ArgusCritique"
+            )
+            call_ids += _log(db, run, t, result, None)
+            fell_back = fell_back or result.fell_back
+            dropped = _unknown_verdict(result.data.get("revised_verdict"))
+            dropped += check_text_fields(result.data, CRITIQUE_TEXT, refs)
+            dropped += [f"unknown ref: {i}" for i in result.data.get("refs_used", []) if i not in refs]
+            if not dropped:
+                kept_critique = result.data
         except ReasonError as error:
             call_ids += _log(db, run, t, None, error)
-            rejected = [str(error)]
-            continue
-        call_ids += _log(db, run, t, result, None)
-        fell_back = fell_back or result.fell_back
-        rejected = check_text_fields(result.data, DRAFT_TEXT, refs)
-        rejected += [f"unknown ref: {i}" for i in result.data.get("refs_used", []) if i not in refs]
-        if not rejected:
-            draft = result.data
-            break
-    if draft is None:
-        draft = _code_draft(allowed, checks, dict(inputs.rivals))
-
-    kept_critique: dict[str, Any] | None = None
-    dropped: list[str] = []
-    task = critique_task(
-        recipe, plan, refs, checks=prompts, allowed=allowed_names, draft=draft, experiment_id=run.experiment_id
-    )
-    try:
-        result = await reasoner(task, tier="deep", schema=load_schema("verdict_critique"), schema_name="ArgusCritique")
-        call_ids += _log(db, run, t, result, None)
-        fell_back = fell_back or result.fell_back
-        dropped = check_text_fields(result.data, CRITIQUE_TEXT, refs)
-        dropped += [f"unknown ref: {i}" for i in result.data.get("refs_used", []) if i not in refs]
-        if not dropped:
-            kept_critique = result.data
-    except ReasonError as error:
-        call_ids += _log(db, run, t, None, error)
-        dropped = [str(error)]
+            dropped = [str(error)]
 
     revised = VerdictLevel(kept_critique["revised_verdict"]) if kept_critique else None
     final = choose_verdict(allowed, VerdictLevel(draft["verdict"]), revised)

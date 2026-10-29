@@ -156,3 +156,16 @@ def test_the_worker_reasons_only_with_an_api_key(db, tmp_path):
     keyless = keyed.model_copy(update={"model_api_key": None})
     assert isinstance(create_app(keyed, db, EventBroker(), {}).state.jobs.reasoner, SettingsReasoner)
     assert create_app(keyless, db, EventBroker(), {}).state.jobs.reasoner is None
+
+
+def test_reviews_are_listed_for_the_verdict_panel(client, run_id):
+    body = {
+        "t": 10.0,
+        "target_kind": "rival",
+        "target_id": "lighting change",
+        "action": "resolve",
+        "comment": "Lamp off.",
+    }
+    assert client.get(f"/api/runs/{run_id}/reviews").json() == []
+    saved = client.post(f"/api/runs/{run_id}/reviews", json=body).json()
+    assert client.get(f"/api/runs/{run_id}/reviews").json() == [saved]

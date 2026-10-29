@@ -99,6 +99,11 @@ def register_note_routes(
         except VerdictRefused as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
 
+    @app.get("/api/runs/{run_id}/reviews")
+    def get_reviews(run_id: str) -> list[Review]:
+        run_or_404(run_id)
+        return repos.reviews_for_run(db, run_id)
+
     @app.post("/api/runs/{run_id}/reviews", status_code=201)
     def post_review(run_id: str, body: ReviewDraft) -> Review:
         run_or_404(run_id)

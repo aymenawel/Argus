@@ -11,6 +11,7 @@ import argus.reason.prompts as prompts
 from argus.claims.refs import Ref, RefTable
 from argus.domain import Direction, Experiment, ExperimentStatus, Plan
 from argus.reason.prompts import (
+    critique_task,
     describe_task,
     load_prompt,
     load_schema,
@@ -137,6 +138,34 @@ def test_the_verdict_task_carries_the_checks_and_the_allowed_verdicts():
     )
     text = "\n".join(task.variable)
     assert task.function == "verdict_draft" and "Past the checkpoint." in text and "SUPPORTED, INCONCLUSIVE" in text
+
+
+def test_the_critique_sees_the_events_the_draft_cites():
+    from argus.domain import EventKind, RunEvent
+
+    event = RunEvent(
+        id="evt_1",
+        run_id="run_1",
+        vessel_id="ves_c",
+        t_start=119.0,
+        t_end=None,
+        kind=EventKind.INTERVENTION,
+        source="quality",
+        detail={"message": "something in front of the vessel"},
+        frame_ids=[],
+    )
+    task = critique_task(
+        COLOUR,
+        PLAN,
+        refs_at(400.0),
+        checks=["Past the checkpoint."],
+        allowed=["INCONCLUSIVE"],
+        draft={"verdict": "INCONCLUSIVE"},
+        events=[event],
+        labels={"ves_c": "C"},
+    )
+    text = "\n".join(task.variable)
+    assert "evt_1 | intervention (something in front of the vessel) | C" in text
 
 
 def test_describe_fills_the_recipes_metrics_into_the_schema():

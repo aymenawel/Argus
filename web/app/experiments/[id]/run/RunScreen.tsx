@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { Feed } from "@/components/feed/Feed";
+import { VerdictPanel } from "@/components/verdict/VerdictPanel";
 import { Readouts } from "@/components/run/Readouts";
 import { RunFrame } from "@/components/run/RunFrame";
 import { Timeline } from "@/components/run/Timeline";
@@ -141,8 +143,11 @@ export function RunScreen() {
           <div className={styles.message}>
             <p className={styles.messageTitle}>No run yet</p>
             <p className={styles.messageText}>
-              Start one with <code className={styles.code}>uv run python -m argus run run.json</code>
+              Set up the vessels and lock the plan first, then start the run from the setup.
             </p>
+            <Link className={styles.setupLink} href={`/experiments/${id}/setup`}>
+              Open the setup
+            </Link>
           </div>
         </Panel>
       </>
@@ -187,19 +192,31 @@ export function RunScreen() {
           {problem}
         </p>
       )}
-      <Panel className={styles.panel}>
-        {ready && load.state === "ready" ? (
-          <>
-            <RunFrame snapshot={snapshot} source={load.source} mainMetric={load.mainMetric} />
-            <Readouts snapshot={snapshot} mainMetric={load.mainMetric} />
-          </>
-        ) : (
-          <div className={styles.placeholder} aria-busy="true" />
+      <div className={styles.workspace}>
+        <Panel className={styles.panel}>
+          {ready && load.state === "ready" ? (
+            <>
+              <RunFrame snapshot={snapshot} source={load.source} mainMetric={load.mainMetric} />
+              <Readouts snapshot={snapshot} mainMetric={load.mainMetric} />
+            </>
+          ) : (
+            <div className={styles.placeholder} aria-busy="true" />
+          )}
+        </Panel>
+        {ready && (
+          <Panel title="Notes" className={styles.feedPanel}>
+            <Feed snapshot={snapshot} />
+          </Panel>
         )}
-      </Panel>
+      </div>
       {ready && load.state === "ready" && (
         <Panel title="Timeline" className={styles.timelinePanel}>
           <Timeline snapshot={snapshot} source={load.source} mainMetric={load.mainMetric} />
+        </Panel>
+      )}
+      {ready && (
+        <Panel title="Verdict" className={styles.timelinePanel}>
+          <VerdictPanel snapshot={snapshot} />
         </Panel>
       )}
     </>

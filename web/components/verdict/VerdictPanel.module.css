@@ -1,0 +1,217 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.none {
+  color: var(--muted);
+}
+
+.hint {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.error {
+  padding: 10px 14px;
+  border-radius: var(--r-small);
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: var(--fs-sm);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.allowed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.allowed strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.fellBack {
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--r-tile);
+  background: var(--raised);
+  list-style: none;
+  font-size: var(--fs-sm);
+}
+
+.checks li {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+}
+
+.mark {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.ok {
+  color: var(--pos);
+}
+
+.failed {
+  color: var(--neg);
+}
+
+.open {
+  color: var(--warn);
+}
+
+.explanation {
+  font-size: var(--fs-section);
+  line-height: 24px;
+  max-width: 72ch;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+.section h3 {
+  color: var(--faint);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.section p {
+  max-width: 72ch;
+}
+
+.rivals,
+.findings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rivals li,
+.findings li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.rivalName,
+.findingItem {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.rivalStatus {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.rivalReason {
+  flex-basis: 100%;
+}
+
+.fix {
+  flex-basis: 100%;
+  color: var(--text);
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-ink);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.resolve {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--r-tile);
+  background: var(--raised);
+}
+
+.resolveLabel {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.input {
+  flex: 1 1 220px;
+  min-width: 0;
+  height: var(--control-h);
+  padding: 0 12px;
+  border: 1px solid var(--control);
+  border-radius: var(--r-small);
+  background: var(--surface);
+}
+
+.review {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+
+.decided {
+  color: var(--pos);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
