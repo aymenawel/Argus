@@ -34,6 +34,7 @@ Run Oct 27 with the scripts in `worker/probes/` (total spend ≈ $0.19). Numbers
 - [x] SAM 3.1 video call on a short MP4: works, 16-object cap, stable IDs
 - [x] Short MP4 to Muse Spark: ~72 input tokens per second at 240×240, 10 fps
 - [x] Voice note through `/v1/asr/transcribe`: correct transcript in 1.9 s
+- [ ] **Live runs don't lock the camera:** `CameraSettings` only locks a property when given a value, and runs pass none, so the Nuroum ran on auto exposure and white balance (Oct 29). Proposed: lock each property at the value the camera settled on when the run starts. Phase 3 or later
 - [ ] **Nuroum webcam** (not connected on Oct 27): MJPEG 2560×1440 @ 30 fps, exposure/WB lock read back, closest sharp distance. The built-in HP camera was tested instead: MJPEG 720p, WB lock reads back, exposure lock unknown (`09`)
 - [ ] XA50: fast-motion recording keeps going on AC power for hours; real start time; HDMI overlays (when the experiment starts)
 - [x] `cv2.aruco.ArucoDetector` available in `opencv-python` 5.0.0; detects all 4 card markers

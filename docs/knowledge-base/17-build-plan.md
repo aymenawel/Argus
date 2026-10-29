@@ -26,6 +26,17 @@
 - **Final review:** a fresh reviewer found 1 Critical (inverted print-scale correction) and 7 Important issues. All Critical and Important issues were fixed with a failing test first, except `rectify` sizing, which moves to phase 2. 13 minors are deferred.
 - **Against the day plan:** the SQLite schema (day 2), measurements and ArUco scale (day 3) and the UI foundation (day 5) are in place. The capture loop and the watcher (day 2) are not started; phase 2 begins with them, then `segment()`.
 
+**Phase 2, watch and measure: built Oct 28-29** on branch `phase-2` (plan `docs/superpowers/plans/2026-10-28-phase-2-watch-and-measure.md`).
+
+- **Worker:** detections, events and model calls with evidence triggers; run calibration (card or ruler) with a colour reference that settles over the first readings; SAM 3.1 image and video segmentation (one shared client, no hidden retries, spend reserved under the cap); outlines, vessel assignment and IoU tracking; video import (sampling, per-vessel SAM video, full-frame image fallback) and live runs (gate and watcher at up to 5 fps, background analysis, camera and card moves followed); the quality gate (sharpness around the vessels, lamp changes matched, hands by a vessel caught); `POST /runs`, timeline, frames, cameras and `argus run`.
+- **Web:** the Run view (frame with outlines and regions in force, readouts, editor-style timeline with a draggable playhead) over a batched snapshot store; Node's test runner for its data layer.
+- **Evidence on real data (Oct 28-29, food colouring in cold, room and warm water, compact card):**
+  - Live run on the Nuroum at 720p, 21 min: 1,802 frames, 123 SAM calls all ok, $0.31. Warm water coloured through within ~2 min of the dye (25.6 dE00); room ~5 and cold ~3 at 18 min. Noise before the dye 0.6 dE00.
+  - Import of a phone recording (6.8 min, 942 samples): 3 SAM video calls ok, $0.57, 16 min to process; the warm glass switched at the same moment as in the live run.
+  - Scale: the card's printed 30 mm ruler measured 30.01-30.13 mm on the webcam and 30.15 mm on the phone (target within 2 %).
+  - The real runs found five problems the synthetic tests missed, each fixed test-first (D-62 to D-64): a plain wall failed the sharpness gate; an arm in front of the glasses was measured as dye; a hand over the card read as a camera move; a camera still settling at the first frame skewed every colour reading; correction flickered at its cut-off. After the fixes the phone import's noise before the dye fell from 3.3-3.7 to 0.4-0.6 dE00 (2.1 in the cold glass, where the phone's exposure was locked 2 s in) and correction no longer flipped (74 times before).
+- **Final review:** a fresh reviewer found 2 Critical and 11 Important issues (a dead camera's frozen frame stored as evidence; the gate stuck after a lamp change; the spend cap overshot; hidden SDK retries; Stop ignored; and more). All were fixed with a failing test first; minors are in the ledger. 221 worker tests and 6 web tests pass.
+
 ## Today: start the chosen experiment
 
 **Salt-stress germination dose-response, side view on the Canon XA50 (no stand needed).** Full protocol: `20-demo-experiment-germination.md`. Start tonight (Oct 27), stop Thursday evening (Oct 30).
