@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { ExperimentsTable, ExperimentsTableSkeleton } from "@/components/experiments/ExperimentsTable";
 import { NewExperimentDialog } from "@/components/experiments/NewExperimentDialog";
@@ -43,6 +44,7 @@ function finding(experiments: Experiment[]): ReactNode {
 }
 
 export default function ExperimentsPage() {
+  const router = useRouter();
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [recipes, setRecipes] = useState<RecipeSummary[]>([]);
   const [load, setLoad] = useState<Load>({ state: "loading" });
@@ -137,7 +139,10 @@ export default function ExperimentsPage() {
         open={dialogOpen}
         recipes={recipes}
         onClose={() => setDialogOpen(false)}
-        onCreated={(experiment) => setExperiments((current) => merge(current, [experiment]))}
+        onCreated={(experiment) => {
+          setExperiments((current) => merge(current, [experiment]));
+          router.push(`/experiments/${experiment.id}/setup`); // a new experiment starts with its setup
+        }}
       />
     </>
   );

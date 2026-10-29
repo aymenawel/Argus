@@ -41,6 +41,19 @@ class RecipeSummary(BaseModel):
     main_measurement: str
 
 
+class MetricInfo(BaseModel):
+    id: str  # as readings are stored (a lab_mean measurement stores _l, _a and _b)
+    unit: str
+
+
+class RecipeDetail(RecipeSummary):
+    """What the setup wizard offers: concepts to find vessels by, metrics a plan may predict, and rivals."""
+
+    concepts: list[str]
+    metrics: list[MetricInfo]
+    rivals: list[str]
+
+
 def create_app(
     settings: Settings,
     db: Database,
@@ -76,6 +89,23 @@ def create_app(
     @app.get("/api/recipes")
     def list_recipes() -> list[RecipeSummary]:
         return [RecipeSummary(**r.model_dump(include=set(RecipeSummary.model_fields))) for r in recipes.values()]
+
+    @app.get("/api/recipes/{recipe_id}")
+    def get_recipe(recipe_id: str) -> RecipeDetail:
+        recipe = recipes.get(recipe_id)
+        if recipe is None:
+            raise HTTPException(status_code=404, detail="recipe not found")
+        units = {m.id: m.unit for m in recipe.measurements}
+        metrics = [
+            MetricInfo(id=name, unit=units.get(name, units.get(name.rsplit("_", 1)[0], "")))
+            for name in recipe.stored_metrics()
+        ]
+        return RecipeDetail(
+            **recipe.model_dump(include=set(RecipeSummary.model_fields)),
+            concepts=[c.name for c in recipe.concepts],
+            metrics=metrics,
+            rivals=list(recipe.rivals),
+        )
 
     @app.get("/api/experiments")
     def list_experiments() -> list[Experiment]:

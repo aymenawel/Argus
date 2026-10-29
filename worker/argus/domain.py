@@ -145,12 +145,22 @@ class Vessel(VesselDraft):
     run_id: str
 
 
+class SetupVessel(Record):
+    """A vessel as the wizard draws it: its role comes a step later."""
+
+    label: str
+    role: Role | None = None
+    blind_label: str | None = None
+    condition: Condition | None = None
+    roi: list[tuple[float, float]]
+
+
 class Setup(Record):
     """An experiment's setup while the wizard fills it in: a draft, not evidence."""
 
     source: RunSource | None = None
     time_scale: float = Field(1.0, gt=0)
-    vessels: list[VesselDraft] = []
+    vessels: list[SetupVessel] = []
     print_check_mm: float | None = Field(None, ge=90, le=110)
     ruler: RulerInput | None = None
     factor: str | None = None

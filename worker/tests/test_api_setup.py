@@ -188,3 +188,37 @@ def test_a_preview_before_any_vessel_makes_no_sam_call(client, db, experiment, c
     preview = client.post(f"/api/experiments/{experiment}/preview", json={"path": str(clip), "video_s": 1.0}).json()
     assert preview["vessels"] == [] and preview["calibration"]["card"] == "standard"
     assert logged_functions(db) == []
+
+
+def test_a_recipe_tells_the_wizard_its_concepts_metrics_and_rivals(client):
+    recipe = client.get("/api/recipes/colour-reaction").json()
+    assert recipe["concepts"] == ["liquid"] and "lighting change" in " ".join(recipe["rivals"]).lower()
+    metrics = {m["id"]: m["unit"] for m in recipe["metrics"]}
+    assert metrics["delta_e"] == "dE00" and all(metrics.values())  # every stored metric with its unit
+    assert client.get("/api/recipes/nope").status_code == 404
+
+
+def test_vessels_are_saved_before_their_roles_and_a_run_needs_every_role(client, experiment, clip):
+    a, b = (v["roi"] for v in two_vessels())
+    unroled = [{"label": "A", "role": "treatment", "roi": a}, {"label": "B", "role": None, "roi": b}]
+    saved = client.put(f"/api/experiments/{experiment}/setup", json=setup_with_video(clip, unroled))
+    assert saved.status_code == 200 and saved.json()["vessels"][1]["role"] is None
+    run = client.post(f"/api/experiments/{experiment}/runs", json={"mode": "imported", "paths": [str(clip)]})
+    assert run.status_code == 422 and "role" in run.json()["detail"]
+
+
+def test_a_plain_frame_to_draw_vessels_on_costs_nothing(client, db, experiment, clip):
+    client.put(f"/api/experiments/{experiment}/setup", json=setup_with_video(clip, two_vessels()))
+    answer = client.post(f"/api/experiments/{experiment}/frame", json={"path": str(clip), "video_s": 1.0})
+    assert answer.status_code == 200 and answer.headers["content-type"] == "image/jpeg"
+    image = cv2.imdecode(np.frombuffer(answer.content, np.uint8), cv2.IMREAD_COLOR)
+    assert image.shape[0] > 100 and logged_functions(db) == []
+
+
+def test_a_colour_change_preview_starts_at_zero(client, clip):
+    dye = client.post("/api/experiments", json={"title": "Dye", "recipe_id": "colour-reaction"}).json()["id"]
+    client.put(f"/api/experiments/{dye}/setup", json=setup_with_video(clip, two_vessels()))
+    preview = client.post(f"/api/experiments/{dye}/preview", json={"path": str(clip), "video_s": 3.0}).json()
+    a = next(v for v in preview["vessels"] if v["label"] == "A")
+    delta = [r for r in a["readings"] if r["metric"] == "delta_e"]
+    assert delta and delta[0]["value"] == 0 and "±" in delta[0]["display"]  # measured against itself: the start

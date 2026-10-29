@@ -1,0 +1,75 @@
+.stepper {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px 0 6px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.step:hover:not(:disabled) {
+  background: var(--active);
+  color: var(--text);
+}
+
+.index {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--sunk);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.current {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-tile);
+}
+
+.current .index {
+  background: var(--primary-bg);
+  color: var(--primary-ink);
+}
+
+.done .index {
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+.locked {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@media (max-width: 720px) {
+  .name {
+    display: none;
+  }
+
+  .current .name {
+    display: inline;
+  }
+}

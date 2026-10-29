@@ -1,0 +1,71 @@
+.panel {
+  margin-top: 12px;
+}
+
+.stepper {
+  margin-top: 18px;
+}
+
+.faint {
+  color: var(--faint);
+}
+
+.placeholder {
+  min-height: 320px;
+  border-radius: var(--r-media);
+  background: var(--sunk);
+  animation: wait 1.4s var(--ease-in-out) infinite;
+}
+
+@keyframes wait {
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+}
+
+.problems {
+  margin: 0;
+  padding: 0 0 0 8px;
+  list-style: none;
+  color: var(--warn);
+  font-size: var(--fs-sm);
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px 0;
+}
+
+.message > button {
+  margin-top: 8px;
+}
+
+.messageTitle {
+  font-size: var(--fs-section);
+  line-height: 22px;
+  font-weight: 600;
+}
+
+.messageText {
+  max-width: 560px;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .placeholder {
+    animation: none;
+  }
+}

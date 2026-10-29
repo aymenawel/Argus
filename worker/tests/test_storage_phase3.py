@@ -18,10 +18,10 @@ from argus.domain import (
     Role,
     RunSource,
     Setup,
+    SetupVessel,
     SourceKind,
     VerdictDraft,
     VerdictLevel,
-    VesselDraft,
     plan_sha256,
 )
 from argus.storage.db import Database
@@ -149,7 +149,7 @@ def test_setup_round_trips_and_defaults_empty(db, exp):
         source=RunSource(kind=SourceKind.WEBCAM, camera_index=1),
         print_check_mm=100.0,
         factor="water temperature",
-        vessels=[VesselDraft(label="A", role=Role.CONTROL, roi=[(0, 0), (10, 0), (10, 10)])],
+        vessels=[SetupVessel(label="A", role=Role.CONTROL, roi=[(0, 0), (10, 0), (10, 10)])],
     )
     assert save_setup(db, exp.id, setup) == setup
     assert get_setup(db, exp.id) == setup

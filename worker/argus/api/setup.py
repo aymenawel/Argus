@@ -8,7 +8,7 @@ import base64
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from argus.api.events import EventBroker
@@ -78,6 +78,16 @@ def register_setup_routes(
             await asyncio.to_thread(repos.add_model_call, db, None, None, call)
         return result.data
 
+    @app.post("/api/experiments/{experiment_id}/frame")
+    async def frame(experiment_id: str, body: FrameRequest) -> Response:
+        """A plain frame from the source to draw vessels on: no segmentation, no cost."""
+        await asyncio.to_thread(experiment_or_404, experiment_id)
+        image = await asyncio.to_thread(frame_from, hub, body)
+        ok, jpeg = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, PREVIEW_JPEG_QUALITY])
+        if not ok:
+            raise HTTPException(status_code=500, detail="could not encode the frame")
+        return Response(jpeg.tobytes(), media_type="image/jpeg")
+
     @app.post("/api/experiments/{experiment_id}/preview")
     async def preview(experiment_id: str, body: FrameRequest) -> dict:
         """One frame as a run would see it: the calibration, the quality gate and, for the saved setup's vessels,
@@ -86,7 +96,11 @@ def register_setup_routes(
         setup = await asyncio.to_thread(repos.get_setup, db, experiment_id)
         image = await asyncio.to_thread(frame_from, hub, body)
         cal = await asyncio.to_thread(calibrate, image, print_check_mm=setup.print_check_mm, ruler=setup.ruler)
-        vessels = [Vessel(**v.model_dump(), id=f"preview_{v.label}", run_id="preview") for v in setup.vessels]
+        drawn = setup.vessels  # a vessel without a role yet is measured all the same
+        # Named by label, so the quality flags read "saturated:A".
+        vessels = [
+            Vessel(**(v.model_dump() | {"role": v.role or "treatment"}), id=v.label, run_id="preview") for v in drawn
+        ]
         report = await asyncio.to_thread(assess, image, vessels, previous_good=None)
         shape = image.shape[:2]
         masks: dict[str, dict[str, np.ndarray]] = {v.id: {} for v in vessels}
@@ -113,18 +127,11 @@ def register_setup_routes(
         for vessel in vessels:
             readings = []
             if cal is not None:
-                result = await asyncio.to_thread(
-                    measure_vessel,
-                    recipe,
-                    vessel,
-                    masks[vessel.id],
-                    image,
-                    cal,
-                    t=0.0,
-                    frame_id=None,
-                    baselines={},
-                    current_reference=cal.reference,
-                )
+                common = dict(t=0.0, frame_id=None, current_reference=cal.reference)
+                args = (measure_vessel, recipe, vessel, masks[vessel.id], image, cal)
+                result = await asyncio.to_thread(*args, baselines={}, **common)
+                if result.lab:  # a colour change is measured from a first reading: on its own frame it starts at 0
+                    result = await asyncio.to_thread(*args, baselines=result.lab, **common)
                 readings = [
                     {
                         "metric": d.metric,

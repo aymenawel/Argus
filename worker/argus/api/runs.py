@@ -145,7 +145,11 @@ def register_run_routes(app: FastAPI, *, db: Database, settings: Settings, jobs:
         if body.vessels is not None:
             drafts = [VesselDraft(**v.model_dump()) for v in body.vessels]
         elif setup.vessels:
-            drafts = list(setup.vessels)
+            unroled = [v.label for v in setup.vessels if v.role is None]
+            if unroled:
+                detail = f"give every vessel a role first: {', '.join(unroled)} has none"
+                raise HTTPException(status_code=422, detail=detail)
+            drafts = [VesselDraft(**v.model_dump()) for v in setup.vessels]
         else:
             raise HTTPException(status_code=422, detail="no vessels: draw them in the setup or send them with the run")
         print_check_mm = body.print_check_mm if body.print_check_mm is not None else setup.print_check_mm

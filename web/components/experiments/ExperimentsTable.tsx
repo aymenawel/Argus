@@ -41,7 +41,7 @@ export function ExperimentsTable({ experiments, recipes }: { experiments: Experi
           {experiments.map((e) => (
             <tr key={e.id}>
               <td>
-                <Link className={styles.title} href={`/experiments/${e.id}/run`}>
+                <Link className={styles.title} href={`/experiments/${e.id}/${e.status === "draft" ? "setup" : "run"}`}>
                   {e.title}
                 </Link>
                 <span className={styles.sub}>{recipeTitle.get(e.recipe_id) ?? e.recipe_id}</span>

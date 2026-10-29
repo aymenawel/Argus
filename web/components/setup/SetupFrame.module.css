@@ -1,0 +1,120 @@
+/* A frame to set up on: like the Run view's frame, with regions to keep, drop or draw. */
+.frame {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: var(--r-media);
+  background: var(--frame);
+}
+
+.image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  color: #aab0b9;
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.drawing {
+  cursor: crosshair;
+}
+
+.vessel {
+  fill: rgba(45, 212, 191, 0.12);
+  stroke: #2dd4bf;
+  stroke-width: 2.4;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.7));
+}
+
+.proposal {
+  fill: rgba(255, 255, 255, 0.06);
+  stroke: rgba(255, 255, 255, 0.75);
+  stroke-width: 2;
+  stroke-dasharray: 8 6;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.7));
+}
+
+.proposal:hover {
+  stroke: #ffffff;
+  fill: rgba(255, 255, 255, 0.14);
+}
+
+.outline {
+  fill: rgba(255, 255, 255, 0.14);
+  stroke: #ffffff;
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.box {
+  fill: rgba(45, 212, 191, 0.1);
+  stroke: #2dd4bf;
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.ruler {
+  stroke: #f5b544;
+  stroke-width: 2.4;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.point {
+  fill: #f5b544;
+  stroke: #0b0b0c;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+/* Pills on a photograph keep their light look in both themes. */
+.tag {
+  position: absolute;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: var(--r-pill);
+  background: #ffffff;
+  color: #0b1220;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.proposalTag {
+  background: rgba(11, 18, 32, 0.78);
+  color: #ffffff;
+  font-weight: 600;
+}
