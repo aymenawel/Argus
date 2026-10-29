@@ -93,3 +93,32 @@ def test_sharpness_is_judged_on_the_vessels_not_a_plain_wall():
     assert "blurred" not in assess(scene, VESSELS, previous_good=None).flags
     soft = cv2.GaussianBlur(scene, (31, 31), 10)
     assert "blurred" in assess(soft, VESSELS, previous_good=None).flags
+
+
+def hand_beside_a() -> np.ndarray:
+    beside = frame()
+    beside[150:351, 252:331] = 20  # a hand just right of vessel A: a small part of the scene, most of A's surroundings
+    return beside
+
+
+def test_a_hand_beside_a_vessel_flags_that_vessel_only():
+    report = assess(hand_beside_a(), VESSELS, previous_good=frame())
+    assert report.ok and "occluded" not in report.flags  # the other vessels can still be measured
+    assert report.occluded_vessels == {"ves_A"}
+
+
+def test_change_inside_a_vessel_is_not_a_hand():
+    dyed = frame()
+    dyed[100:401, 100:251] = (40, 40, 200)  # the whole of vessel A turns red; its surroundings don't change
+    report = assess(dyed, VESSELS, previous_good=frame())
+    assert report.ok and report.occluded_vessels == set()
+
+
+def test_something_left_beside_a_vessel_becomes_the_new_reference():
+    gate = QualityGate(VESSELS, QualityThresholds(settle_s=10.0))
+    assert gate.check(0.0, frame()).occluded_vessels == set()
+    assert gate.check(1.0, hand_beside_a()).occluded_vessels == {"ves_A"}
+    assert gate.check(5.0, hand_beside_a()).occluded_vessels == {"ves_A"}
+    settled = gate.check(11.0, hand_beside_a())
+    assert settled.occluded_vessels == set() and "rebaselined" in settled.flags
+    assert gate.check(12.0, frame()).occluded_vessels == {"ves_A"}  # taking it away is a change too

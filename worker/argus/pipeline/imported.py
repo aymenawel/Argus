@@ -86,6 +86,7 @@ def _scan(
     next_sample = 0.0
     gate = QualityGate(ctx.vessels)
     scene_moved = False
+    hands: set[str] = set()  # vessels with something in front of them, logged once per stretch
     for frame in VideoFileSource(request.paths, time_scale=request.time_scale).frames():
         if cancel.is_set():
             return None
@@ -103,6 +104,10 @@ def _scan(
             kind = EventKind.INTERVENTION if "occluded" in report.flags else EventKind.QUALITY
             _event(ctx, frame.t, kind, "quality", {"flags": list(report.flags), "blur": round(report.blur, 1)})
             continue
+        for vessel_id in sorted(report.occluded_vessels - hands):
+            detail = {"flags": [f"occluded:{vessel_id}"], "message": "something in front of the vessel: not measured"}
+            _event(ctx, frame.t, EventKind.INTERVENTION, "quality", detail, vessel_id=vessel_id)
+        hands = report.occluded_vessels
         if "rebaselined" in report.flags:
             scene_moved = True
             _event(ctx, frame.t, EventKind.QUALITY, "quality", {"flags": list(report.flags), "message": REBASELINED})

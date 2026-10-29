@@ -316,3 +316,23 @@ async def test_the_image_fallback_is_one_full_frame_call_per_sample_for_every_ve
     for row in lengths_of_a(ctx):
         true_mm = 10 + 30 * (row.t / SCALE * FPS) / (FRAMES - 1)
         assert abs(row.value - true_mm) <= row.uncertainty, (row.t, row.value, true_mm)
+
+
+@pytest.mark.anyio
+async def test_a_hand_beside_a_vessel_in_a_recording_is_logged_and_skipped(ctx, tmp_path):
+    xs, ys = zip(*ctx.vessels[0].roi, strict=True)
+    path = tmp_path / "hand.mp4"
+    writer = None
+    for i in range(FRAMES):
+        image, _ = scene_with_bar_on_card_plane(STANDARD, length_mm=10 + 30 * i / (FRAMES - 1), width_mm=2)
+        if 50 <= i < 60:  # the sample at 5 s of video (300 s of run time); a hand doesn't stay put for a minute
+            image[int(min(ys)) : int(max(ys)), int(max(xs)) + 2 : int(max(xs)) + 60] = (60, 90, 140)
+        if writer is None:
+            writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), FPS, image.shape[1::-1])
+        writer.write(image)
+    writer.release()
+    await run_import(ctx, request(path), cancel=asyncio.Event())
+    hands = [e for e in events_for_run(ctx.db, ctx.run.id) if e.kind == "intervention"]
+    assert [(e.vessel_id, e.t_start) for e in hands] == [(ctx.vessels[0].id, 300.0)]
+    times = {m.t for m in lengths_of_a(ctx)}
+    assert 300.0 not in times and {240.0, 360.0} <= times

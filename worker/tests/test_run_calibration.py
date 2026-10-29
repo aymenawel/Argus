@@ -42,3 +42,14 @@ def test_a_card_cut_off_by_the_frame_edge_gives_no_nan_colours():
     cal = calibrate(scene(STANDARD, 5.0)[:340])  # top 38 mm of the card: the neutral row is in, the colour row cut off
     assert cal is not None and cal.reference is not None and len(cal.reference.neutrals()) == 6
     assert all(np.isfinite(p.lab).all() for p in cal.reference.patches)
+
+
+def test_a_partly_covered_card_is_not_judged_moved():
+    still = scene(STANDARD, 5.0)
+    cal = calibrate(still)
+    corners = cal.marker_corners_px[:4]  # the first marker's corners
+    (x0, y0), (x1, y1) = corners.min(axis=0).astype(int) - 5, corners.max(axis=0).astype(int) + 5
+    covered = still.copy()
+    covered[y0:y1, x0:x1] = (90, 120, 170)  # a hand over one marker
+    assert card_moved(cal, covered) is None  # can't tell from part of the card: no recalibration
+    assert card_moved(cal, np.roll(covered, 8, axis=1)) is None

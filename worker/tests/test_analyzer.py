@@ -330,3 +330,14 @@ async def test_a_result_at_sams_object_limit_is_flagged_once(ctx, scene):
     assert (
         limit.detail["concept"] == "root" and limit.detail["objects"] == 16 and "at most 16" in limit.detail["message"]
     )
+
+
+@pytest.mark.anyio
+async def test_a_vessel_with_a_hand_beside_it_gets_a_gap_not_a_reading(ctx, scene):
+    image, _ = scene
+    a, b = ctx.vessels
+    out = await analyze_frame(ctx, 0.0, image, segment=True, quality_flags=(f"occluded:{a.id}",))
+    measured = {m.vessel_id for m in measurements_for_run(ctx.db, ctx.run.id)}
+    assert measured == {b.id}  # B is still measured
+    assert {d.vessel_id for d in detections_for_frame(ctx.db, out.frame_id)} <= {b.id}
+    assert a.id not in ctx.last_masks  # the hand's outline is never reused as A's mask

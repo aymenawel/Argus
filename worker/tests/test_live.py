@@ -316,3 +316,16 @@ async def test_a_segmentation_owed_before_the_card_is_seen_runs_once_it_is(make_
     no_card[CARD_AREA] = 255  # the card isn't in view yet
     await live(ctx, watcher, [no_card] * 4 + [with_card] * 6)
     assert model_calls(ctx)  # not an hour later, at the next check-in
+
+
+@pytest.mark.anyio
+async def test_a_hand_beside_a_vessel_pauses_that_vessel_and_is_logged(make_ctx):
+    ctx, watcher = make_ctx(step=1.0)
+    xs, ys = zip(*ctx.vessels[0].roi, strict=True)
+    beside = SHORT.copy()
+    beside[int(min(ys)) : int(max(ys)), int(max(xs)) + 2 : int(max(xs)) + 60] = (60, 90, 140)  # a hand by vessel A
+    await live(ctx, watcher, [SHORT] * 6 + [beside] * 6 + [SHORT] * 6)
+    [hand] = [e for e in events_for_run(ctx.db, ctx.run.id) if e.kind is EventKind.INTERVENTION]
+    assert hand.vessel_id == ctx.vessels[0].id and hand.t_start == pytest.approx(3.0)
+    times = {m.t for m in measurements_for_run(ctx.db, ctx.run.id, metric="colour_l")}
+    assert not any(3.0 <= t < 6.0 for t in times) and any(t >= 6.0 for t in times)  # a gap, then readings again

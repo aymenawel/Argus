@@ -98,12 +98,13 @@ def plane_shift(old: RunCalibration, new: RunCalibration) -> np.ndarray | None:
 
 
 def card_moved(cal: RunCalibration, image_bgr: np.ndarray, *, tolerance_px: float = 3.0) -> bool | None:
-    """Whether the card's markers shifted by more than the tolerance; None when the card isn't visible (or the
-    run is calibrated by a ruler), since there is then nothing to compare."""
+    """Whether the card's markers shifted by more than the tolerance; None when the card isn't fully visible (or
+    the run is calibrated by a ruler), since there is then nothing to compare: a hand over one marker refits the
+    card from the others, a few pixels off, and must not count as a move."""
     if cal.detection is None or cal.marker_corners_px is None:
         return None
     current = detect_card(image_bgr, cards=(cal.detection.spec,))
-    if current is None:
+    if current is None or len(current.marker_ids) < len(cal.detection.spec.marker_ids):
         return None
     shift = np.linalg.norm(_marker_corners_px(current) - cal.marker_corners_px, axis=1)
     return bool(shift.max() > tolerance_px)

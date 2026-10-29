@@ -238,7 +238,12 @@ async def run_live(
                     await ctx.event(t, kind, "quality", {"flags": list(report.flags), "blur": round(report.blur, 1)})
                 await sleep(1 / max_fps)
                 continue
+            by_vessel = {f"occluded:{vessel_id}" for vessel_id in report.occluded_vessels}
+            for flag in sorted(by_vessel - in_trouble):  # a hand by one vessel: that vessel waits, the others go on
+                detail = {"flags": [flag], "message": "something in front of the vessel: not measured meanwhile"}
+                await ctx.event(t, EventKind.INTERVENTION, "quality", detail, vessel_id=flag.split(":", 1)[1])
             in_trouble.clear()
+            in_trouble.update(by_vessel)
             if "rebaselined" in report.flags:
                 scene_moved = True
                 await ctx.event(t, EventKind.QUALITY, "quality", {"flags": list(report.flags), "message": REBASELINED})

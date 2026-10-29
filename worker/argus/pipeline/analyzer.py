@@ -370,6 +370,10 @@ async def analyze_frame(
                 own = [patches[i] for i in assignment[vessel.id]]
                 keys = ctx.matcher.match(vessel, concept, own)
                 keyed.setdefault(vessel.id, {})[concept] = list(zip(keys, own, strict=True))
+    # Something in front of a vessel (the quality gate saw its surroundings change): what SAM found there may be
+    # the hand, so nothing of that vessel is kept from this frame. A gap, not a reading.
+    blocked = {flag.split(":", 1)[1] for flag in quality_flags if flag.startswith("occluded:")}
+    keyed = {vessel_id: by_concept for vessel_id, by_concept in keyed.items() if vessel_id not in blocked}
     if keyed:
         await asyncio.to_thread(_store_detections, ctx, frame_id, keyed, confidence, backend)
     for vessel_id, by_concept in keyed.items():
@@ -379,7 +383,7 @@ async def analyze_frame(
     # Measurement: geometry only where this vessel's concept was segmented on this frame (a vessel missing from
     # `keyed` is a gap, not a zero); colour on the newest masks there are.
     drafts: list[MeasurementDraft] = []
-    for vessel in ctx.vessels:
+    for vessel in (v for v in ctx.vessels if v.id not in blocked):
         segmented_here = set(keyed.get(vessel.id, {}))
         geometry_recipe = ctx.recipe.model_copy(
             update={"measurements": [m for m in ctx.recipe.measurements if m.source in segmented_here]}
