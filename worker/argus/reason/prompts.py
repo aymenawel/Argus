@@ -46,17 +46,6 @@ def load_schema(name: str) -> dict:
     return _without_comments(json.loads((PROMPTS_DIR / "schemas" / f"{name}.json").read_text(encoding="utf-8")))
 
 
-def recipe_metrics(recipe: Recipe) -> list[str]:
-    """The metric names a recipe's readings are stored under (lab_mean stores three: _l, _a, _b); rule-based
-    methods aren't measured yet, so they aren't offered."""
-    names: list[str] = []
-    for spec in recipe.measurements:
-        if spec.rule is not None:
-            continue
-        names += [f"{spec.id}_{axis}" for axis in "lab"] if spec.method == "lab_mean" else [spec.id]
-    return names
-
-
 def prompt_version(recipe: Recipe) -> str:
     """Changes whenever a prompt, the recipe's method card or a schema changes, so the cache key does too."""
     digest = hashlib.sha256()
@@ -217,7 +206,7 @@ def critique_task(
 def describe_task(experiment: Experiment, recipe: Recipe, words: str) -> tuple[ReasonTask, dict]:
     """The setup draft's task, and its schema with the recipe's metrics filled into the `metric` enum."""
     schema = load_schema("recipe_draft")
-    metrics = recipe_metrics(recipe)
+    metrics = recipe.stored_metrics()
     schema["properties"]["metric"]["enum"] = metrics
     units = {m.id: m.unit for m in recipe.measurements}
     listed = ", ".join(f"{name} ({units.get(name, units.get(name.rsplit('_', 1)[0], ''))})" for name in metrics)

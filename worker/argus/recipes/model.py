@@ -72,6 +72,16 @@ class Recipe(Spec):
     events: list[EventSpec] = []
     main_measurement: str
 
+    def stored_metrics(self) -> list[str]:
+        """The metric names this recipe's readings are stored under (lab_mean stores three: _l, _a, _b); rule-based
+        methods aren't measured yet, so they aren't listed."""
+        names: list[str] = []
+        for spec in self.measurements:
+            if spec.rule is not None:
+                continue
+            names += [f"{spec.id}_{axis}" for axis in "lab"] if spec.method == "lab_mean" else [spec.id]
+        return names
+
     @field_validator("concepts")
     @classmethod
     def one_concept_each(cls, concepts: list[Concept]) -> list[Concept]:
