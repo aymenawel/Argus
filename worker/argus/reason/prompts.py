@@ -161,7 +161,11 @@ def verdict_task(
     notes: Sequence[Note],
     experiment_id: str | None = None,
     labels: Mapping[str, str] | None = None,
+    rejected: Sequence[str] = (),
 ) -> ReasonTask:
+    task = load_prompt("deep/verdict.md")
+    if rejected:
+        task += "\n\nYour previous answer was rejected: " + "; ".join(rejected) + ". Fix exactly these."
     return ReasonTask(
         function="verdict_draft",
         experiment_id=experiment_id or (plan.experiment_id if plan else "none"),
@@ -173,7 +177,7 @@ def verdict_task(
             notes_block(notes),
             "CHECKS (computed in code)\n" + "\n".join(f"- {c}" for c in checks),
             "ALLOWED VERDICTS: " + ", ".join(allowed),
-            load_prompt("deep/verdict.md"),
+            task,
         ),
     )
 
