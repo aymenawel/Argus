@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { SnapshotStore, type RunSnapshot } from "../lib/run-snapshot.ts";
-import type { MeasurementRow, RunView, Timeline } from "../lib/types.ts";
+import type { MeasurementRow, Note, RunView, Timeline, Verdict } from "../lib/types.ts";
 
 const VIEW = { running: true, spend_usd: 0, vessels: [], calibration: null } as unknown as RunView;
 
@@ -62,4 +62,111 @@ test("an event that closes gets its end time", () => {
   frame();
   const [event] = seen.at(-1)!.events;
   assert.deepEqual([event.t_start, event.t_end, seen.at(-1)!.events.length], [60, 180, 1]);
+});
+
+function note(id: string, t: number, extra: Partial<Note> = {}): Note {
+  return {
+    id,
+    run_id: "run_1",
+    t,
+    t_end: null,
+    author: "ai",
+    level: "checkpoint",
+    tag: null,
+    body: { observation: "No change." },
+    refs: [],
+    evidence: [],
+    check_status: "passed",
+    model_call_id: null,
+    ...extra,
+  };
+}
+
+function verdict(id: string, level: Verdict["verdict"]): Verdict {
+  return {
+    id,
+    run_id: "run_1",
+    t: 600,
+    provisional: true,
+    allowed: [level],
+    checks: [],
+    verdict: level,
+    body: {
+      explanation: "",
+      rivals: [],
+      what_would_change_it: "",
+      confidence: "low",
+      confidence_reason: "",
+      findings: [],
+      written_by: "model",
+      critique_dropped: [],
+    },
+    draft: {},
+    critique: null,
+    refs: [],
+    model_call_ids: [],
+    fell_back: false,
+  };
+}
+
+test("notes and the verdict come with the first load", () => {
+  const { store } = harness();
+  store.beginLoad();
+  const loaded = store.finishLoad(VIEW, timeline([]), {
+    notes: { notes: [note("n2", 240), note("n1", 120)], rejected: 2 },
+    verdict: verdict("v1", "TOO_EARLY"),
+  });
+  assert.deepEqual(
+    loaded.notes.map((n) => n.id),
+    ["n1", "n2"],
+  );
+  assert.equal(loaded.rejected, 2);
+  assert.equal(loaded.verdict?.id, "v1");
+});
+
+test("a collapsed note updates in place", () => {
+  const { store, seen, frame } = harness();
+  store.beginLoad();
+  store.finishLoad(VIEW, timeline([]));
+  store.receive("note", { run_id: "run_1", t: 120, note: note("n1", 120) });
+  store.receive("note", { run_id: "run_1", t: 240, note: note("n1", 120, { t_end: 240 }) });
+  store.receive("note", {
+    run_id: "run_1",
+    t: 60,
+    note: note("n0", 60, { author: "researcher", tag: "intervention" }),
+  });
+  frame();
+  const notes = seen.at(-1)!.notes;
+  assert.deepEqual(
+    notes.map((n) => [n.id, n.t_end]),
+    [
+      ["n0", null],
+      ["n1", 240],
+    ],
+  );
+});
+
+test("a rejected note bumps the count without adding a note", () => {
+  const { store, seen, frame } = harness();
+  store.beginLoad();
+  store.finishLoad(VIEW, timeline([]));
+  store.receive("note_rejected", {
+    run_id: "run_1",
+    t: 120,
+    attempt_id: "att_1",
+    reasons: ["number outside a ref: 25"],
+  });
+  frame();
+  assert.equal(seen.at(-1)!.rejected, 1);
+  assert.deepEqual(seen.at(-1)!.notes, []);
+});
+
+test("a verdict event replaces the verdict", () => {
+  const { store, seen, frame } = harness();
+  store.beginLoad();
+  store.finishLoad(VIEW, timeline([]));
+  store.receive("verdict", { run_id: "run_1", t: 600, verdict: verdict("v1", "TOO_EARLY") });
+  store.receive("verdict", { run_id: "run_1", t: 700, verdict: verdict("v2", "INCONCLUSIVE") });
+  frame();
+  assert.equal(seen.at(-1)!.verdict?.id, "v2");
 });

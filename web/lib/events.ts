@@ -11,6 +11,9 @@ export const EVENT_TYPES = [
   "run_progress",
   "run_status",
   "spend",
+  "note",
+  "note_rejected",
+  "verdict",
 ] as const;
 
 /**

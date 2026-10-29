@@ -1,4 +1,23 @@
-import type { DetectionOutline, Experiment, RecipeSummary, RunView, Timeline } from "./types";
+import type {
+  DetectionOutline,
+  Experiment,
+  FrameRequest,
+  Note,
+  NotesView,
+  Plan,
+  PlanDraft,
+  Preview,
+  RecipeDraft,
+  RecipeSummary,
+  Review,
+  ReviewDraft,
+  RunCreate,
+  RunView,
+  Setup,
+  Timeline,
+  Verdict,
+  VesselProposal,
+} from "./types";
 
 // An empty NEXT_PUBLIC_ARGUS_API counts as unset, as it does for the worker's settings.
 export function apiBase(): string {
@@ -81,4 +100,88 @@ export function stopRun(runId: string): Promise<RunView> {
 export function frameUrl(runId: string, frameId: string, width?: number): string {
   const path = `/api/runs/${encodeURIComponent(runId)}/frames/${encodeURIComponent(frameId)}.jpg`;
   return `${apiBase()}${path}${width ? `?w=${width}` : ""}`;
+}
+
+const experimentPath = (id: string) => `/api/experiments/${encodeURIComponent(id)}`;
+const runPath = (id: string) => `/api/runs/${encodeURIComponent(id)}`;
+const send = (method: string, body?: unknown): RequestInit => ({
+  method,
+  ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+});
+
+// ---- Notes, verdicts and reviews ----
+
+export function getNotes(runId: string): Promise<NotesView> {
+  return request(`${runPath(runId)}/notes`);
+}
+
+export function postNote(
+  runId: string,
+  note: { t: number; tag: NonNullable<Note["tag"]>; text: string },
+): Promise<Note> {
+  return request(`${runPath(runId)}/notes`, send("POST", note));
+}
+
+export function getVerdict(runId: string): Promise<Verdict | null> {
+  return request(`${runPath(runId)}/verdict`);
+}
+
+/** A 409 says why no verdict can be given now (no locked plan, the spend cap). */
+export function askVerdict(runId: string): Promise<Verdict> {
+  return request(`${runPath(runId)}/verdict`, send("POST"));
+}
+
+export function postReview(runId: string, review: ReviewDraft): Promise<Review> {
+  return request(`${runPath(runId)}/reviews`, send("POST", review));
+}
+
+// ---- Setup, plan and start ----
+
+export function getSetup(experimentId: string): Promise<Setup> {
+  return request(`${experimentPath(experimentId)}/setup`);
+}
+
+export function putSetup(experimentId: string, setup: Setup): Promise<Setup> {
+  return request(`${experimentPath(experimentId)}/setup`, send("PUT", setup));
+}
+
+export function describe(experimentId: string, words: string): Promise<RecipeDraft> {
+  return request(`${experimentPath(experimentId)}/describe`, send("POST", { words }));
+}
+
+export function preview(experimentId: string, frame: FrameRequest): Promise<Preview> {
+  return request(`${experimentPath(experimentId)}/preview`, send("POST", frame));
+}
+
+export function getPlans(experimentId: string): Promise<Plan[]> {
+  return request(`${experimentPath(experimentId)}/plan`);
+}
+
+export function putPlan(experimentId: string, plan: PlanDraft): Promise<Plan> {
+  return request(`${experimentPath(experimentId)}/plan`, send("PUT", plan));
+}
+
+export function lockPlan(experimentId: string): Promise<Plan> {
+  return request(`${experimentPath(experimentId)}/plan/lock`, send("POST"));
+}
+
+export function startRun(experimentId: string, body: RunCreate): Promise<RunView> {
+  return request(`${experimentPath(experimentId)}/runs`, send("POST", body));
+}
+
+// ---- Cameras and vessel detection ----
+
+export function getCameras(): Promise<{ index: number }[]> {
+  return request("/api/cameras");
+}
+
+export function cameraStreamUrl(index: number): string {
+  return `${apiBase()}/api/cameras/${index}/stream.mjpg`;
+}
+
+export function detectVessels(
+  experimentId: string,
+  body: FrameRequest & { concept: string },
+): Promise<VesselProposal[]> {
+  return request(`${experimentPath(experimentId)}/vessels/detect`, send("POST", body));
 }

@@ -1,4 +1,14 @@
-import type { FrameRow, MeasurementRow, RunEvent, RunProgress, RunView, Timeline } from "./types";
+import type {
+  FrameRow,
+  MeasurementRow,
+  Note,
+  NotesView,
+  RunEvent,
+  RunProgress,
+  RunView,
+  Timeline,
+  Verdict,
+} from "./types";
 
 // One run's data as the Run view sees it, kept current from REST loads and SSE events. Plain TypeScript with
 // type-only imports, so Node's test runner can load it as it is.
@@ -9,7 +19,15 @@ export type RunSnapshot = {
   measurements: MeasurementRow[]; // sorted by t
   events: RunEvent[];
   progress: RunProgress | null;
+  notes: Note[]; // sorted by t
+  rejected: number; // AI answers the claim checker turned back
+  verdict: Verdict | null; // the latest
 };
+
+/** What a load brings besides the view and the timeline. */
+export type RunExtras = { notes: NotesView; verdict: Verdict | null };
+
+const NO_EXTRAS: RunExtras = { notes: { notes: [], rejected: 0 }, verdict: null };
 
 export type EventData = Record<string, unknown> & { run_id?: string };
 
@@ -52,7 +70,7 @@ export class SnapshotStore {
     this.loads = Math.max(0, this.loads - 1);
   }
 
-  finishLoad(view: RunView, timeline: Timeline): RunSnapshot {
+  finishLoad(view: RunView, timeline: Timeline, extras: RunExtras = NO_EXTRAS): RunSnapshot {
     this.loads = Math.max(0, this.loads - 1);
     const measurements = [...timeline.measurements].sort(byT);
     this.measurementIds = new Set(measurements.map((m) => m.id));
@@ -62,6 +80,9 @@ export class SnapshotStore {
       measurements,
       events: [...timeline.events],
       progress: null,
+      notes: [...extras.notes.notes].sort(byT),
+      rejected: extras.notes.rejected,
+      verdict: extras.verdict,
     };
     if (this.loads === 0 && this.waiting.length > 0) {
       const waiting = this.waiting;
@@ -107,6 +128,9 @@ export class SnapshotStore {
     let measurementsSorted = true;
     let frames: FrameRow[] | null = null;
     let events: RunEvent[] | null = null;
+    let notes: Note[] | null = null;
+    let rejected = s.rejected;
+    let verdict = s.verdict;
     let progress = s.progress;
     let view = s.view;
 
@@ -152,14 +176,30 @@ export class SnapshotStore {
         progress = data as unknown as RunProgress;
       } else if (type === "spend") {
         view = { ...view, spend_usd: Number(data.spent_usd) };
+      } else if (type === "note") {
+        // A quiet note that goes on comes again with a later end time: it replaces itself.
+        const note = data.note as Note;
+        notes ??= s.notes.slice();
+        const at = notes.findIndex((n) => n.id === note.id);
+        if (at >= 0) notes[at] = note;
+        else if (notes.length === 0 || notes[notes.length - 1].t <= note.t) notes.push(note);
+        else notes = [...notes, note].sort(byT);
+      } else if (type === "note_rejected") {
+        rejected += 1;
+      } else if (type === "verdict") {
+        verdict = data.verdict as Verdict;
       }
     }
 
     if (measurements && !measurementsSorted) measurements.sort(byT);
-    if (!measurements && !frames && !events && progress === s.progress && view === s.view) return s;
+    const same = progress === s.progress && view === s.view && rejected === s.rejected && verdict === s.verdict;
+    if (!measurements && !frames && !events && !notes && same) return s;
     return {
       view,
       progress,
+      rejected,
+      verdict,
+      notes: notes ?? s.notes,
       measurements: measurements ?? s.measurements,
       frames: frames ?? s.frames,
       events: events ?? s.events,

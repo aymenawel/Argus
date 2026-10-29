@@ -1,4 +1,4 @@
-import { frameUrl as liveFrameUrl, getDetections, getRun, getTimeline } from "./api";
+import { frameUrl as liveFrameUrl, getDetections, getNotes, getRun, getTimeline, getVerdict } from "./api";
 import { subscribe as subscribeEvents } from "./events";
 import { type EventData, type RunSnapshot, SnapshotStore } from "./run-snapshot";
 import type { DetectionOutline } from "./types";
@@ -30,8 +30,13 @@ export class LiveSource implements RunSource {
   async load(): Promise<RunSnapshot> {
     this.store.beginLoad();
     try {
-      const [view, timeline] = await Promise.all([getRun(this.runId), getTimeline(this.runId)]);
-      return this.store.finishLoad(view, timeline);
+      const [view, timeline, notes, verdict] = await Promise.all([
+        getRun(this.runId),
+        getTimeline(this.runId),
+        getNotes(this.runId),
+        getVerdict(this.runId),
+      ]);
+      return this.store.finishLoad(view, timeline, { notes, verdict });
     } catch (error) {
       this.store.failLoad();
       throw error;
