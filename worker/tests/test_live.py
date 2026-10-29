@@ -16,9 +16,18 @@ from argus.pipeline.analyzer import RunContext
 from argus.pipeline.live import CameraHub, run_live
 from argus.recipes.model import Recipe, WatcherSpec
 from argus.storage.files import RunFiles
-from argus.storage.repos import add_vessels, create_run, events_for_run, frames_for_run, get_run, measurements_for_run
+from argus.storage.repos import (
+    add_vessels,
+    create_run,
+    events_for_run,
+    frames_for_run,
+    get_run,
+    measurements_for_run,
+    notes_for_run,
+)
 from argus.watcher import Watcher, WatcherSettings
 from tests.helpers import CARD_AREA, on_a_bench, scene_with_bar_on_card_plane
+from tests.reasoning import FakeReasoner, clean_note
 from tests.test_analyzer import FakeSegmenter
 
 DT = 0.5
@@ -330,3 +339,28 @@ async def test_a_hand_beside_a_vessel_pauses_that_vessel_and_is_logged(make_ctx)
     assert hand.vessel_id == ctx.vessels[0].id and hand.t_start == pytest.approx(3.0)
     times = {m.t for m in measurements_for_run(ctx.db, ctx.run.id, metric="colour_l")}
     assert not any(3.0 <= t < 6.0 for t in times) and any(t >= 6.0 for t in times)  # a gap, then readings again
+
+
+@pytest.mark.anyio
+async def test_notes_are_written_while_capture_goes_on(make_ctx):
+    ctx, watcher = make_ctx(step=1.0)
+    released, reads = asyncio.Event(), []
+
+    class AnswersLate(FakeReasoner):
+        async def __call__(self, task, **kwargs):
+            await released.wait()  # the first note's answer comes only once the loop has read 10 more frames
+            return await super().__call__(task, **kwargs)
+
+    ctx.reasoner = AnswersLate([clean_note(observation="A reads {ref:m:A:length}.")] * 10)
+    ctx.notes.interval = 4.0
+
+    def on_read(now):
+        reads.append(now)
+        if len(reads) == 20:
+            released.set()
+
+    await asyncio.wait_for(live(ctx, watcher, [SHORT] * 24, on_read=on_read), 60)
+    notes = notes_for_run(ctx.db, ctx.run.id)
+    assert notes and notes[0].t == 4.0 and notes[0].check_status == "passed"
+    assert {5.0, 6.0, 7.0, 8.0, 9.0} <= {f.t for f in frames_for_run(ctx.db, ctx.run.id)}  # stored meanwhile
+    assert all(n.t <= 11.5 for n in notes)

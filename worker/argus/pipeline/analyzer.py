@@ -24,6 +24,8 @@ from argus.config import Settings
 from argus.domain import Detection, EventKind, MeasurementDraft, ModelCallDraft, Run, Vessel, new_id
 from argus.measure.engine import ColourBaseline, VesselMeasurements, measure_vessel
 from argus.measure.uncertainty import format_measurement
+from argus.pipeline.notes import NoteWriter
+from argus.reason import Reasoner
 from argus.recipes.model import Recipe
 from argus.segment import Clip, MaskPatch, SegmentError, SegmentResult, segment
 from argus.segment.outline import outline_polygons
@@ -94,6 +96,7 @@ class RunContext:
     vessels: list[Vessel]
     segmenter: Segmenter
     calibration: RunCalibration | None = None
+    reasoner: Reasoner | None = None  # None: no AI notes in this run
     matcher: TrackMatcher = field(default_factory=TrackMatcher)
     last_masks: dict[str, dict[str, np.ndarray]] = field(default_factory=dict)
     baselines: dict[str, dict[str, ColourBaseline]] = field(default_factory=dict)
@@ -108,10 +111,12 @@ class RunContext:
     spend_lock: asyncio.Lock = field(init=False, default_factory=asyncio.Lock)
     reserved_usd: float = 0.0  # expected cost of the calls in flight, not yet logged
     limit_reported: set[str] = field(default_factory=set)  # concepts that hit SAM's object limit
+    notes: NoteWriter = field(init=False)
 
     def __post_init__(self) -> None:
         self.semaphore = asyncio.Semaphore(self.settings.sam_concurrency)
         self.rules = RuleEvaluator(self.recipe)
+        self.notes = NoteWriter(self)
 
     def publish(self, kind: str, data: dict) -> None:
         self.broker.publish(kind, {"run_id": self.run.id, **data})

@@ -1,7 +1,7 @@
 -- Phase 3 (spec §5, §7): the structured prediction a verdict is judged against, the setup wizard's draft, and
 -- the explanation layer: derived numbers, notes, every note attempt, verdicts and researcher reviews.
--- Derived numbers, note attempts, verdicts and reviews are append-only; a note may only gain its end time,
--- once, when quiet "no change" notes collapse into one.
+-- Derived numbers, note attempts, verdicts and reviews are append-only; a note may only move its end time
+-- later, as quiet "no change" notes collapse into one.
 
 ALTER TABLE plans ADD COLUMN metric TEXT;
 ALTER TABLE plans ADD COLUMN direction TEXT;
@@ -105,9 +105,9 @@ BEGIN
     SELECT RAISE(ABORT, 'derived numbers are evidence');
 END;
 
--- Notes: a note may gain its end time once; nothing else changes
-CREATE TRIGGER notes_end_once BEFORE UPDATE ON notes
-WHEN OLD.t_end IS NOT NULL OR NEW.t_end IS NULL
+-- Notes: a note's end time may only move later; nothing else changes
+CREATE TRIGGER notes_end_later BEFORE UPDATE ON notes
+WHEN NEW.t_end IS NULL OR (OLD.t_end IS NOT NULL AND NEW.t_end < OLD.t_end)
     OR NEW.id IS NOT OLD.id OR NEW.run_id IS NOT OLD.run_id OR NEW.t IS NOT OLD.t
     OR NEW.author IS NOT OLD.author OR NEW.level IS NOT OLD.level OR NEW.tag IS NOT OLD.tag
     OR NEW.body IS NOT OLD.body OR NEW.refs IS NOT OLD.refs OR NEW.evidence IS NOT OLD.evidence

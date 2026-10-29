@@ -46,10 +46,16 @@ def load_schema(name: str) -> dict:
     return _without_comments(json.loads((PROMPTS_DIR / "schemas" / f"{name}.json").read_text(encoding="utf-8")))
 
 
+def method_card(recipe: Recipe) -> str:
+    """The recipe's method card, relative to prompts/: the general one for a recipe that has none of its own."""
+    own = f"recipes/{recipe.id}/method.md"
+    return own if (PROMPTS_DIR / own).is_file() else "recipes/general/method.md"
+
+
 def prompt_version(recipe: Recipe) -> str:
     """Changes whenever a prompt, the recipe's method card or a schema changes, so the cache key does too."""
     digest = hashlib.sha256()
-    files = [PROMPTS_DIR / "recipes" / recipe.id / "method.md"]
+    files = [PROMPTS_DIR / method_card(recipe)]
     files += sorted(
         p for p in PROMPTS_DIR.rglob("*") if p.is_file() and "recipes" not in p.relative_to(PROMPTS_DIR).parts
     )
@@ -114,7 +120,7 @@ def notes_block(notes: Sequence[Note]) -> str:
 def _stable(recipe: Recipe, plan: Plan | None) -> tuple[str, ...]:
     return (
         load_prompt("system/scientific-rules.md"),
-        load_prompt(f"recipes/{recipe.id}/method.md"),
+        load_prompt(method_card(recipe)),
         plan_block(plan),
     )
 
@@ -218,7 +224,7 @@ def describe_task(experiment: Experiment, recipe: Recipe, words: str) -> tuple[R
         function="describe",
         experiment_id=experiment.id,
         prompt_version=prompt_version(recipe),
-        stable=(load_prompt("system/scientific-rules.md"), load_prompt(f"recipes/{recipe.id}/method.md")),
+        stable=(load_prompt("system/scientific-rules.md"), load_prompt(method_card(recipe))),
         variable=(
             f"RECIPE: {recipe.title}\nMEASURABLE METRICS: {listed}\nRECIPE RIVALS: {'; '.join(recipe.rivals)}",
             load_prompt("setup/describe.md"),

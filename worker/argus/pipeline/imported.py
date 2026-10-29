@@ -5,7 +5,8 @@
    calibrated and stored;
 2. segment: one H.264 crop clip per vessel and concept goes to SAM in video mode (image mode on the
    full frame, sample by sample and shared by every vessel, if video mode fails);
-3. measure: each sample goes through the frame analyzer with the masks from stage 2.
+3. measure: each sample goes through the frame analyzer with the masks from stage 2, and the notes due after it
+   are written there and then; the recording ends with a checkpoint note on the whole of it.
 """
 
 from __future__ import annotations
@@ -313,9 +314,15 @@ async def run_import(ctx: RunContext, request: ImportRequest, *, cancel: asyncio
         await analyze_frame(
             ctx, sample.t, image, frame_id=sample.frame_id, segment=False, masks=frame_masks, quality_flags=sample.flags
         )
+        if ctx.reasoner is not None:
+            level = ctx.notes.due(sample.t, await asyncio.to_thread(ctx.notes.fresh_events, sample.t))
+            if level is not None:
+                await ctx.notes.write(sample.t, level, image_bgr=image)
         elapsed = max(time.perf_counter() - started, 1e-6)
         ctx.publish(
             "run_progress",
             {"stage": "measure", "t": sample.t, "t_end": t_end, "speed": round((sample.t - t0) / elapsed, 2)},
         )
+    if ctx.reasoner is not None and ctx.notes.last_t < t_end:  # a recording ends with a note on the whole of it
+        await ctx.notes.write(t_end, "checkpoint", image_bgr=image)
     return await asyncio.to_thread(_finish, ctx, RunStatus.FINISHED)

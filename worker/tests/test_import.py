@@ -1,6 +1,7 @@
 """The import pipeline on a synthetic clip: a card and a bar that grows in vessel A. Fake segmenter, no network."""
 
 import asyncio
+from dataclasses import replace
 
 import cv2
 import numpy as np
@@ -16,11 +17,20 @@ from argus.pipeline.analyzer import RunContext
 from argus.pipeline.imported import ImportRequest, run_import
 from argus.pipeline.jobs import RunJobs
 from argus.pipeline.live import CameraHub
-from argus.recipes.model import Recipe
+from argus.recipes.model import EventSpec, Recipe
 from argus.segment import MaskPatch, SegmentError, SegmentResult, Track, TrackFrame
 from argus.storage.files import RunFiles
-from argus.storage.repos import add_vessels, create_run, events_for_run, frames_for_run, get_run, measurements_for_run
+from argus.storage.repos import (
+    add_vessels,
+    create_run,
+    events_for_run,
+    frames_for_run,
+    get_run,
+    measurements_for_run,
+    notes_for_run,
+)
 from tests.helpers import on_a_bench, scene_with_bar_on_card_plane
+from tests.reasoning import FakeReasoner, clean_note
 
 FPS, FRAMES, SCALE = 10, 120, 60  # 12 s of video = 12 run minutes
 RECIPE = Recipe.model_validate(
@@ -336,3 +346,17 @@ async def test_a_hand_beside_a_vessel_in_a_recording_is_logged_and_skipped(ctx, 
     assert [(e.vessel_id, e.t_start) for e in hands] == [(ctx.vessels[0].id, 300.0)]
     times = {m.t for m in lengths_of_a(ctx)}
     assert 300.0 not in times and {240.0, 360.0} <= times
+
+
+@pytest.mark.anyio
+async def test_an_import_notes_a_rule_crossing_and_closes_with_a_checkpoint(ctx, clip):
+    recipe = RECIPE.model_copy(update={"events": [EventSpec(id="long", when="length > 30")]})
+    answers = [clean_note(observation="A reads {ref:m:A:length}.")] * 4
+    ctx = replace(ctx, recipe=recipe, reasoner=FakeReasoner(answers))
+    status = await run_import(ctx, request(clip), cancel=asyncio.Event())
+    notes = notes_for_run(ctx.db, ctx.run.id)
+    crossing = min(e.t_start for e in events_for_run(ctx.db, ctx.run.id) if e.kind == "rule")
+    last = max(f.t for f in frames_for_run(ctx.db, ctx.run.id))
+    assert status is RunStatus.FINISHED and [n.level for n in notes] == ["event", "checkpoint"]
+    assert notes[0].t == crossing and notes[1].t == last  # in time order, the last one closing the run
+    assert all(n.check_status == "passed" for n in notes) and ctx.reasoner.calls == 2

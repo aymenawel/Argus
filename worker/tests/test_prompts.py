@@ -162,6 +162,13 @@ def test_every_recipe_has_a_short_method_card():
         assert 40 < len(card.split()) <= 250
 
 
+def test_a_recipe_without_a_method_card_uses_the_general_one():
+    custom = COLOUR.model_copy(update={"id": "my-own-recipe"})
+    task = note_task("checkpoint", custom, None, RefTable({}), [], [])
+    assert task.stable[1] == load_prompt("recipes/general/method.md")
+    assert prompt_version(custom).startswith("p")
+
+
 def test_the_rules_say_numbers_come_only_as_refs():
     rules = load_prompt("system/scientific-rules.md")
     assert "{ref:" in rules and "Safety" in rules

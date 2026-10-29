@@ -193,11 +193,12 @@ def test_reasoning_evidence_is_append_only(db, run, table, add):
         c.execute(f"INSERT OR REPLACE INTO {table}({columns}) VALUES ({','.join('?' * len(row))})", list(row.values()))
 
 
-def test_a_note_may_only_gain_its_end_time_once(db, run):
+def test_a_note_may_only_move_its_end_time_later(db, run):
     n = add_note(db, run.id, note())
     assert extend_note(db, n.id, 50.0).t_end == 50.0
+    assert extend_note(db, n.id, 90.0).t_end == 90.0  # a quiet stretch goes on
     with pytest.raises(sqlite3.IntegrityError):
-        extend_note(db, n.id, 90.0)
+        extend_note(db, n.id, 60.0)
     with pytest.raises(sqlite3.IntegrityError), db.write() as c:
         c.execute("UPDATE notes SET body='{}' WHERE id=?", (n.id,))
     with pytest.raises(sqlite3.IntegrityError), db.write() as c:

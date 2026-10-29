@@ -197,7 +197,8 @@ async def run_live(
 
     Capture never waits on the network (spec §4.3): frames are analyzed in background tasks, at most one of them
     segmenting. A segmentation that can't start yet (no calibration, one still in flight, too soon after the last)
-    is owed, not dropped.
+    is owed, not dropped. A note due after an analysis is written in the background too, one at a time: a note due
+    while one is in flight is dropped (its events wait for the next one).
     """
     step, interval = ctx.recipe.analysis_step_s, ctx.settings.segment_interval_s
     properties = camera_properties or {}
@@ -207,6 +208,7 @@ async def run_live(
     watching = asyncio.Lock()  # the watcher is read in a worker thread and updated when a segmentation lands
     pending: set[asyncio.Task] = set()
     segmenting: asyncio.Task | None = None
+    writing: asyncio.Task | None = None  # the note in flight
     owed = scene_moved = False
     in_trouble: set[str] = set()  # quality problems already reported, until a good frame clears them
     t = 0.0
@@ -216,6 +218,15 @@ async def run_live(
         if segment and outcome.segmented:
             async with watching:
                 await asyncio.to_thread(watcher.mark_analyzed, t, image)
+        if ctx.reasoner is not None:
+            await note_if_due(t, image)
+
+    async def note_if_due(t: float, image: np.ndarray) -> None:
+        nonlocal writing
+        level = ctx.notes.due(t, await asyncio.to_thread(ctx.notes.fresh_events, t))
+        if level is not None and (writing is None or writing.done()):
+            writing = asyncio.create_task(ctx.notes.write(t, level, image_bgr=image))
+            pending.add(writing)
 
     try:
         while not cancel.is_set():
@@ -285,7 +296,10 @@ async def run_live(
                 if wants_segment:
                     owed, last_segment, segmenting = False, t, task
             await sleep(1 / max_fps)
-        await asyncio.gather(*pending)  # what was captured is analyzed before the run ends
+        while pending:  # what was captured is analyzed before the run ends (and a note started is written)
+            started = list(pending)
+            await asyncio.gather(*started)
+            pending.difference_update(started)
     except BaseException:
         for task in pending:
             task.cancel()
