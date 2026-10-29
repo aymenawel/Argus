@@ -6,6 +6,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
+from argus.analyze.rules import parse_rule
+
 METHODS_BY_FAMILY = {
     "size": {"area", "height", "skeleton_length"},
     "colour": {"lab_mean", "delta_e"},
@@ -110,3 +112,14 @@ class Recipe(Spec):
         if main not in ids:
             raise ValueError(f"'{main}' is not one of this recipe's measurements")
         return main
+
+    @field_validator("events")
+    @classmethod
+    def events_are_rules_on_known_metrics(cls, events: list[EventSpec], info: ValidationInfo) -> list[EventSpec]:
+        measurements = info.data.get("measurements", [])
+        known = {m.id for m in measurements} | {f"{m.id}_{axis}" for m in measurements for axis in "lab"}
+        for event in events:
+            rule = parse_rule(event.id, event.when)
+            if rule.metric not in known:
+                raise ValueError(f"event '{event.id}' uses '{rule.metric}', which this recipe doesn't measure")
+        return events

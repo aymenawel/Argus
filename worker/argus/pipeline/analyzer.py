@@ -15,6 +15,7 @@ from typing import Any, Literal, Protocol
 import cv2
 import numpy as np
 
+from argus.analyze.rules import RuleEvaluator
 from argus.api.events import EventBroker
 from argus.calibration.colour import ColourReference, PatchReading, neutral_drift, read_patches
 from argus.calibration.detect import detect_card
@@ -103,12 +104,14 @@ class RunContext:
     colour_reference: ColourReference | None = None  # the settled reference colour is corrected against
     settling: list[ColourReference] = field(default_factory=list)  # card readings until it settles
     semaphore: asyncio.Semaphore = field(init=False)
+    rules: RuleEvaluator = field(init=False)  # the recipe's rule events, fired once per vessel
     spend_lock: asyncio.Lock = field(init=False, default_factory=asyncio.Lock)
     reserved_usd: float = 0.0  # expected cost of the calls in flight, not yet logged
     limit_reported: set[str] = field(default_factory=set)  # concepts that hit SAM's object limit
 
     def __post_init__(self) -> None:
         self.semaphore = asyncio.Semaphore(self.settings.sam_concurrency)
+        self.rules = RuleEvaluator(self.recipe)
 
     def publish(self, kind: str, data: dict) -> None:
         self.broker.publish(kind, {"run_id": self.run.id, **data})
@@ -462,4 +465,7 @@ async def analyze_frame(
                 "display": format_measurement(row.value, row.uncertainty, row.unit),
             },
         )
+    for rule, row in ctx.rules.fired(rows):
+        detail = {"rule": rule.id, "metric": rule.metric, "measurement_id": row.id}
+        await ctx.event(row.t, EventKind.RULE, "rule", detail, vessel_id=row.vessel_id, frame_ids=[frame_id])
     return AnalysisOutcome(frame_id, bool(keyed), len(rows), failed)
