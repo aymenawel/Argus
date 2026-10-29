@@ -1,5 +1,7 @@
 # 20 · Chosen demo experiment: salt-stress germination dose-response
 
+> **Not run (Oct 29, D-70):** the multi-day run was dropped. The long replay in the demo re-analyses the published Genze & Grimm petri-dish dataset instead; see `docs/research/Demo experiments and footage options.md`.
+
 > **Decided Oct 27, 2026 (D-31).** This is the main real experiment for the demo. The steel corrosion test (`06-modes-and-recipes.md` catalog) stays a **later, optional** second run if time allows.
 
 ## Status and suggested tweaks (Oct 27 evening) [proposed, Q-14]
@@ -54,7 +56,7 @@
 9. **Camera:** AC power, manual focus, manual exposure, fixed white balance, Full HD, **fast motion ×600** (one frame every 20 s; ~7 min of video, ~2 GB for 72 h).
 10. **Write the hypothesis and prediction with the time,** film the phone clock for 5 s, start recording. Check after 1 hour that it's still recording.
 11. **Don't touch anything.** If a towel dries out, add the same small amount of water to every jar and note the time.
-12. **Stop Thursday evening (Oct 30):** stop recording, film the clock again, copy the video to the laptop, keep the A–F key.
+12. **Stop Friday evening (Oct 30):** stop recording, film the clock again, copy the video to the laptop, keep the A–F key.
 
 ## What Argus measures
 
