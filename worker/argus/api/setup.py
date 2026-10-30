@@ -23,6 +23,7 @@ from argus.pipeline.live import CameraHub
 from argus.reason import ReasonError
 from argus.reason.prompts import describe_task
 from argus.recipes.model import Recipe
+from argus.recipes.resolve import recipe_for
 from argus.segment import SegmentError
 from argus.segment.outline import outline_polygons
 from argus.segment.tracking import assign_to_vessels
@@ -45,7 +46,7 @@ def register_setup_routes(
         experiment = repos.get_experiment(db, experiment_id)
         if experiment is None:
             raise HTTPException(status_code=404, detail="experiment not found")
-        return experiment, recipes[experiment.recipe_id]
+        return experiment, recipe_for(db, recipes, experiment)
 
     @app.get("/api/experiments/{experiment_id}/setup")
     def get_setup(experiment_id: str) -> Setup:

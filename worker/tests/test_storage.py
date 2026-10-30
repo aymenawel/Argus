@@ -21,7 +21,7 @@ from tests.records import DRAFT, draft
 def test_wal_mode_and_schema_version(db):
     with db.read() as c:
         assert c.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
-        assert c.execute("PRAGMA user_version").fetchone()[0] == 4
+        assert c.execute("PRAGMA user_version").fetchone()[0] == 5
 
 
 def test_path_with_space_and_accent_round_trips(db):

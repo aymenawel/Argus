@@ -15,6 +15,7 @@ from argus.domain import EventKind, Note, NoteDraft, Review, ReviewDraft, Run, V
 from argus.pipeline.jobs import RunJobs
 from argus.pipeline.verdict import VerdictRefused, run_verdict
 from argus.recipes.model import Recipe
+from argus.recipes.resolve import recipe_for
 from argus.storage import repos
 from argus.storage.db import Database
 
@@ -94,7 +95,7 @@ def register_note_routes(
             raise HTTPException(status_code=404, detail="experiment not found")
         try:
             return await run_verdict(
-                db, broker, settings, run, recipe=recipes[experiment.recipe_id], reasoner=jobs.reasoner
+                db, broker, settings, run, recipe=recipe_for(db, recipes, experiment), reasoner=jobs.reasoner
             )
         except VerdictRefused as error:
             raise HTTPException(status_code=409, detail=str(error)) from error

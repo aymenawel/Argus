@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from argus.api.cameras import register_camera_routes
 from argus.api.events import EventBroker, event_stream
@@ -17,12 +17,14 @@ from argus.api.notes import register_note_routes
 from argus.api.runs import register_run_routes
 from argus.api.setup import register_setup_routes
 from argus.config import Settings, load_settings
-from argus.domain import Experiment
+from argus.domain import Experiment, PlanDraft
 from argus.pipeline.jobs import RunJobs
 from argus.pipeline.live import CameraHub
 from argus.reason import SettingsReasoner
+from argus.recipes.draft import RecipeRefused, draft_recipe
 from argus.recipes.loader import load_all
 from argus.recipes.model import Recipe
+from argus.recipes.resolve import recipe_for
 from argus.storage import repos
 from argus.storage.db import Database
 
@@ -30,8 +32,31 @@ VERSION = "0.1.0"
 
 
 class ExperimentCreate(BaseModel):
+    """A template by id, or the experiment's own recipe (drafted from words, D-73) with its plan draft."""
+
     title: str = Field(min_length=1, max_length=200)
-    recipe_id: str
+    recipe_id: str | None = None
+    recipe: dict | None = None
+    plan: PlanDraft | None = None
+
+    @model_validator(mode="after")
+    def one_recipe(self) -> ExperimentCreate:
+        if (self.recipe_id is None) == (self.recipe is None):
+            raise ValueError("give either recipe_id (a template) or recipe (your own)")
+        return self
+
+
+class DraftIn(BaseModel):
+    words: str = Field(min_length=1, max_length=4000)
+
+
+def own_recipe_or_422(body: dict) -> Recipe:
+    """A recipe from the researcher or a draft, checked like a recipe file; 422 with every reason."""
+    try:
+        return Recipe.model_validate({**body, "id": "own", "version": body.get("version", 1)})
+    except ValidationError as error:
+        reasons = [f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in error.errors()]
+        raise HTTPException(status_code=422, detail=reasons) from error
 
 
 class RecipeSummary(BaseModel):
@@ -111,14 +136,62 @@ def create_app(
     def list_experiments() -> list[Experiment]:
         return repos.list_experiments(db)
 
+    @app.post("/api/experiments/draft")
+    async def draft(body: DraftIn) -> dict:
+        """A recipe and plan for the researcher's words, checked by code; nothing is saved."""
+        if jobs.reasoner is None:
+            raise HTTPException(status_code=503, detail="reasoning is off: MODEL_API_KEY is not set")
+        try:
+            result, calls = await draft_recipe(body.words, reasoner=jobs.reasoner, templates=recipes)
+        except RecipeRefused as refused:
+            for call in refused.calls:
+                await asyncio.to_thread(repos.add_model_call, db, None, None, call)
+            raise HTTPException(status_code=422, detail=refused.reasons) from refused
+        for call in calls:
+            await asyncio.to_thread(repos.add_model_call, db, None, None, call)
+        return {
+            "recipe": result.recipe.model_dump(by_alias=True, mode="json"),
+            "plan": result.plan.model_dump(mode="json"),
+            "setup_hints": result.setup_hints,
+            "safety_notes": result.safety_notes,
+            "question": result.question,
+        }
+
     @app.post("/api/experiments", status_code=201)
     def create_experiment(body: ExperimentCreate) -> Experiment:
-        recipe = recipes.get(body.recipe_id)
-        if recipe is None:
-            raise HTTPException(status_code=422, detail=f"unknown recipe: {body.recipe_id}")
-        experiment = repos.create_experiment(db, body.title, recipe.id, recipe.version)
+        if body.recipe_id is not None:
+            template = recipes.get(body.recipe_id)
+            if template is None:
+                raise HTTPException(status_code=422, detail=f"unknown recipe: {body.recipe_id}")
+            experiment = repos.create_experiment(db, body.title, template.id, template.version)
+        else:
+            own = own_recipe_or_422(body.recipe or {})
+            if body.plan is not None and body.plan.metric and body.plan.metric not in own.stored_metrics():
+                raise HTTPException(status_code=422, detail=f"the plan's metric '{body.plan.metric}' isn't measured")
+            experiment = repos.create_experiment(db, body.title, "own", 1)
+            repos.save_recipe(db, experiment.id, own, "drafted")
+            if body.plan is not None:
+                repos.save_plan_draft(db, experiment.id, body.plan)
+            experiment = repos.get_experiment(db, experiment.id) or experiment
         broker.publish("experiment", experiment.model_dump(mode="json"))
         return experiment
+
+    @app.get("/api/experiments/{experiment_id}/recipe")
+    def get_experiment_recipe(experiment_id: str) -> dict:
+        experiment = repos.get_experiment(db, experiment_id)
+        if experiment is None:
+            raise HTTPException(status_code=404, detail="experiment not found")
+        return recipe_for(db, recipes, experiment).model_dump(by_alias=True, mode="json")
+
+    @app.put("/api/experiments/{experiment_id}/recipe")
+    def put_experiment_recipe(experiment_id: str, body: dict) -> dict:
+        """An edited recipe becomes the experiment's next version, until the plan is locked (then it is frozen)."""
+        if repos.get_experiment(db, experiment_id) is None:
+            raise HTTPException(status_code=404, detail="experiment not found")
+        if repos.first_locked_plan(db, experiment_id) is not None:
+            raise HTTPException(status_code=409, detail="the plan is locked: the recipe is frozen with it")
+        repos.save_recipe(db, experiment_id, own_recipe_or_422(body), "edited")
+        return (repos.own_recipe(db, experiment_id) or own_recipe_or_422(body)).model_dump(by_alias=True, mode="json")
 
     @app.get("/api/experiments/{experiment_id}")
     def get_experiment(experiment_id: str) -> Experiment:

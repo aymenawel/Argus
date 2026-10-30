@@ -44,6 +44,7 @@ from argus.domain import (
     new_id,
     plan_sha256,
 )
+from argus.recipes.model import Recipe
 from argus.storage.audit import append_batch
 from argus.storage.db import Database
 
@@ -170,6 +171,34 @@ def lock_plan(db: Database, experiment_id: str) -> Plan:
             )
             c.execute("UPDATE experiments SET status=? WHERE id=?", (ExperimentStatus.LOCKED, experiment_id))
     return next(p for p in get_plans(db, experiment_id) if p.version == latest.version)
+
+
+def save_recipe(db: Database, experiment_id: str, recipe: Recipe, origin: str) -> int:
+    """A new version of the experiment's own recipe, now the one in use (D-73); versions never change."""
+    with db.write() as c:
+        row = c.execute(
+            "SELECT COALESCE(MAX(version), 0) AS v FROM experiment_recipes WHERE experiment_id=?", (experiment_id,)
+        ).fetchone()
+        version = int(row["v"]) + 1
+        body = recipe.model_copy(update={"id": "own", "version": version}).model_dump_json(by_alias=True)
+        c.execute(
+            "INSERT INTO experiment_recipes(experiment_id, version, body, origin, created_at) VALUES (?,?,?,?,?)",
+            (experiment_id, version, body, origin, _now()),
+        )
+        c.execute("UPDATE experiments SET recipe_id='own', recipe_version=? WHERE id=?", (version, experiment_id))
+    return version
+
+
+def own_recipe(db: Database, experiment_id: str, version: int | None = None) -> Recipe | None:
+    """The experiment's own recipe: a given version, or the newest."""
+    query = "SELECT body FROM experiment_recipes WHERE experiment_id=?"
+    params: tuple = (experiment_id,)
+    if version is not None:
+        query += " AND version=?"
+        params += (version,)
+    with db.read() as c:
+        row = c.execute(query + " ORDER BY version DESC LIMIT 1", params).fetchone()
+    return Recipe.model_validate_json(row["body"]) if row else None
 
 
 def first_locked_plan(db: Database, experiment_id: str) -> Plan | None:

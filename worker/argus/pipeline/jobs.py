@@ -22,6 +22,7 @@ from argus.pipeline.live import CameraHub, run_live
 from argus.pipeline.verdict import VerdictRefused, run_verdict
 from argus.reason import Reasoner
 from argus.recipes.model import Recipe
+from argus.recipes.resolve import recipe_for
 from argus.storage.db import Database
 from argus.storage.files import RunFiles
 from argus.storage.repos import (
@@ -68,7 +69,7 @@ class RunJobs:
             broker=self.broker,
             settings=self.settings,
             files=RunFiles(self.settings.data_dir, run.experiment_id, run.id),
-            recipe=self.recipes[experiment.recipe_id],
+            recipe=recipe_for(self.db, self.recipes, experiment),
             run=run,
             vessels=list(vessels),
             segmenter=self.segmenter,
