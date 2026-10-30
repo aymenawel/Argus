@@ -25,7 +25,7 @@ def _rounded(value: float, bounds: tuple[float, float]) -> float:
     """To a hundredth of the search range's order of magnitude: 33.2817 in (10, 50) becomes 33.3."""
     width = bounds[1] - bounds[0]
     places = max(0, 2 - math.floor(math.log10(width))) if width > 0 else 2
-    return round(value, places)
+    return min(max(round(value, places), bounds[0]), bounds[1])  # rounding never takes a pick outside the range
 
 
 def suggest_levels(
@@ -36,8 +36,22 @@ def suggest_levels(
     count: int = 3,
     seed: int = 0,
 ) -> list[float]:
-    """`count` levels to try next, from (level, outcome) per finished vessel: one Ax range parameter, each pair attached
-    and completed as a trial, so the batch comes from the model rather than a random start."""
+    """`count` levels to try next, lowest first (see level_picks)."""
+    return sorted(level for level, _ in level_picks(tested, minimize=minimize, bounds=bounds, count=count, seed=seed))
+
+
+def level_picks(
+    tested: Sequence[tuple[float, float]],
+    *,
+    minimize: bool,
+    bounds: tuple[float, float],
+    count: int = 3,
+    seed: int = 0,
+) -> list[tuple[float, str]]:
+    """`count` levels to try next, each with the Ax generation node that picked it ("MBM": its BoTorch model), from
+    (level, outcome) per finished vessel: one range parameter, each pair attached and completed as a trial. Ax's usual
+    quasi-random start is switched off, since the attached vessels already cover the range: every pick comes from the
+    model of this run's data, on a small plate too."""
     with warnings.catch_warnings():  # Ax and PyTorch warn about their own deprecations on import and while fitting
         warnings.simplefilter("ignore")
         from ax.api.client import Client
@@ -51,8 +65,10 @@ def suggest_levels(
             parameters=[RangeParameterConfig(name=PARAMETER, bounds=bounds, parameter_type="float")],
         )
         client.configure_optimization(objective=f"-{OUTCOME}" if minimize else OUTCOME)
+        client.configure_generation_strategy(initialization_budget=0, initialize_with_center=False)
         for level, outcome in tested:
             index = client.attach_trial(parameters={PARAMETER: float(level)})
             client.complete_trial(trial_index=index, raw_data={OUTCOME: float(outcome)})
         trials = client.get_next_trials(max_trials=count)
-    return sorted(_rounded(float(p[PARAMETER]), bounds) for p in trials.values())
+        nodes = client.summarize().set_index("trial_index")["generation_node"]
+    return [(_rounded(float(p[PARAMETER]), bounds), str(nodes[index])) for index, p in trials.items()]

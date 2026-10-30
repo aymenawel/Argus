@@ -27,7 +27,7 @@ export function FitTable({ fits }: { fits: FitsView }) {
               : !fit.ok
                 ? `No fit: ${fit.reason}`
                 : !fit.reached
-                  ? "Not half-way by the end"
+                  ? "Still rising at the end"
                   : `${fit.curve} curve`;
             return (
               <tr key={v.vessel_id}>

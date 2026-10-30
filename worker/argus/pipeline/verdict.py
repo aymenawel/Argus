@@ -98,6 +98,7 @@ def rival_states(db: Database, run: Run, rivals: Sequence[str]) -> dict[str, Lit
     return states
 
 
+CAPPED_AT = "a slow dish, or one where nothing grew, is evidence too, so nothing stronger than Inconclusive is allowed."
 PLATEAU_SPREAD = 0.25  # plateaus further apart than this: half-way times are halves of different totals
 
 
@@ -113,11 +114,12 @@ def _fit_notes(
         if fit is None:
             continue
         if not fit.ok:
-            notes.append(
-                (f"fit:{vessel.label}", False, f"No fit for {vessel.label}: {fit.reason}; it counts for nothing.")
+            text = (
+                f"No fit for {vessel.label}: {fit.reason}. Without its value the comparison is incomplete: {CAPPED_AT}"
             )
+            notes.append((f"fit:{vessel.label}", False, text))
         elif not fit.reached:
-            text = f"{vessel.label} had not reached half its final value by the end: it counts for nothing."
+            text = f"{vessel.label} was still rising at the end, so its half-way point isn't known: {CAPPED_AT}"
             notes.append((f"fit:{vessel.label}", False, text))
         elif fit.plateau is not None:
             plateaus.append(fit.plateau[0])

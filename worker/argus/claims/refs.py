@@ -12,6 +12,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
 from argus.analyze.fits import fit_series
+from argus.analyze.next_run import pooled_sd
 from argus.analyze.noise import noise_floor, wobble_floor
 from argus.domain import DerivedDraft, Measurement, Plan, Role, RunEvent, Vessel
 from argus.measure.uncertainty import format_measurement
@@ -77,7 +78,9 @@ def _fitted(
     t: float, curve: str, quantity: str, metric: str, vessels: Sequence[Vessel], rows: Mapping[str, list[Measurement]]
 ) -> list[tuple[str, DerivedDraft, float | None, str | None]]:
     """Each vessel's fitted half-way time (h) or rate (unit/h), and each treatment's difference from the controls'
-    mean, as derived rows; a refused or unreached fit gives no ref (the verdict names it)."""
+    mean, as derived rows; a refused or unreached fit gives no ref (the verdict names it). A fit's ± covers the fit
+    only (cumulative readings are autocorrelated), so a difference carries the spread between dishes of one condition
+    as well: one dish against the controls' mean."""
     own, diff, words = FITTED[quantity]
     fitted: dict[str, tuple[DerivedDraft, Measurement]] = {}
     out: list[tuple[str, DerivedDraft, float | None, str | None]] = []
@@ -109,6 +112,12 @@ def _fitted(
     spread = statistics.stdev(values) / math.sqrt(len(values)) if len(values) >= 2 else 0.0
     measured = _quadrature(*(d.uncertainty for d, _ in controls)) / len(controls)
     mean, u_mean = statistics.fmean(values), _quadrature(spread, measured)
+    groups: dict[str, list[float]] = {}
+    for vessel in vessels:
+        if vessel.id in fitted:
+            condition = vessel.condition.value if vessel.condition is not None else ""
+            groups.setdefault(f"{vessel.role}:{condition}", []).append(fitted[vessel.id][0].value)
+    between = pooled_sd(groups) or 0.0  # how much dishes of one condition differ
     for vessel in vessels:
         if vessel.role is not Role.TREATMENT or vessel.id not in fitted:
             continue
@@ -118,7 +127,7 @@ def _fitted(
             kind="difference",
             label=f"{_vessel_label(vessel)}: {metric} {words} minus the controls' mean",
             value=mine.value - mean,
-            uncertainty=_quadrature(mine.uncertainty, u_mean),
+            uncertainty=_quadrature(max(mine.uncertainty, between), u_mean),
             unit=mine.unit,
             inputs=[last.id, *(c.id for _, c in controls)],
             method_version="difference/1",

@@ -18,7 +18,7 @@ import numpy as np
 
 from argus.claims.refs import RefTable
 from argus.config import REPO_ROOT
-from argus.domain import Experiment, Note, Plan, RunEvent, VerdictLevel
+from argus.domain import Direction, Experiment, Note, Plan, RunEvent, VerdictLevel
 from argus.reason import ReasonTask
 from argus.recipes.model import Recipe
 
@@ -76,7 +76,19 @@ def plan_block(plan: Plan | None) -> str:
     ]
     if plan.metric and plan.direction:
         who = f"treatment vessels with condition '{plan.treatment}'" if plan.treatment else "every treatment vessel"
-        line = f"Structured prediction: {who} reads {plan.direction.value} than the controls on {plan.metric}"
+        if plan.quantity == "half_time":  # D-78: judged on the fitted curve, not the readings
+            when = "sooner" if plan.direction is Direction.LOWER else "later"
+            line = (
+                f"Structured prediction: {who} reaches half its fitted plateau of {plan.metric} {when} than the "
+                f"controls (a {plan.direction.value} half-way time)"
+            )
+        elif plan.quantity == "rate":
+            line = (
+                f"Structured prediction: {who} has a {plan.direction.value} fitted rate of {plan.metric} than the "
+                "controls"
+            )
+        else:
+            line = f"Structured prediction: {who} reads {plan.direction.value} than the controls on {plan.metric}"
         if plan.min_effect is not None:
             line += " by at least {ref:plan:min_effect}"
         if plan.checkpoint_s is not None:

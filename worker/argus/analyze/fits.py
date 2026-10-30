@@ -1,6 +1,7 @@
 """Curve fits (D-79): the recipe's curve fitted to one vessel's readings, in code. The half-way time, the rate and the
 plateau carry ± from the fit's covariance (uncertainties.correlated_values). A fit that fails a check is refused
-with its reason, never forced; a half-way point after the last reading is "not reached", never extrapolated.
+with its reason, never forced; a half-way point after the last reading, or a curve still far from its plateau
+at the end, is "not reached", never extrapolated.
 Times go in and out in seconds for samples, and in hours for the half-way time and the rate.
 """
 
@@ -21,7 +22,9 @@ from argus.storage.repos import measurements_for_run
 
 MIN_POINTS = 6
 MIN_DISTINCT = 4
-PLATEAU_LIMIT = 1.5  # a fitted plateau above 1.5 × the highest reading is far from the data
+PLATEAU_LIMIT = 1.5  # a fitted plateau above 1.5 × the highest reading: the curve was still rising at the end
+BASELINE_LIMIT = 0.25  # a curve from zero fitted to readings starting this far up (share of their range) misplaces
+# its half-way point: a baseline (dough's own height) is not part of the rise
 RMSE_LIMIT = 0.25  # residuals above a quarter of the data's range: the curve doesn't describe the series
 SAMPLES = 100
 GROWTH = ("logistic", "gompertz", "first_order", "exponential")
@@ -108,6 +111,14 @@ def fit_series(times_s: Sequence[float], values: Sequence[float], curve: str) ->
     if len(np.unique(np.round(y, 9))) < MIN_DISTINCT:
         return _refused(curve, f"fewer than {MIN_DISTINCT} distinct readings")
     name, function, p0, bounds = _model(curve, t, y)
+    if function in (_logistic, _gompertz, _rising):
+        start, rise = float(np.median(y[:3])), float(y.max() - y.min())
+        if abs(start) > BASELINE_LIMIT * rise:
+            return _refused(
+                curve,
+                f"the readings start well above zero ({start:.3g}, against a rise of {rise:.3g}): a {name} curve "
+                "from zero would misplace the half-way point",
+            )
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", OptimizeWarning)
@@ -152,7 +163,7 @@ def fit_series(times_s: Sequence[float], values: Sequence[float], curve: str) ->
         elif half.std_dev > t_last - t_first:
             return _refused(curve, "the half-way time's ± is larger than the run")
     if reached and plateau is not None and plateau.nominal_value > PLATEAU_LIMIT * float(y.max()):
-        return _refused(curve, f"the series does not follow a {name} curve (its plateau is far above the data)")
+        reached = False  # past half-way of a plateau far above the data: still rising, its half-way point unknown
 
     grid = np.linspace(t_first, t_last, SAMPLES)
     samples = [(float(g * 3600.0), float(v)) for g, v in zip(grid, function(grid, *popt), strict=True)]
@@ -161,7 +172,8 @@ def fit_series(times_s: Sequence[float], values: Sequence[float], curve: str) ->
         ok=True,
         reached=reached,
         half_time_h=_pair(half) if half is not None and reached else None,
-        rate_per_h=_pair(rate) if rate is not None else None,
+        # a growth curve's rate is K × r: with the plateau unknown, so is the rate
+        rate_per_h=_pair(rate) if rate is not None and (reached or plateau is None) else None,
         plateau=_pair(plateau) if plateau is not None and reached else None,
         rmse=rmse,
         samples=samples,

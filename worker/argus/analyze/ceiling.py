@@ -10,6 +10,9 @@ The first rule that applies sets the allowed verdicts:
    opposed); it is small when its ± rules out the smallest effect in the predicted direction. 2+ clear and none
    opposed → {SUPPORTED, INCONCLUSIVE}; every one small or opposed → {NOT_SUPPORTED, INCONCLUSIVE}; otherwise →
    {INCONCLUSIVE}. Without a smallest effect, nothing is small: no clear effect is not evidence of none.
+A plan judged on a fitted half-way time or rate (D-78, D-79) needs 2 controls, judges each effect by its own ± and
+the smallest effect (the readings' noise floor is in another unit), and stays Inconclusive while any compared vessel
+has no fitted value: a dish that never germinated, or was still rising, is evidence too.
 """
 
 from __future__ import annotations
@@ -24,6 +27,8 @@ from argus.domain import Direction, VerdictLevel
 NOISE_FACTOR = 3.0  # an effect under ~3 × the noise floor is "not real yet" (KB 08)
 K_UNCERTAINTY = 2.0  # within 2 × its own ± (about 95 %) a difference could still be zero, or the smallest effect
 MIN_REPLICATES = 2
+MIN_FITTED_CONTROLS = 2  # one control's fit ± says nothing of how dishes differ
+FITTED = ("half_time", "rate")
 
 SUPPORTED, NOT_SUPPORTED, INCONCLUSIVE, TOO_EARLY = (
     VerdictLevel.SUPPORTED,
@@ -78,7 +83,7 @@ def _effect(ref: Ref, inputs: VerdictInputs) -> Literal["clear", "opposed", "sma
     big = (
         size > 0
         and size > K_UNCERTAINTY * ref.uncertainty
-        and size > NOISE_FACTOR * (inputs.noise or 0.0)
+        and (inputs.quantity in FITTED or size > NOISE_FACTOR * (inputs.noise or 0.0))
         and size >= inputs.min_effect
     )
     if big:
@@ -144,7 +149,18 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
             f"{metric} was measured in this run." if inputs.measured else f"{metric} has no readings in this run.",
         )
     )
-    if inputs.controls:
+    fitted = inputs.quantity in FITTED
+    if fitted and 0 < inputs.controls < MIN_FITTED_CONTROLS:
+        checks.append(
+            _check(
+                "control",
+                False,
+                f"Only {inputs.controls} control vessel with a fitted value; at least {MIN_FITTED_CONTROLS} are "
+                "needed, since a fit's ± doesn't show how much dishes differ.",
+                prompt="Too few control vessels with a fitted value to show how much dishes differ.",
+            )
+        )
+    elif inputs.controls:
         checks.append(
             _check(
                 "control",
@@ -169,7 +185,6 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
             else "Too few treatment vessels in the comparison to count replicates.",
         )
     )
-    fitted = inputs.quantity in ("half_time", "rate")
     if fitted:
         words = "half-way times" if inputs.quantity == "half_time" else "rates"
         text = f"Judged on fitted {words}: each carries its fit's ±, in place of a noise floor."
@@ -229,13 +244,17 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
                 f"(clear needs more than {bar}).",
                 (ref.id,),
                 prompt=f"Vessel {label}: {{ref:{ref.id}}} against the controls, {words[verdicts[label]]} (judged "
-                "against the noise floor, its own ± and the smallest effect {ref:plan:min_effect}).",
+                + (
+                    "against its own ± and the smallest effect {ref:plan:min_effect})."
+                    if fitted
+                    else "against the noise floor, its own ± and the smallest effect {ref:plan:min_effect})."
+                ),
             )
         )
 
     if (
         not inputs.measured
-        or inputs.controls == 0
+        or inputs.controls < (MIN_FITTED_CONTROLS if fitted else 1)
         or inputs.treatments < MIN_REPLICATES
         or (inputs.noise is None and not fitted)
     ):
@@ -243,6 +262,8 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
     if any(state == "open" for state in inputs.rivals.values()):
         return {INCONCLUSIVE}, checks
     if not inputs.registered:
+        return {INCONCLUSIVE}, checks
+    if fitted and any(ok is False for _, ok, _ in inputs.fit_notes):  # a compared vessel without a fitted value
         return {INCONCLUSIVE}, checks
     clear = sum(v == "clear" for v in verdicts.values())
     opposed = sum(v == "opposed" for v in verdicts.values())

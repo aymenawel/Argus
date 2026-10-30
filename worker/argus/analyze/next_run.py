@@ -6,6 +6,7 @@ only explains them. Argus suggests; it never starts a run or moves hardware.
 from __future__ import annotations
 
 import math
+import re
 import statistics
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -132,6 +133,18 @@ def _hours(h: float) -> str:
     return f"{h:.0f} h" if h >= 10 else f"{h:.1f} h"
 
 
+NUMBER_AND_UNIT = re.compile(r"^\s*([-+]?\d+(?:[.,]\d+)?)\s*(.*?)\s*$")
+
+
+def _as_number(value: float | str) -> tuple[float, str] | None:
+    """A condition's level and the unit typed after it ("20 °C" → 20, "°C"), since the setup keeps conditions as the
+    researcher typed them; None for text such as "water"."""
+    if isinstance(value, float | int):
+        return float(value), ""
+    match = NUMBER_AND_UNIT.match(value)
+    return (float(match.group(1).replace(",", ".")), match.group(2)) if match else None
+
+
 JUDGED = {"level": "level at the checkpoint", "half_time": "half-way time", "rate": "rate"}
 
 
@@ -142,10 +155,12 @@ def _next_levels(
     conditions = [v.condition for v in vessels if v.condition is not None]
     if not conditions:
         return [], "", "the vessels have no condition to vary"
-    if not all(isinstance(c.value, float | int) for c in conditions):
+    numeric = {v.id: n for v in vessels if v.condition is not None and (n := _as_number(v.condition.value))}
+    if not numeric:
         return [], "", f"{conditions[0].factor} isn't numeric, so there are no levels to search"
-    unit = next((c.unit for c in conditions if c.unit), None) or ""
-    tested = [(float(v.condition.value), judged[v.id]) for v in vessels if v.condition is not None and v.id in judged]
+    # A text condition ("water" as the control) has no level: it stays out of the search.
+    unit = next((c.unit for c in conditions if c.unit), None) or next((u for _, u in numeric.values() if u), "")
+    tested = [(numeric[v.id][0], judged[v.id]) for v in vessels if v.id in numeric and v.id in judged]
     if len({level for level, _ in tested}) < 2:
         return [], unit, "at least two tested levels are needed to search for the next ones"
     bounds = level_bounds([level for level, _ in tested])
@@ -210,9 +225,7 @@ def next_run_numbers(db: Database, run: Run, recipe: Recipe, plan: Plan | None) 
     elif not any(f.ok for f in fits.values()):
         hours_reason = f"unknown: no vessel's readings follow a {recipe.curve} curve"
     elif any(f.ok and not f.reached for f in fits.values()):
-        hours_reason = (
-            f"unknown: a vessel had not reached half its final value by the end; run longer than {_hours(last_h)}"
-        )
+        hours_reason = f"unknown: a vessel was still rising at the end; run longer than {_hours(last_h)}"
     else:
         hours_reason = f"unknown: a {recipe.curve} curve never levels off"
 

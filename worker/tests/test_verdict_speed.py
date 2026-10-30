@@ -63,7 +63,8 @@ def run_with(db, exp, curves: dict[str, np.ndarray], *, quantity="half_time"):
     save_plan_draft(db, exp.id, plan)
     lock_plan(db, exp.id)
     run = create_run(db, exp.id, RunMode.LIVE, RunSource(kind=SourceKind.WEBCAM, camera_index=0))
-    roles = {"A": Role.CONTROL, "B": Role.CONTROL, "C": Role.TREATMENT, "D": Role.TREATMENT}
+    roles = {"A": Role.CONTROL, "B": Role.CONTROL, "F": Role.CONTROL}
+    roles |= {label: Role.TREATMENT for label in "CDE"}
     drafts = [
         VesselDraft(
             label=label,
@@ -161,3 +162,79 @@ def test_the_smallest_effect_is_in_the_judged_quantitys_unit(db, exp, quantity, 
     assert ref is not None and ref.unit == unit
     if unit != "count":  # a count prints bare
         assert ref.display.endswith(f" {unit}")
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("label", "curve"),
+    [("E", "flat"), ("E", "unreached"), ("F", "flat")],
+)
+async def test_a_dish_with_no_half_way_time_caps_the_verdict(db, exp, label, curve):
+    """A treatment dish where nothing germinated, or that was still rising, is evidence against "faster": dropping it
+    would let the others carry the claim. Same for a control."""
+    failed = np.zeros_like(TIMES_H) if curve == "flat" else logistic(10, 60)
+    curves = {"A": logistic(10, 22), "B": logistic(10, 22), "C": logistic(10, 14), "D": logistic(10, 14)}
+    curves |= {"E": logistic(10, 14), label: failed}
+    verdict = await judge(db, run_with(db, exp, curves))
+    assert verdict.allowed == [VerdictLevel.INCONCLUSIVE]
+    named = check(verdict, f"fit:{label}")
+    assert named is not None and named["ok"] is False and "Inconclusive" in named["text"]
+
+
+def test_the_noise_floor_does_not_judge_fitted_effects():
+    """The readings' noise floor is in counts; a half-way time's effect is in hours: only its own ± judges it."""
+    from argus.analyze.ceiling import VerdictInputs, ceiling
+    from argus.claims.refs import Ref
+
+    def effect(label):
+        return Ref(f"dt50:{label}:germinated", label, -8.0, 0.5, "h", "-8.0 ± 0.5 h", "difference", None, None)
+
+    inputs = VerdictInputs(
+        t=48 * 3600.0,
+        running=False,
+        locked=True,
+        checkpoint_s=24 * 3600.0,
+        controls=2,
+        treatments=2,
+        effects={"C": effect("C"), "D": effect("D")},
+        noise=5.0,  # counts
+        min_effect=2.0,
+        direction=Direction.LOWER,
+        rivals={},
+        measured=True,
+        quantity="half_time",
+    )
+    allowed, checks = ceiling(inputs)
+    assert VerdictLevel.SUPPORTED in allowed
+    assert all("noise floor" not in c.prompt for c in checks if c.id.startswith("effect:"))
+
+
+@pytest.mark.anyio
+async def test_a_rate_plan_ignores_the_rate_of_a_dish_still_rising(db, exp):
+    curves = {"A": logistic(10, 22), "B": logistic(10, 22), "C": logistic(10, 14), "D": logistic(10, 14)}
+    verdict = await judge(db, run_with(db, exp, curves | {"E": logistic(10, 60)}, quantity="rate"))
+    assert check(verdict, "effect:E") is None
+    assert check(verdict, "fit:E") is not None and verdict.allowed == [VerdictLevel.INCONCLUSIVE]
+
+
+@pytest.mark.anyio
+async def test_fitted_plans_need_two_controls(db, exp):
+    verdict = await judge(db, run_with(db, exp, {"A": logistic(10, 22), "C": logistic(10, 14), "D": logistic(10, 14)}))
+    assert verdict.allowed == [VerdictLevel.INCONCLUSIVE]
+    assert check(verdict, "control")["ok"] is False and "2" in check(verdict, "control")["text"]
+
+
+def test_a_dishs_uncertainty_includes_how_dishes_differ(db, exp):
+    """A fit's ± covers the fit only; dishes of one condition differ by more (cumulative readings are autocorrelated),
+    so each treatment's difference carries the spread between dishes."""
+    import statistics
+
+    from argus.claims.refs import build_refs
+    from argus.storage.repos import first_locked_plan
+
+    curves = {"A": logistic(10, 20), "B": logistic(10, 22), "C": logistic(10, 15), "D": logistic(10, 15.2)}
+    run = run_with(db, exp, curves)
+    refs = build_refs(db, run.id, 48 * 3600.0, recipe=RECIPE, plan=first_locked_plan(db, exp.id))
+    t50 = {label: refs.get(f"t50:{label}:germinated").value for label in curves}
+    pooled = ((statistics.variance([t50["A"], t50["B"]]) + statistics.variance([t50["C"], t50["D"]])) / 2) ** 0.5
+    assert refs.get("dt50:C:germinated").uncertainty >= pooled

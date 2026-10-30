@@ -65,7 +65,7 @@ def logistic_fit(t50: float, *, K: float = 10.0, r: float = 0.5, reached: bool =
     )
 
 
-def finished_run(db, *, status=RunStatus.FINISHED):
+def finished_run(db, *, status=RunStatus.FINISHED, halves=None):
     """Rye controls A, B and millet treatments C, D, half-way at 22, 23, 15 and 17 h, judged on half-way time."""
     exp = create_experiment(db, "Rye vs millet", "seed-germination", 1)
     plan = PlanDraft(
@@ -83,7 +83,7 @@ def finished_run(db, *, status=RunStatus.FINISHED):
     save_plan_draft(db, exp.id, plan)
     lock_plan(db, exp.id)
     run = create_run(db, exp.id, RunMode.LIVE, RunSource(kind=SourceKind.WEBCAM, camera_index=0))
-    halves = {"A": 22.0, "B": 23.0, "C": 15.0, "D": 17.0}
+    halves = halves or {"A": 22.0, "B": 23.0, "C": 15.0, "D": 17.0}
     drafts = [
         VesselDraft(
             label=label,
@@ -193,3 +193,12 @@ async def test_next_runs_are_evidence(db):
         c.execute("UPDATE next_runs SET body='{}' WHERE id=?", (suggestion.id,))
     with pytest.raises(sqlite3.IntegrityError, match="evidence"), db.write() as c:
         c.execute("DELETE FROM next_runs WHERE id=?", (suggestion.id,))
+
+
+def test_a_vessel_still_rising_leaves_the_run_length_unknown(db):
+    from argus.analyze.next_run import next_run_numbers
+    from argus.storage.repos import first_locked_plan
+
+    run = finished_run(db, halves={"A": 22.0, "B": 23.0, "C": 15.0, "D": 47.0})
+    numbers = next_run_numbers(db, run, RECIPE, first_locked_plan(db, run.experiment_id))
+    assert numbers.hours is None and "still rising" in numbers.hours_reason

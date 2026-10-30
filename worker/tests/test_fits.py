@@ -79,3 +79,29 @@ def test_a_fit_that_lands_far_from_the_data_is_refused():
     crashed = [v if t < 30 * 3600 else 0.0 for t, v in zip(times, values, strict=True)]
     fit = fit_series(times, crashed, "logistic")
     assert not fit.ok and "does not follow a logistic curve" in fit.reason
+
+
+def test_a_fit_still_rising_has_no_rate():
+    """Its rate would come from an extrapolated plateau."""
+    fit = fit_series(*series(logistic(r=0.15, t50=30.0), hours=24, noise=0.05), "logistic")
+    assert fit.ok and not fit.reached and fit.rate_per_h is None and fit.plateau is None
+
+
+def test_a_slow_vessel_still_rising_is_not_reached_rather_than_refused():
+    """Past half-way but far from its plateau at the end: slow, not a bad fit."""
+    fit = fit_series(*series(logistic(K=10.0, r=0.1, t50=44.0), noise=0.05), "logistic")
+    assert fit.ok and not fit.reached
+    assert fit.half_time_h is None and fit.rate_per_h is None and fit.plateau is None
+
+
+@pytest.mark.parametrize(
+    ("curve", "make"),
+    [
+        ("logistic", lambda t: 30 + 30 / (1 + np.exp(-1.5 * (t - 2)))),  # dough rising from its own height
+        ("first_order", lambda t: 5 + 10 * (1 - np.exp(-0.2 * t))),
+    ],
+)
+def test_a_series_that_starts_well_above_zero_is_refused(curve, make):
+    """These curves start at zero: fitted to a series with a baseline, the half-way point lands in the wrong place."""
+    fit = fit_series(*series(make, hours=8, step_h=0.25, noise=0.05), curve)
+    assert not fit.ok and "above zero" in fit.reason

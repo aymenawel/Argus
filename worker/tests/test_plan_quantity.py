@@ -63,3 +63,20 @@ async def test_a_draft_carries_the_quantity():
     plan = answer()["plan"] | {"quantity": "half_time", "direction": "lower", "min_effect": 2}
     draft, _ = await draft_recipe(WORDS_GERMINATION, reasoner=FakeReasoner([answer(plan=plan)]), templates=TEMPLATES)
     assert draft.plan.quantity == "half_time"
+
+
+def test_the_prompts_state_a_fitted_prediction_in_its_own_terms():
+    from datetime import UTC, datetime
+
+    from argus.domain import Plan
+    from argus.reason.prompts import plan_block
+
+    def block(quantity):
+        fields = sample(quantity=quantity, direction=Direction.LOWER).model_dump()
+        locked = datetime(2026, 10, 30, tzinfo=UTC)
+        return plan_block(Plan(**fields, experiment_id="exp", version=1, locked_at=locked, sha256="x"))
+
+    assert "reads lower than the controls" in block("level")
+    half = block("half_time")
+    assert "half-way time" in half and "sooner" in half and "reads lower" not in half
+    assert "fitted rate" in block("rate")

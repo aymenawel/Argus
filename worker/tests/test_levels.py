@@ -166,3 +166,29 @@ async def test_levels_are_refs_the_model_may_cite(db):
     first, third = suggestion.numbers["levels"][0], suggestion.numbers["levels"][2]
     assert suggestion.body["written_by"] == "model"
     assert f"{first:g} °C" in suggestion.body["why"] and f"{third:g} °C" in suggestion.body["why"]
+
+
+def test_numeric_conditions_stored_as_text_get_levels(db):
+    """The setup stores a condition as the researcher typed it ("20 °C"), so a numeric factor arrives as text."""
+    conditions = {"A": "20 °C", "B": "25 °C", "C": "30 °C", "D": "35 °C", "E": "40 °C", "F": "45 °C"}
+    final = {label: 50 - (float(value.split()[0]) - 35) ** 2 / 10 for label, value in conditions.items()}
+    run, plan = run_with(db, conditions, final)
+    numbers = next_run_numbers(db, run, RECIPE, plan)
+    assert len(numbers.levels) == 3 and numbers.levels_unit == "°C"
+
+
+def test_a_text_control_is_left_out_of_the_level_search(db):
+    conditions = {"A": "water", "B": "5 g/L", "C": "10 g/L", "D": "15,5 g/L"}
+    run, plan = run_with(db, conditions, {"A": 20, "B": 25, "C": 30, "D": 28})
+    numbers = next_run_numbers(db, run, RECIPE, plan)
+    assert len(numbers.levels) == 3 and numbers.levels_unit == "g/L"
+    assert all(0 <= level <= 20.75 for level in numbers.levels)
+
+
+def test_ax_picks_come_from_its_model_on_a_small_plate():
+    """Without the change, Ax spends its first picks on quasi-random exploration and they read as optimised."""
+    from argus.analyze.levels import level_picks
+
+    tested = [(level, 100 - (level - 30) ** 2) for level in (20.0, 25.0, 30.0, 40.0)]
+    picks = level_picks(tested, minimize=False, bounds=level_bounds([t for t, _ in tested]), count=3, seed=0)
+    assert len(picks) == 3 and all(how == "MBM" for _, how in picks)
