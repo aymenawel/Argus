@@ -233,6 +233,24 @@ export type Note = {
 
 export type NotesView = { notes: Note[]; rejected: number };
 
+/** Argus's readings against a published dataset's labels (GET /runs/{id}/agreement); null without labels. */
+export type VesselAgreement = {
+  label: string;
+  mean_abs_diff: number | null;
+  exact_share: number | null;
+  t50_argus: number | null;
+  t50_labels: number | null;
+  frames: number;
+};
+
+export type Agreement = {
+  metric: string;
+  source: string;
+  vessels: VesselAgreement[];
+  mean_abs_diff: number | null;
+  exact_share: number | null;
+};
+
 export type Check = { id: string; ok: boolean | null; text: string; refs: string[] };
 
 export type VerdictBody = {

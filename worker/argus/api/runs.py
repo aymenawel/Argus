@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
@@ -12,6 +13,7 @@ import numpy as np
 from fastapi import FastAPI, HTTPException, Query, Response
 from pydantic import BaseModel, Field, model_validator
 
+from argus.analyze.agreement import agreement
 from argus.calibration.run import RulerInput
 from argus.capture.webcam import CameraSettings
 from argus.config import Settings
@@ -237,6 +239,13 @@ def register_run_routes(app: FastAPI, *, db: Database, settings: Settings, jobs:
         if not await jobs.stop(run_id):
             raise HTTPException(status_code=409, detail="the run is not running")
         return await asyncio.to_thread(view, run_or_404(run_id))
+
+    @app.get("/api/runs/{run_id}/agreement")
+    def get_agreement(run_id: str, metric: str) -> dict | None:
+        """Argus's readings against the dataset's labels for this metric; null when there are no labels."""
+        run_or_404(run_id)
+        result = agreement(db, run_id, metric)
+        return asdict(result) if result is not None else None
 
     @app.get("/api/runs/{run_id}/timeline")
     def timeline(run_id: str, t_from: float | None = None, t_to: float | None = None) -> dict:

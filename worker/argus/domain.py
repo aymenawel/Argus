@@ -212,6 +212,21 @@ class CalibrationDraft(Record):
     camera_properties: dict[str, CameraProperty] = {}
 
 
+class ReferenceValueDraft(Record):
+    """A published dataset's own value for a vessel at a time (a human label), kept apart from measurements."""
+
+    vessel_id: str
+    t: float = Field(ge=0)
+    metric: str
+    value: float
+    source: str  # the dataset it came from
+
+
+class ReferenceValue(ReferenceValueDraft):
+    id: str
+    run_id: str
+
+
 class Calibration(CalibrationDraft):
     id: str
     run_id: str

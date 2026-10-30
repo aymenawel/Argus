@@ -26,13 +26,14 @@ from argus.calibration.run import RulerInput, RunCalibration, calibrate, card_mo
 from argus.capture.images import ImageSequenceSource
 from argus.capture.quality import REBASELINED, QualityGate
 from argus.capture.video import VideoFileSource, VideoFrame
-from argus.domain import EventKind, RunStatus, Vessel, new_id
+from argus.datasets.manifest import load_manifest
+from argus.domain import EventKind, ReferenceValueDraft, RunStatus, Vessel, new_id
 from argus.pipeline.analyzer import KeyedPatches, RunContext, Skipped, _write_jpeg, analyze_frame, segment_with_retries
 from argus.pipeline.moves import after_card_moved
 from argus.rois import roi_box
 from argus.segment import Clip, MaskPatch, SegmentResult
 from argus.segment.tracking import assign_to_vessels
-from argus.storage.repos import add_calibration, add_event, add_frame, set_run_status
+from argus.storage.repos import add_calibration, add_event, add_frame, add_reference_values, set_run_status
 from argus.watcher import Watcher, WatcherSettings
 
 CROP_MARGIN_PX = 8
@@ -279,6 +280,27 @@ async def _segment_vessel(
             masks[sample.frame_id].setdefault(vessel.id, {})[concept] = _keep(ctx, vessel, concept, patches, shape)
 
 
+def _store_labels(ctx: RunContext, manifest_path: Path) -> None:
+    """The dataset's own values for each dish, frame by frame, beside (never among) Argus's measurements."""
+    manifest = load_manifest(manifest_path, check_frames=False)
+    by_label = {v.label: v.id for v in ctx.vessels}
+    rows = [
+        ReferenceValueDraft(
+            vessel_id=by_label[tile.label],
+            t=i * manifest.interval_s,
+            metric=metric,
+            value=value,
+            source=manifest.dataset,
+        )
+        for tile in manifest.tiles
+        if tile.label in by_label
+        for metric, values in tile.labels.items()
+        for i, value in enumerate(values[: len(manifest.frames)])
+    ]
+    if rows:
+        add_reference_values(ctx.db, ctx.run.id, rows)
+
+
 def _finish(ctx: RunContext, status: RunStatus) -> RunStatus:
     set_run_status(ctx.db, ctx.run.id, status)
     ctx.publish("run_status", {"status": str(status)})
@@ -291,6 +313,8 @@ async def run_import(ctx: RunContext, request: ImportRequest, *, cancel: asyncio
     if scanned is None or cancel.is_set():
         return await asyncio.to_thread(_finish, ctx, RunStatus.STOPPED)
     samples, calibrations, epochs = scanned
+    if request.manifest is not None:
+        await asyncio.to_thread(_store_labels, ctx, request.manifest)
     if not samples:
         return await asyncio.to_thread(_finish, ctx, RunStatus.FINISHED)
 

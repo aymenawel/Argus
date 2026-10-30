@@ -1,0 +1,60 @@
+/* Argus's readings against a published dataset's labels, dish by dish. */
+.agreement {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+.agreement h3 {
+  color: var(--faint);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.summary {
+  color: var(--text);
+}
+
+.scroll {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.table th:first-child {
+  text-align: left;
+}
+
+.table thead th {
+  color: var(--faint);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.table tbody th {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.note {
+  color: var(--faint);
+  font-size: var(--fs-xs);
+  line-height: 17px;
+}

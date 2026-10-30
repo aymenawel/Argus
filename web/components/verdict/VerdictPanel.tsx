@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { VerdictChip } from "@/components/ui/VerdictChip";
+import { AgreementTable } from "./AgreementTable";
 import { Button } from "@/components/ui/Button";
 import { ApiError, askVerdict, getPlans, getReviews, postReview } from "@/lib/api";
 import type { RunSnapshot } from "@/lib/run-source";
@@ -128,6 +129,10 @@ export function VerdictPanel({ snapshot }: Props) {
       )}
 
       {verdict && <Body verdict={verdict} resolved={resolved} onResolve={setResolving} />}
+
+      {run.source.provenance && plan?.metric && (
+        <AgreementTable runId={run.id} metric={plan.metric} refresh={`${running}-${verdict?.id}`} />
+      )}
 
       {verdict && resolving && (
         <form

@@ -29,6 +29,8 @@ from argus.domain import (
     NoteDraft,
     Plan,
     PlanDraft,
+    ReferenceValue,
+    ReferenceValueDraft,
     Review,
     ReviewDraft,
     Run,
@@ -607,6 +609,24 @@ def add_measurements(db: Database, run_id: str, drafts: Sequence[MeasurementDraf
         )
         append_batch(c, run_id, rows)
     return rows
+
+
+def add_reference_values(db: Database, run_id: str, drafts: Sequence[ReferenceValueDraft]) -> list[ReferenceValue]:
+    rows = [ReferenceValue(**d.model_dump(), id=new_id("ref"), run_id=run_id) for d in drafts]
+    with db.write() as c:
+        c.executemany(
+            "INSERT INTO reference_values(id, run_id, vessel_id, t, metric, value, source) VALUES (?,?,?,?,?,?,?)",
+            [(r.id, run_id, r.vessel_id, r.t, r.metric, r.value, r.source) for r in rows],
+        )
+    return rows
+
+
+def reference_values_for_run(db: Database, run_id: str, metric: str) -> list[ReferenceValue]:
+    with db.read() as c:
+        found = c.execute(
+            "SELECT * FROM reference_values WHERE run_id=? AND metric=? ORDER BY vessel_id, t", (run_id, metric)
+        ).fetchall()
+    return [ReferenceValue(**dict(r)) for r in found]
 
 
 def measurements_for_run(

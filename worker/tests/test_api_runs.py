@@ -225,3 +225,37 @@ def test_a_published_plate_needs_a_role_for_every_condition_and_a_control(client
     roles = {"rye": "control", "millet": "treatment"}
     answer = client.post(url, json={"mode": "imported", "manifest": broken, "roles": roles})
     assert answer.status_code == 422 and "frame_001.jpg" in answer.json()["detail"]
+
+
+def test_a_published_plates_labels_are_kept_for_the_agreement(client, experiment, tmp_path):
+    from tests.test_images_source import write_manifest
+
+    tiles = [
+        {
+            "label": "A1",
+            "condition": "rye",
+            "run": "sc1",
+            "dish": 1,
+            "box": [0, 0, 40, 40],
+            "seeds": 5,
+            "labels": {"germinated": [0, 1, 3]},
+        },
+        {
+            "label": "B1",
+            "condition": "millet",
+            "run": "pg1",
+            "dish": 4,
+            "box": [40, 0, 80, 40],
+            "seeds": 5,
+            "labels": {"germinated": [0, 2, 4]},
+        },
+    ]
+    manifest = write_manifest(tmp_path / "plate", tiles=tiles)
+    roles = {"rye": "control", "millet": "treatment"}
+    url = f"/api/experiments/{experiment['id']}/runs"
+    created = client.post(url, json={"mode": "imported", "manifest": manifest, "roles": roles})
+    view = wait_until_done(client, created.json()["run"]["id"])
+    result = client.get(f"/api/runs/{view['run']['id']}/agreement", params={"metric": "germinated"}).json()
+    assert result["source"] == "Test plates" and [v["label"] for v in result["vessels"]] == ["A1", "B1"]
+    assert all(v["frames"] == 0 for v in result["vessels"])  # nothing measured: no calibration in this plate
+    assert client.get(f"/api/runs/{view['run']['id']}/agreement", params={"metric": "area"}).json() is None

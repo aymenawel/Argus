@@ -1,4 +1,5 @@
 import type {
+  Agreement,
   DetectionOutline,
   Experiment,
   FrameRequest,
@@ -159,6 +160,11 @@ export function getVerdict(runId: string): Promise<Verdict | null> {
 /** A 409 says why no verdict can be given now (no locked plan, the spend cap). */
 export function askVerdict(runId: string): Promise<Verdict> {
   return request(`${runPath(runId)}/verdict`, send("POST"));
+}
+
+/** Null when the run has no labels for this metric (only published data carries them). */
+export function getAgreement(runId: string, metric: string): Promise<Agreement | null> {
+  return request(`${runPath(runId)}/agreement?metric=${encodeURIComponent(metric)}`);
 }
 
 export function getReviews(runId: string): Promise<Review[]> {
