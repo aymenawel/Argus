@@ -25,7 +25,7 @@ export function useReadings(snapshot: RunSnapshot, mainMetric: string, t: number
 function calibrationText(snapshot: RunSnapshot): string {
   const cal = snapshot.view.calibration;
   if (!cal) return "No calibration";
-  const name = cal.card === "ruler" ? "Ruler" : "Card";
+  const name = cal.card === "ruler" ? "Ruler" : cal.card === "dish" ? "Dish rim" : "Card";
   return `${name} · ${(1 / cal.mm_per_px).toFixed(2)} px/mm ± ${(cal.rel_uncertainty * 100).toFixed(1)}%`;
 }
 

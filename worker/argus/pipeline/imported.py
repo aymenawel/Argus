@@ -47,6 +47,7 @@ class ImportRequest:
     print_check_mm: float | None = None
     ruler: RulerInput | None = None
     manifest: Path | None = None  # a published image sequence instead of video files
+    dish_diameter_mm: float | None = None  # with no card or ruler, the dishes' rims in the vessel regions set the scale
 
 
 def _frames(request: ImportRequest) -> Iterator[VideoFrame]:
@@ -125,7 +126,13 @@ def _scan(
         current = calibrations[-1][1] if calibrations else None
         moved = current is not None and card_moved(current, frame.image) is True
         if current is None or moved:
-            cal = calibrate(frame.image, print_check_mm=request.print_check_mm, ruler=request.ruler)
+            cal = calibrate(
+                frame.image,
+                print_check_mm=request.print_check_mm,
+                ruler=request.ruler,
+                dish_diameter_mm=request.dish_diameter_mm,
+                rois=[v.roi for v in epochs[-1][1]],
+            )
             if cal is not None:
                 calibrations.append((frame.t, cal))
                 add_calibration(ctx.db, ctx.run.id, cal.to_draft(frame.t, {}))

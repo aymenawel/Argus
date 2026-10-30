@@ -97,7 +97,14 @@ def register_setup_routes(
         _, recipe = await asyncio.to_thread(experiment_or_404, experiment_id)
         setup = await asyncio.to_thread(repos.get_setup, db, experiment_id)
         image = await asyncio.to_thread(frame_from, hub, body)
-        cal = await asyncio.to_thread(calibrate, image, print_check_mm=setup.print_check_mm, ruler=setup.ruler)
+        cal = await asyncio.to_thread(
+            calibrate,
+            image,
+            print_check_mm=setup.print_check_mm,
+            ruler=setup.ruler,
+            dish_diameter_mm=setup.dish_diameter_mm,
+            rois=[v.roi for v in setup.vessels],
+        )
         drawn = setup.vessels  # a vessel without a role yet is measured all the same
         # Named by label, so the quality flags read "saturated:A".
         vessels = [

@@ -117,7 +117,7 @@ export type Vessel = {
 export type Calibration = {
   id: string;
   t: number;
-  card: "standard" | "compact" | "ruler";
+  card: "standard" | "compact" | "ruler" | "dish";
   mm_per_px: number;
   rel_uncertainty: number;
   print_scale: number;
@@ -317,6 +317,7 @@ export type Setup = {
   vessels: SetupVessel[];
   print_check_mm: number | null;
   ruler: RulerInput | null;
+  dish_diameter_mm?: number | null; // with no card or ruler, the dishes' rims set the scale
   factor: string | null;
   factor_unit: string | null;
 };
@@ -340,7 +341,7 @@ export type RecipeDraft = {
 
 export type Preview = {
   frame_jpeg_b64: string;
-  calibration: { card: "standard" | "compact" | "ruler"; px_per_mm: number; rel_uncertainty: number } | null;
+  calibration: { card: "standard" | "compact" | "ruler" | "dish"; px_per_mm: number; rel_uncertainty: number } | null;
   quality: { blur: number; flags: string[] };
   vessels: {
     label: string;

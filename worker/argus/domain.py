@@ -179,6 +179,7 @@ class Setup(Record):
     vessels: list[SetupVessel] = []
     print_check_mm: float | None = Field(None, ge=90, le=110)
     ruler: RulerInput | None = None
+    dish_diameter_mm: float | None = Field(None, gt=0)  # with no card or ruler, the dishes' rims set the scale
     factor: str | None = None
     factor_unit: str | None = None
 
@@ -202,7 +203,7 @@ class CameraProperty(StrEnum):
 
 class CalibrationDraft(Record):
     t: float = Field(ge=0)
-    card: Literal["standard", "compact", "ruler"]
+    card: Literal["standard", "compact", "ruler", "dish"]
     homography: list[list[float]] | None = None
     mm_per_px: float = Field(gt=0)
     rel_uncertainty: float = Field(ge=0)

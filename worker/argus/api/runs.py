@@ -215,6 +215,7 @@ def register_run_routes(app: FastAPI, *, db: Database, settings: Settings, jobs:
                     print_check_mm=print_check_mm,
                     ruler=ruler,
                     manifest=Path(body.manifest) if body.manifest else None,
+                    dish_diameter_mm=(manifest.dish_diameter_mm if manifest else None) or setup.dish_diameter_mm,
                 )
                 jobs.start_import(run, vessels, request)
         except RuntimeError as error:  # the camera didn't open

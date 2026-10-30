@@ -1,8 +1,9 @@
-"""A run's calibration: the Argus Card (or, without one, a two-click ruler) on the first good frame, and a
-check of whether the card has moved since (spec §6, KB 09)."""
+"""A run's calibration: the Argus Card (or, without one, a two-click ruler, or the rims of dishes of a known
+diameter) on the first good frame, and a check of whether the card has moved since (spec §6, KB 09, D-72)."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import cv2
@@ -10,6 +11,7 @@ import numpy as np
 
 from argus.calibration.colour import ColourReference, read_patches
 from argus.calibration.detect import CardDetection, RulerScale, detect_card, ruler_scale, with_print_check
+from argus.calibration.dish import DishScale, dish_scale
 from argus.domain import CalibrationDraft, CameraProperty, RulerInput  # RulerInput lives in domain (Setup holds one)
 
 
@@ -26,18 +28,25 @@ class RunCalibration:
     ruler: RulerScale | None
     reference: ColourReference | None
     marker_corners_px: np.ndarray | None
+    dish: DishScale | None = None
+
+    @property
+    def _scale(self) -> CardDetection | RulerScale | DishScale:
+        scale = self.detection or self.ruler or self.dish
+        assert scale is not None, "a calibration has a card, a ruler or a dish"
+        return scale
 
     @property
     def mm_per_px(self) -> float:
-        return self.detection.mm_per_px if self.detection else self.ruler.mm_per_px
+        return self._scale.mm_per_px
 
     @property
     def rel_uncertainty(self) -> float:
-        return self.detection.rel_uncertainty if self.detection else self.ruler.rel_uncertainty
+        return self._scale.rel_uncertainty
 
     @property
     def card_name(self) -> str:
-        return self.detection.spec.name if self.detection else "ruler"
+        return self.detection.spec.name if self.detection else "ruler" if self.ruler else "dish"
 
     def to_draft(self, t: float, camera_properties: dict[str, CameraProperty]) -> CalibrationDraft:
         reference = None
@@ -56,9 +65,15 @@ class RunCalibration:
 
 
 def calibrate(
-    image_bgr: np.ndarray, *, print_check_mm: float | None = None, ruler: RulerInput | None = None
+    image_bgr: np.ndarray,
+    *,
+    print_check_mm: float | None = None,
+    ruler: RulerInput | None = None,
+    dish_diameter_mm: float | None = None,
+    rois: Sequence[Sequence[tuple[float, float]]] = (),
 ) -> RunCalibration | None:
-    """The card if it is in view (with the print check when given), else the ruler, else None: no millimetres."""
+    """The card if it is in view (with the print check when given), else the ruler, else the dishes' rims in the
+    vessel regions when their diameter is known, else None: no millimetres."""
     detection = detect_card(image_bgr)
     if detection is not None:
         if print_check_mm is not None:
@@ -77,6 +92,10 @@ def calibrate(
             reference=None,
             marker_corners_px=None,
         )
+    if dish_diameter_mm is not None and rois:
+        dish = dish_scale(image_bgr, rois, dish_diameter_mm)
+        if dish is not None:
+            return RunCalibration(detection=None, ruler=None, reference=None, marker_corners_px=None, dish=dish)
     return None
 
 

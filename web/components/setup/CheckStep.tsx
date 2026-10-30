@@ -16,7 +16,7 @@ type Props = {
   onChange: (setup: Setup) => void;
 };
 
-const CARD = { standard: "Standard card", compact: "Compact card", ruler: "Ruler" } as const;
+const CARD = { standard: "Standard card", compact: "Compact card", ruler: "Ruler", dish: "Dish rim" } as const;
 
 function quality(preview: Preview, label: string): { text: string; ok: boolean } {
   const flags = preview.quality.flags;
