@@ -32,3 +32,33 @@ export function formatPair([value, uncertainty]: [number, number], unit: string)
   const decimals = Math.max(0, -place);
   return `${round(value).toFixed(decimals)} ± ${round(uncertainty).toFixed(decimals)} ${unit}`;
 }
+
+export type Marker = "circle" | "square" | "diamond";
+export type SeriesGroup = { label: string; control: boolean; dash?: string; marker: Marker };
+type Grouped = { role: "control" | "treatment"; condition: { value: number | string } | null };
+
+// Up to three treatment conditions stay apart by dash and dot shape; the control is always grey, solid and round.
+const DASHES = [undefined, "7 4", "2 4"];
+const MARKERS: Marker[] = ["circle", "square", "diamond"];
+
+export const groupKey = (v: Grouped) => `${v.role}:${v.condition?.value ?? ""}`;
+
+/** One group per condition, controls first. The dots carry the shape too: a vessel with no fitted curve still shows
+ * which condition its readings belong to. */
+export function conditionGroups(vessels: Grouped[]): Map<string, SeriesGroup> {
+  const groups = new Map<string, SeriesGroup>();
+  for (const v of [...vessels].sort((a, b) => Number(b.role === "control") - Number(a.role === "control"))) {
+    const key = groupKey(v);
+    if (groups.has(key)) continue;
+    const control = v.role === "control";
+    const treatments = [...groups.values()].filter((g) => !g.control).length;
+    const name = control ? "Control" : "Treatment";
+    groups.set(key, {
+      label: v.condition ? `${name}: ${v.condition.value}` : name,
+      control,
+      dash: control ? undefined : DASHES[treatments % DASHES.length],
+      marker: control ? "circle" : MARKERS[treatments % MARKERS.length],
+    });
+  }
+  return groups;
+}

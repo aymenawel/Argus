@@ -46,7 +46,7 @@ def logistic(K, t50, r=0.5):
     return K / (1 + np.exp(-r * (TIMES_H - t50)))
 
 
-def run_with(db, exp, curves: dict[str, np.ndarray], *, quantity="half_time"):
+def run_with(db, exp, curves: dict[str, np.ndarray], *, quantity="half_time", unit="count"):
     """Vessels A, B (rye, control) and C, D (millet, treatment) with the given readings, and a locked plan."""
     plan = PlanDraft(
         hypothesis="Millet germinates faster than rye.",
@@ -64,7 +64,7 @@ def run_with(db, exp, curves: dict[str, np.ndarray], *, quantity="half_time"):
     lock_plan(db, exp.id)
     run = create_run(db, exp.id, RunMode.LIVE, RunSource(kind=SourceKind.WEBCAM, camera_index=0))
     roles = {"A": Role.CONTROL, "B": Role.CONTROL, "F": Role.CONTROL}
-    roles |= {label: Role.TREATMENT for label in "CDE"}
+    roles |= {label: Role.TREATMENT for label in ("C", "D", "E", "pg1-1")}
     drafts = [
         VesselDraft(
             label=label,
@@ -84,7 +84,7 @@ def run_with(db, exp, curves: dict[str, np.ndarray], *, quantity="half_time"):
             metric="germinated",
             value=float(v + rng.normal(0, 0.1)) if np.ptp(values) > 0 else 0.0,
             uncertainty=0.0,
-            unit="count",
+            unit=unit,
             method_version="component_count/1",
         )
         for label, values in curves.items()
@@ -94,9 +94,12 @@ def run_with(db, exp, curves: dict[str, np.ndarray], *, quantity="half_time"):
     return run
 
 
+def answers() -> FakeReasoner:
+    return FakeReasoner([verdict_draft("INCONCLUSIVE", refs_used=[], explanation="Judged."), critique("INCONCLUSIVE")])
+
+
 async def judge(db, run):
-    answers = [verdict_draft("INCONCLUSIVE", refs_used=[], explanation="Judged."), critique("INCONCLUSIVE")]
-    return await run_verdict(db, EventBroker(), SETTINGS, run, recipe=RECIPE, reasoner=FakeReasoner(answers))
+    return await run_verdict(db, EventBroker(), SETTINGS, run, recipe=RECIPE, reasoner=answers())
 
 
 def check(verdict, id_):
@@ -238,3 +241,53 @@ def test_a_dishs_uncertainty_includes_how_dishes_differ(db, exp):
     t50 = {label: refs.get(f"t50:{label}:germinated").value for label in curves}
     pooled = ((statistics.variance([t50["A"], t50["B"]]) + statistics.variance([t50["C"], t50["D"]])) / 2) ** 0.5
     assert refs.get("dt50:C:germinated").uncertainty >= pooled
+
+
+@pytest.mark.anyio
+async def test_the_model_is_told_which_dish_has_no_fit(db, exp):
+    """A note's numbers stay in the refs, but a dish's name is not a number: the model must know which dish failed."""
+    curves = {"A": logistic(10, 22), "B": logistic(10, 22), "C": logistic(10, 14), "D": logistic(10, 14)}
+    run = run_with(db, exp, curves | {"pg1-1": np.zeros_like(TIMES_H)})
+    reasoner = answers()
+    await run_verdict(db, EventBroker(), SETTINGS, run, recipe=RECIPE, reasoner=reasoner)
+    checks = next(block for block in reasoner.tasks[0].variable if block.startswith("CHECKS"))
+    assert "No fit for pg1-1" in checks
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(("quantity", "words"), [("half_time", "half-way times"), ("rate", "rates")])
+async def test_the_plateau_note_names_the_judged_quantity_and_unit(db, exp, quantity, words):
+    curves = {"A": logistic(10, 22), "B": logistic(10, 22), "C": logistic(5, 14), "D": logistic(10, 14)}
+    run = run_with(db, exp, curves, quantity=quantity, unit="mm")
+    reasoner = answers()
+    verdict = await run_verdict(db, EventBroker(), SETTINGS, run, recipe=RECIPE, reasoner=reasoner)
+    text = check(verdict, "plateaus")["text"]
+    assert words in text and " mm)" in text
+    checks = next(block for block in reasoner.tasks[0].variable if block.startswith("CHECKS"))
+    line = next(line for line in checks.splitlines() if "plateaus" in line)
+    assert words in line and not any(c.isdigit() for c in line)
+    assert all(word not in line for word in ("quarter", "halves")), line  # words the claim checker rejects
+
+
+@pytest.mark.anyio
+async def test_controls_without_a_fit_are_not_called_missing(db, exp):
+    """The control dishes are there and measured; it's their curves that failed. The checks must say so."""
+    flat = np.zeros_like(TIMES_H)
+    verdict = await judge(db, run_with(db, exp, {"A": flat, "B": flat, "C": logistic(10, 14), "D": logistic(10, 14)}))
+    control, replicates = check(verdict, "control")["text"], check(verdict, "replicates")["text"]
+    assert "no control vessel" not in control.lower() and "2 control" in control and "fitted" in control
+    assert "fitted" in replicates and "measured" not in replicates
+    assert verdict.allowed == [VerdictLevel.INCONCLUSIVE]
+
+
+def test_a_fitted_plan_needs_the_recipe(db, exp):
+    """Without the recipe there is no curve to fit, so no dish could be named as failed: refuse, don't skip."""
+    from argus.claims.refs import build_refs
+    from argus.pipeline.verdict import verdict_inputs
+    from argus.storage.repos import first_locked_plan
+
+    run = run_with(db, exp, {"A": logistic(10, 22), "B": logistic(10, 22), "C": logistic(10, 14)})
+    plan = first_locked_plan(db, exp.id)
+    refs = build_refs(db, run.id, 48 * 3600.0, recipe=RECIPE, plan=plan)
+    with pytest.raises(ValueError, match="recipe"):
+        verdict_inputs(db, run, refs, plan=plan, t=48 * 3600.0, recipe=None)

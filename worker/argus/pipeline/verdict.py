@@ -7,7 +7,7 @@ import asyncio
 from collections.abc import Sequence
 from typing import Any, Literal
 
-from argus.analyze.ceiling import TOO_EARLY, VerdictInputs, ceiling, choose_verdict
+from argus.analyze.ceiling import TOO_EARLY, VerdictInputs, ceiling, choose_verdict, without_digits
 from argus.analyze.fits import vessel_fits
 from argus.api.events import EventBroker
 from argus.claims.checker import check_text_fields, render
@@ -99,36 +99,43 @@ def rival_states(db: Database, run: Run, rivals: Sequence[str]) -> dict[str, Lit
 
 
 CAPPED_AT = "a slow dish, or one where nothing grew, is evidence too, so nothing stronger than Inconclusive is allowed."
-PLATEAU_SPREAD = 0.25  # plateaus further apart than this: half-way times are halves of different totals
+PLATEAU_SPREAD = 0.25  # plateaus further apart than this: half-way times or rates on different totals
+# What different totals do to the judged quantity, in words the claim checker accepts (no "half" or "quarter").
+ON_TOTALS = {
+    "half_time": "their half-way times are measured against different totals",
+    "rate": "their rates are partly set by different totals",
+}
 
 
 def _fit_notes(
-    db: Database, run: Run, recipe: Recipe, metric: str, judged: Sequence, t: float
-) -> tuple[tuple[str, bool | None, str], ...]:
-    """Refused or unreached fits among the vessels judged, by name, and a plateau spread that changes the meaning."""
+    db: Database, run: Run, recipe: Recipe, metric: str, unit: str, quantity: str, judged: Sequence, t: float
+) -> tuple[tuple[str, bool | None, str, str], ...]:
+    """Refused or unreached fits among the vessels judged, by name, and a plateau spread that changes the meaning; each
+    with its prompt: the dish's name kept (a name, not a number), every other number left to the refs."""
     fits = vessel_fits(db, run.id, recipe, metric, t)
-    notes: list[tuple[str, bool | None, str]] = []
+    notes: list[tuple[str, bool | None, str, str]] = []
+    unknown = "half-way point" if quantity == "half_time" else "rate"
     plateaus = []
     for vessel in judged:
         fit = fits.get(vessel.id)
         if fit is None:
             continue
         if not fit.ok:
-            text = (
-                f"No fit for {vessel.label}: {fit.reason}. Without its value the comparison is incomplete: {CAPPED_AT}"
-            )
-            notes.append((f"fit:{vessel.label}", False, text))
+            why = f"{fit.reason}. Without its value the comparison is incomplete: {CAPPED_AT}"
+            label = f"No fit for {vessel.label}: "
+            notes.append((f"fit:{vessel.label}", False, label + why, label + without_digits(why)))
         elif not fit.reached:
-            text = f"{vessel.label} was still rising at the end, so its half-way point isn't known: {CAPPED_AT}"
-            notes.append((f"fit:{vessel.label}", False, text))
+            text = f"{vessel.label} was still rising at the end, so its {unknown} isn't known: {CAPPED_AT}"
+            notes.append((f"fit:{vessel.label}", False, text, text))
         elif fit.plateau is not None:
             plateaus.append(fit.plateau[0])
     if len(plateaus) >= 2 and min(plateaus) > 0 and max(plateaus) / min(plateaus) - 1 > PLATEAU_SPREAD:
+        shown = "" if unit in ("", "count") else f" {unit}"  # counts print bare, as everywhere
         text = (
-            f"The vessels' plateaus differ by more than a quarter ({min(plateaus):.1f} to {max(plateaus):.1f}): "
-            "their half-way times are halves of different totals."
+            f"The vessels' plateaus differ by more than {PLATEAU_SPREAD:.0%} ({min(plateaus):.1f} to "
+            f"{max(plateaus):.1f}{shown}): {ON_TOTALS[quantity]}."
         )
-        notes.append(("plateaus", None, text))
+        notes.append(("plateaus", None, text, f"The vessels' plateaus differ widely: {ON_TOTALS[quantity]}."))
     return tuple(notes)
 
 
@@ -143,6 +150,8 @@ def verdict_inputs(
         data_began = run.started_at
     vessels = vessels_for_run(db, run.id)
     quantity = plan.quantity if plan is not None and plan.quantity in FITTED else "level"
+    if quantity in FITTED and recipe is None:  # no curve to fit: no dish could be named as failed
+        raise ValueError("a plan judged on a fitted quantity needs the recipe's curve")
     own, diff = (FITTED[quantity][0], FITTED[quantity][1]) if quantity in FITTED else ("m", "diff")
     controls = [v for v in vessels if v.role is Role.CONTROL and f"{own}:{v.label}:{metric}" in refs]
     compared = [
@@ -156,8 +165,10 @@ def verdict_inputs(
     effects = {v.label: refs.get(f"{diff}:{v.label}:{metric}") for v in compared}
     smallest = plan.min_effect if plan is not None and plan.min_effect is not None else 0.0
     spans: dict[str, list[float]] = {}
+    unit = ""
     for m in measurements_for_run(db, run.id, metric=metric) if metric else []:
         spans.setdefault(m.vessel_id, []).append(m.value)
+        unit = m.unit
     judged = {v.id for v in [*controls, *compared]}
     # A measurement that never moved anywhere (a count of roots SAM can't see) is no evidence that nothing happened.
     # A fitted quantity's smallest effect is in h or per h, not in readings: there, "registered" means it moved at all.
@@ -167,7 +178,11 @@ def verdict_inputs(
         if vid in judged
     )
     all_judged = [v for v in vessels if v.role is Role.CONTROL] + compared
-    notes = _fit_notes(db, run, recipe, metric, all_judged, t) if quantity in FITTED and recipe is not None else ()
+    notes = (
+        _fit_notes(db, run, recipe, metric, unit, quantity, all_judged, t)
+        if quantity in FITTED and recipe is not None
+        else ()
+    )
     noise = refs.get(f"noise:{metric}")
     min_effect = refs.get("plan:min_effect")
     return VerdictInputs(
@@ -183,6 +198,7 @@ def verdict_inputs(
         fit_notes=notes,
         checkpoint_s=plan.checkpoint_s if plan is not None else None,
         controls=len(controls),
+        control_vessels=sum(v.role is Role.CONTROL for v in vessels),
         treatments=sum(ref is not None for ref in effects.values()),  # measured, not just drawn
         planned=len(compared),
         effects={label: ref for label, ref in effects.items() if ref is not None},

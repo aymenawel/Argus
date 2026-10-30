@@ -179,8 +179,8 @@ def _next_levels(
 
 
 def next_run_numbers(db: Database, run: Run, recipe: Recipe, plan: Plan | None) -> NextRunNumbers:
-    """Replicates from the spread of the judged quantity within conditions (each vessel's level at the checkpoint, or
-    its fitted half-way time or rate), run length from the fitted curves, from this run only."""
+    """Replicates from the spread of the judged quantity within conditions (each vessel's latest level, as the verdict
+    compares it, or its fitted half-way time or rate), run length from the fitted curves, from this run only."""
     metric = plan.metric if plan is not None and plan.metric else recipe.main_measurement
     quantity = plan.quantity if plan is not None and plan.quantity in ("half_time", "rate") else "level"
     checkpoint = plan.checkpoint_s if plan is not None else None
@@ -197,7 +197,7 @@ def next_run_numbers(db: Database, run: Run, recipe: Recipe, plan: Plan | None) 
         judged = {vid: f.rate_per_h[0] for vid, f in fits.items() if f.ok and f.rate_per_h is not None}
         judged_unit = f"{unit}/h"
     else:
-        judged = {r.vessel_id: r.value for r in rows if checkpoint is None or r.t <= checkpoint}  # the latest wins
+        judged = {r.vessel_id: r.value for r in rows}  # the latest wins: the readings the verdict compared
         judged_unit = unit
     groups: dict[str, list[float]] = {}
     for vessel in vessels:

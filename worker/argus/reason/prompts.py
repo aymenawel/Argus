@@ -242,8 +242,8 @@ def next_run_task(
     experiment_id: str,
     rejected: Sequence[str] = (),
 ) -> ReasonTask:
-    """The next-run suggestion's task (D-80): code's numbers as (ref id or name, reason) pairs, the reasons' digits
-    masked so the only numbers the model can cite are the refs."""
+    """The next-run suggestion's task (D-80): code's numbers as (ref id or name, reason) pairs, the reasons' and the
+    verdict checks' digits masked so the only numbers the model can cite are the refs."""
     task = load_prompt("deep/next-run.md")
     if rejected:
         task += "\n\nYour previous answer was rejected: " + "; ".join(rejected) + ". Fix exactly these."
@@ -254,7 +254,8 @@ def next_run_task(
         stable=_stable(recipe, plan),
         variable=(
             measurements_block(refs),
-            f"VERDICT: {verdict}\nCHECKS (computed in code)\n" + "\n".join(f"- {c}" for c in checks),
+            f"VERDICT: {verdict}\nCHECKS (computed in code; numbers masked as [n])\n"
+            + "\n".join(f"- {NUMBER.sub('[n]', c)}" for c in checks),
             "OPEN RIVALS: " + ("; ".join(open_rivals) if open_rivals else "none"),
             "NEXT-RUN NUMBERS (computed in code; cite as {ref:<id>}, reasons with numbers masked as [n])\n"
             + "\n".join(f"- {name}: {NUMBER.sub('[n]', reason)}" for name, reason in numbers),

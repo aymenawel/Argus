@@ -10,9 +10,10 @@ The first rule that applies sets the allowed verdicts:
    opposed); it is small when its ± rules out the smallest effect in the predicted direction. 2+ clear and none
    opposed → {SUPPORTED, INCONCLUSIVE}; every one small or opposed → {NOT_SUPPORTED, INCONCLUSIVE}; otherwise →
    {INCONCLUSIVE}. Without a smallest effect, nothing is small: no clear effect is not evidence of none.
-A plan judged on a fitted half-way time or rate (D-78, D-79) needs 2 controls, judges each effect by its own ± and
-the smallest effect (the readings' noise floor is in another unit), and stays Inconclusive while any compared vessel
-has no fitted value: a dish that never germinated, or was still rising, is evidence too.
+A plan judged on a fitted half-way time or rate (D-78, D-79) needs 2 controls with a fitted value, has no noise floor
+(each effect is judged by its own ± and the smallest effect: the readings' noise floor is in another unit), and stays
+Inconclusive while any compared vessel has no fitted value: a dish that never germinated, or was still rising, is
+evidence too.
 """
 
 from __future__ import annotations
@@ -73,8 +74,9 @@ class VerdictInputs:
     registered: bool = True  # some compared vessel's reading moved by the smallest effect: the measurement can see it
     quantity: str = "level"  # D-78: "half_time" or "rate" are judged on fitted curves, each with its fit's ±
     fit_notes: tuple[
-        tuple[str, bool | None, str], ...
-    ] = ()  # (check id, ok, text): refused or unreached fits, plateaus
+        tuple[str, bool | None, str, str], ...
+    ] = ()  # (check id, ok, text, prompt): refused or unreached fits, plateaus
+    control_vessels: int = 0  # control vessels in the run, fitted or not
 
 
 def _effect(ref: Ref, inputs: VerdictInputs) -> Literal["clear", "opposed", "small", "unclear"]:
@@ -93,7 +95,7 @@ def _effect(ref: Ref, inputs: VerdictInputs) -> Literal["clear", "opposed", "sma
     return "unclear"
 
 
-def _without_digits(text: str) -> str:
+def without_digits(text: str) -> str:
     """A check's words for the model: its numbers are in the refs, never copied from text."""
     return " ".join(word for word in text.split() if not any(c.isdigit() for c in word))
 
@@ -150,13 +152,14 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
         )
     )
     fitted = inputs.quantity in FITTED
-    if fitted and 0 < inputs.controls < MIN_FITTED_CONTROLS:
+    present = max(inputs.controls, inputs.control_vessels)
+    if fitted and present and inputs.controls < MIN_FITTED_CONTROLS:
         checks.append(
             _check(
                 "control",
                 False,
-                f"Only {inputs.controls} control vessel with a fitted value; at least {MIN_FITTED_CONTROLS} are "
-                "needed, since a fit's ± doesn't show how much dishes differ.",
+                f"{inputs.controls} of {present} control vessel(s) have a fitted value; at least {MIN_FITTED_CONTROLS} "
+                "are needed, since a fit's ± doesn't show how much dishes differ.",
                 prompt="Too few control vessels with a fitted value to show how much dishes differ.",
             )
         )
@@ -174,23 +177,24 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
             _check("control", False, "There is no control vessel, so a treatment can't be told from other causes.")
         )
     enough = inputs.treatments >= MIN_REPLICATES
+    counted = "with a fitted difference from the controls" if fitted else "in the comparison measured"
     checks.append(
         _check(
             "replicates",
             enough,
-            f"{inputs.treatments} of {max(inputs.planned, inputs.treatments)} treatment vessel(s) in the comparison "
-            f"measured; at least {MIN_REPLICATES} are needed.",
-            prompt="Enough treatment vessels in the comparison."
+            f"{inputs.treatments} of {max(inputs.planned, inputs.treatments)} treatment vessel(s) {counted}; "
+            f"at least {MIN_REPLICATES} are needed.",
+            prompt=f"Enough treatment vessels {counted.replace(' measured', '')}."
             if enough
-            else "Too few treatment vessels in the comparison to count replicates.",
+            else f"Too few treatment vessels {counted.replace(' measured', '')} to count replicates.",
         )
     )
     if fitted:
         words = "half-way times" if inputs.quantity == "half_time" else "rates"
         text = f"Judged on fitted {words}: each carries its fit's ±, in place of a noise floor."
         checks.append(_check("fits", True, text))
-        for id_, ok, note in inputs.fit_notes:
-            checks.append(_check(id_, ok, note, prompt=_without_digits(note)))
+        for id_, ok, note, prompt in inputs.fit_notes:
+            checks.append(_check(id_, ok, note, prompt=prompt))
     elif inputs.noise is not None:
         checks.append(
             _check(
@@ -263,7 +267,7 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
         return {INCONCLUSIVE}, checks
     if not inputs.registered:
         return {INCONCLUSIVE}, checks
-    if fitted and any(ok is False for _, ok, _ in inputs.fit_notes):  # a compared vessel without a fitted value
+    if fitted and any(ok is False for _, ok, _, _ in inputs.fit_notes):  # a compared vessel without a fitted value
         return {INCONCLUSIVE}, checks
     clear = sum(v == "clear" for v in verdicts.values())
     opposed = sum(v == "opposed" for v in verdicts.values())

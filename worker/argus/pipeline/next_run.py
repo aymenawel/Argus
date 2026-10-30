@@ -24,6 +24,7 @@ from argus.storage.repos import (
     add_next_run,
     first_locked_plan,
     latest_verdict,
+    run_has_readings,
     run_last_t,
     run_spend_usd,
     vessels_for_run,
@@ -123,6 +124,11 @@ async def suggest_next_run(
 ) -> NextRun:
     if run.status is RunStatus.RUNNING:
         raise NextRunRefused("the run is still going: the next run is suggested once it has ended")
+    # Without a prediction or a reading every number would be unknown: refuse before a paid call explains that.
+    if await asyncio.to_thread(first_locked_plan, db, run.experiment_id) is None:
+        raise NextRunRefused("no plan was locked for this experiment: the next run is planned against its prediction")
+    if not await asyncio.to_thread(run_has_readings, db, run.id):
+        raise NextRunRefused("this run has no readings yet: there is nothing to plan the next run from")
     if run.id in _writing:
         raise NextRunRefused("a next run is being suggested for this run: it arrives in about a minute")
     _writing.add(run.id)

@@ -74,10 +74,15 @@
 }
 
 .swatch {
-  width: 18px;
-  height: 4px;
+  width: 22px;
+  height: 10px;
   stroke: var(--series);
   stroke-width: 2.5;
+}
+
+.swatchDot {
+  fill: var(--series);
+  stroke: none;
 }
 
 .ring {

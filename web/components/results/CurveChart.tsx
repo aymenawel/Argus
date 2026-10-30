@@ -1,20 +1,39 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { linearScale, niceTicks } from "@/lib/chart";
+import { conditionGroups, groupKey, linearScale, type Marker, niceTicks } from "@/lib/chart";
 import type { FitsView } from "@/lib/types";
 import styles from "./CurveChart.module.css";
 
 type Props = { fits: FitsView; checkpointS?: number | null };
 
-// Up to three treatment conditions stay apart by dash pattern; the control is always grey and solid.
-const DASHES = [undefined, "7 4", "2 4"];
-
 const PAD = { left: 44, right: 16, top: 26, bottom: 34 };
 
+// A reading's dot in its condition's shape, centred on (cx, cy).
+function Dot({
+  marker,
+  cx,
+  cy,
+  r,
+  className,
+}: {
+  marker: Marker;
+  cx: number;
+  cy: number;
+  r: number;
+  className?: string;
+}) {
+  if (marker === "square") return <rect className={className} x={cx - r} y={cy - r} width={2 * r} height={2 * r} />;
+  if (marker === "diamond") {
+    const d = r * 1.35;
+    return <polygon className={className} points={`${cx},${cy - d} ${cx + d},${cy} ${cx},${cy + d} ${cx - d},${cy}`} />;
+  }
+  return <circle className={className} cx={cx} cy={cy} r={r} />;
+}
+
 // Each vessel's readings as dots and its fitted curve as a line, coloured by condition (controls grey, treatments
-// teal, told apart by dash); the plan's checkpoint dashed; each half-way point marked. Plain SVG drawn from the worker's numbers (nothing computed here
-// but positions).
+// teal, told apart by dash and dot shape); the plan's checkpoint dashed; each half-way point marked. Plain SVG drawn
+// from the worker's numbers (nothing computed here but positions).
 export function CurveChart({ fits, checkpointS }: Props) {
   // Drawn at the figure's own width, so the labels keep their size from a phone to a wide screen.
   const figure = useRef<HTMLElement>(null);
@@ -38,21 +57,7 @@ export function CurveChart({ fits, checkpointS }: Props) {
   const y = linearScale([yTicks[0], yTicks.at(-1)!], [H - PAD.bottom, PAD.top]);
   const path = (points: [number, number][]) =>
     points.map(([t, v], i) => `${i ? "L" : "M"}${x(t / 3600).toFixed(1)},${y(v).toFixed(1)}`).join("");
-  // One group per condition, controls first.
-  const groupOf = (v: FitsView["vessels"][number]) => `${v.role}:${v.condition?.value ?? ""}`;
-  const groups = new Map<string, { label: string; control: boolean; dash?: string }>();
-  for (const v of [...fits.vessels].sort((a, b) => Number(b.role === "control") - Number(a.role === "control"))) {
-    const key = groupOf(v);
-    if (groups.has(key)) continue;
-    const control = v.role === "control";
-    const treatments = [...groups.values()].filter((g) => !g.control).length;
-    const name = control ? "Control" : "Treatment";
-    groups.set(key, {
-      label: v.condition ? `${name}: ${v.condition.value}` : name,
-      control,
-      dash: control ? undefined : DASHES[treatments % DASHES.length],
-    });
-  }
+  const groups = conditionGroups(fits.vessels);
 
   return (
     <figure ref={figure} className={styles.figure}>
@@ -98,10 +103,17 @@ export function CurveChart({ fits, checkpointS }: Props) {
         {fits.vessels.map((v) => (
           <g key={v.vessel_id} className={v.role === "control" ? styles.control : styles.treatment}>
             {v.readings.map(([t, value], i) => (
-              <circle key={i} className={styles.dot} cx={x(t / 3600)} cy={y(value)} r={2} />
+              <Dot
+                key={i}
+                className={styles.dot}
+                marker={groups.get(groupKey(v))?.marker ?? "circle"}
+                cx={x(t / 3600)}
+                cy={y(value)}
+                r={2}
+              />
             ))}
             {v.fit?.ok && v.fit.samples.length > 0 && (
-              <path className={styles.curve} d={path(v.fit.samples)} strokeDasharray={groups.get(groupOf(v))?.dash} />
+              <path className={styles.curve} d={path(v.fit.samples)} strokeDasharray={groups.get(groupKey(v))?.dash} />
             )}
             {v.fit?.ok && v.fit.half_time_h && v.fit.plateau && (
               <circle className={styles.half} cx={x(v.fit.half_time_h[0])} cy={y(v.fit.plateau[0] / 2)} r={4}>
@@ -116,8 +128,9 @@ export function CurveChart({ fits, checkpointS }: Props) {
       <figcaption className={styles.legend}>
         {[...groups.entries()].map(([key, g]) => (
           <span key={key} className={`${styles.key} ${g.control ? styles.control : styles.treatment}`}>
-            <svg className={styles.swatch} viewBox="0 0 18 4" aria-hidden="true">
-              <line x1="0" x2="18" y1="2" y2="2" strokeDasharray={g.dash} />
+            <svg className={styles.swatch} viewBox="0 0 22 10" aria-hidden="true">
+              <line x1="0" x2="22" y1="5" y2="5" strokeDasharray={g.dash} />
+              <Dot className={styles.swatchDot} marker={g.marker} cx={11} cy={5} r={2.6} />
             </svg>
             {g.label}
           </span>

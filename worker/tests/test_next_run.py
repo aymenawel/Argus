@@ -65,7 +65,7 @@ def logistic_fit(t50: float, *, K: float = 10.0, r: float = 0.5, reached: bool =
     )
 
 
-def finished_run(db, *, status=RunStatus.FINISHED, halves=None):
+def finished_run(db, *, status=RunStatus.FINISHED, halves=None, quantity="half_time", checkpoint_s=86400.0):
     """Rye controls A, B and millet treatments C, D, half-way at 22, 23, 15 and 17 h, judged on half-way time."""
     exp = create_experiment(db, "Rye vs millet", "seed-germination", 1)
     plan = PlanDraft(
@@ -76,9 +76,9 @@ def finished_run(db, *, status=RunStatus.FINISHED, halves=None):
         metric="root_length",
         direction=Direction.LOWER,
         min_effect=2.0,
-        checkpoint_s=86400.0,
+        checkpoint_s=checkpoint_s,
         treatment=None,
-        quantity="half_time",
+        quantity=quantity,
     )
     save_plan_draft(db, exp.id, plan)
     lock_plan(db, exp.id)
@@ -202,3 +202,79 @@ def test_a_vessel_still_rising_leaves_the_run_length_unknown(db):
     run = finished_run(db, halves={"A": 22.0, "B": 23.0, "C": 15.0, "D": 47.0})
     numbers = next_run_numbers(db, run, RECIPE, first_locked_plan(db, run.experiment_id))
     assert numbers.hours is None and "still rising" in numbers.hours_reason
+
+
+def test_the_verdicts_checks_reach_the_model_without_digits():
+    """Code's numbers reach the model only as refs: a check's "2.4 ± 1.6 h" would be copied and rejected."""
+    from argus.claims.refs import RefTable
+    from argus.reason.prompts import next_run_task
+
+    task = next_run_task(
+        RECIPE,
+        None,
+        RefTable({}),
+        numbers=[],
+        verdict="INCONCLUSIVE",
+        checks=["Vessel C: 2.4 ± 1.6 h against the controls, no clear effect."],
+        open_rivals=[],
+        experiment_id="exp",
+    )
+    checks = next(block for block in task.variable if "CHECKS" in block)
+    assert "Vessel C" in checks and not any(c.isdigit() for c in checks)
+
+
+@pytest.mark.anyio
+async def test_a_run_without_readings_is_refused_before_any_call(db):
+    exp = create_experiment(db, "Empty", "seed-germination", 1)
+    save_plan_draft(db, exp.id, PlanDraft(hypothesis="h", prediction="p", threshold="t", rivals=[]))
+    lock_plan(db, exp.id)
+    run = create_run(db, exp.id, RunMode.LIVE, RunSource(kind=SourceKind.WEBCAM, camera_index=0))
+    run = set_run_status(db, run.id, RunStatus.FINISHED)
+    reasoner = FakeReasoner([])
+    with pytest.raises(NextRunRefused, match="no readings"):
+        await suggest_next_run(db, run, RECIPE, reasoner, SETTINGS)
+    assert reasoner.calls == 0
+
+
+@pytest.mark.anyio
+async def test_a_run_without_a_locked_plan_is_refused_before_any_call(db):
+    exp = create_experiment(db, "No plan", "seed-germination", 1)
+    run = create_run(db, exp.id, RunMode.LIVE, RunSource(kind=SourceKind.WEBCAM, camera_index=0))
+    vessel = add_vessels(db, run.id, [VesselDraft(label="A", role=Role.CONTROL, roi=[(0, 0), (9, 0), (9, 9)])])[0]
+    add_measurements(
+        db,
+        run.id,
+        [
+            MeasurementDraft(
+                vessel_id=vessel.id,
+                frame_id=None,
+                t=60.0,
+                metric="root_length",
+                value=1.0,
+                uncertainty=0.1,
+                unit="mm",
+                method_version="skeleton_length/1",
+            )
+        ],
+    )
+    run = set_run_status(db, run.id, RunStatus.FINISHED)
+    reasoner = FakeReasoner([])
+    with pytest.raises(NextRunRefused, match="plan"):
+        await suggest_next_run(db, run, RECIPE, reasoner, SETTINGS)
+    assert reasoner.calls == 0
+
+
+def test_a_level_plans_spread_comes_from_the_readings_the_verdict_compared(db):
+    """The verdict compares each vessel's latest reading; the replicates must come from the spread of the same values,
+    not from the readings at the checkpoint."""
+    from argus.analyze.next_run import next_run_numbers, pooled_sd
+    from argus.storage.repos import first_locked_plan, measurements_for_run, vessels_for_run
+
+    run = finished_run(db, quantity=None, checkpoint_s=43200.0)  # the level judged from 12 h, curves still rising
+    plan = first_locked_plan(db, run.experiment_id)
+    numbers = next_run_numbers(db, run, RECIPE, plan)
+    latest = {r.vessel_id: r.value for r in measurements_for_run(db, run.id, metric="root_length")}
+    groups: dict[str, list[float]] = {}
+    for v in vessels_for_run(db, run.id):
+        groups.setdefault(str(v.role), []).append(latest[v.id])
+    assert f"spread of {pooled_sd(groups):.2g} mm" in numbers.replicates_reason

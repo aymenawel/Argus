@@ -165,6 +165,16 @@ def test_ordinary_words_are_not_quantities(text):
     assert check_note(clean_note(observation=text), REFS, allowed=ALL, evidence=set()) == []
 
 
+@pytest.mark.parametrize("text", ["Millet's half-way time came later.", "The half way point.", "Halfway there."])
+def test_half_way_is_the_name_of_a_time_not_a_quantity(text):
+    """A plan judged on speed is about the half-way time (KB 18): the term names the time, it claims no amount."""
+    assert check_note(clean_note(observation=text), REFS, allowed=ALL, evidence=set()) == []
+
+
+def test_half_of_something_is_still_a_quantity():
+    assert check_note(clean_note(observation="Half the seeds grew."), REFS, allowed=ALL, evidence=set())
+
+
 DISHES = refs_table({"m:pg1-2:count": "6 count", "chg:sc1-2:count": "3 count", "m:3:count": "2 count"})
 
 

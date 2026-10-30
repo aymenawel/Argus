@@ -1,7 +1,7 @@
 // Scales and ticks for the Results page's SVG charts (lib/chart.ts).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatPair, linearScale, niceTicks } from "../lib/chart.ts";
+import { conditionGroups, formatPair, groupKey, linearScale, niceTicks } from "../lib/chart.ts";
 
 test("a linear scale maps the domain onto the range, either way round", () => {
   assert.equal(linearScale([0, 10], [0, 100])(5), 50);
@@ -23,4 +23,25 @@ test("a value and its ± round the uncertainty first, then the value to match", 
   assert.equal(formatPair([21.437, 0.1523], "h"), "21.44 ± 0.15 h"); // a leading 1 keeps two digits
   assert.equal(formatPair([1234.5, 37], "count"), "1230 ± 40 count");
   assert.equal(formatPair([2.5, 0], "mm"), "2.5 mm");
+});
+
+test("treatment conditions are told apart by dash and by dot shape; controls stay solid and round", () => {
+  const vessel = (role: "control" | "treatment", value: string) => ({ role, condition: { factor: "salt", value } });
+  const groups = conditionGroups([
+    vessel("treatment", "50 mM"),
+    vessel("control", "0 mM"),
+    vessel("treatment", "100 mM"),
+    vessel("treatment", "50 mM"),
+    vessel("treatment", "150 mM"),
+  ]);
+  assert.deepEqual(
+    [...groups.values()].map((g) => [g.label, g.dash, g.marker]),
+    [
+      ["Control: 0 mM", undefined, "circle"],
+      ["Treatment: 50 mM", undefined, "circle"],
+      ["Treatment: 100 mM", "7 4", "square"],
+      ["Treatment: 150 mM", "2 4", "diamond"],
+    ],
+  );
+  assert.equal(groups.get(groupKey(vessel("treatment", "100 mM")))?.marker, "square");
 });

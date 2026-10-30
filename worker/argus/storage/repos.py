@@ -592,6 +592,11 @@ def add_model_call(db: Database, run_id: str | None, t: float | None, draft: Mod
     return call
 
 
+def run_has_readings(db: Database, run_id: str) -> bool:
+    with db.read() as c:
+        return c.execute("SELECT 1 FROM measurements WHERE run_id=? LIMIT 1", (run_id,)).fetchone() is not None
+
+
 def run_last_t(db: Database, run_id: str) -> float:
     """The run's time now: its newest frame or reading, 0 before any."""
     with db.read() as c:

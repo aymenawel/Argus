@@ -80,3 +80,12 @@ def test_the_prompts_state_a_fitted_prediction_in_its_own_terms():
     half = block("half_time")
     assert "half-way time" in half and "sooner" in half and "reads lower" not in half
     assert "fitted rate" in block("rate")
+
+
+@pytest.mark.parametrize("name", ["setup/describe.md", "setup/recipe.md"])
+def test_the_drafting_prompts_put_the_smallest_effect_in_the_judged_quantitys_unit(name):
+    """A half-way plan's smallest effect is in hours: a draft in seeds would be judged against hours."""
+    from argus.reason.prompts import load_prompt
+
+    line = next(line for line in load_prompt(name).splitlines() if "smallest difference" in line)
+    assert "hours" in line and "per hour" in line, line

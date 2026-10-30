@@ -29,7 +29,7 @@ COUNTING = (
 NUMBER_WORD = re.compile(
     r"\b(?:(?:" + COUNTING + r")s?"
     r"|(?:" + COUNTING + r"|multi|many)-?fold"
-    r"|twice|half|halv(?:e|ed|es|ing)"
+    r"|twice|half(?![-\s]?way\b)|halv(?:e|ed|es|ing)"  # "half-way" names a time (KB 18), not an amount
     r"|doubl(?:e|ed|es|ing)|tripl(?:e|ed|es|ing)|quadrupl(?:e|ed|es|ing)"
     r"|per\s?cent)\b|%",
     re.IGNORECASE,
