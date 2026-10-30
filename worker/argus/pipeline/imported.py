@@ -249,8 +249,13 @@ async def _segment_vessel(
     full_frames: FullFrames,
     *,
     first_clip: int = 0,
+    stills: bool = False,
 ) -> None:
-    """Stop is checked before every SAM call; a call already sent finishes and is logged."""
+    """Stop is checked before every SAM call; a call already sent finishes and is logged. `stills` (a published image
+    sequence, frames far apart) goes straight to image mode on the whole frame."""
+    if stills:
+        await _segment_stills(ctx, samples, vessel, concept, shape, masks, cancel, full_frames)
+        return
     box = roi_box(vessel, *shape, margin=CROP_MARGIN_PX)
     x0, y0, x1, y1 = box
     size = ctx.settings.sam_max_video_frames
@@ -273,16 +278,34 @@ async def _segment_vessel(
             continue
         if result.reason == "cap":
             return
-        for sample in chunk:  # video mode failed: image mode on the full frame, sample by sample
-            if cancel.is_set():
-                return
-            single = await _full_frame(ctx, sample, concept, full_frames)
-            if isinstance(single, Skipped):
-                if single.reason == "cap":
-                    return
-                continue
-            patches = [track.frames[0].patch for track in single.tracks]
-            masks[sample.frame_id].setdefault(vessel.id, {})[concept] = _keep(ctx, vessel, concept, patches, shape)
+        # video mode failed: image mode on the full frame, sample by sample
+        if not await _segment_stills(ctx, chunk, vessel, concept, shape, masks, cancel, full_frames):
+            return
+
+
+async def _segment_stills(
+    ctx: RunContext,
+    samples: list[_Sample],
+    vessel: Vessel,
+    concept: str,
+    shape: tuple[int, int],
+    masks: dict[str, dict[str, dict]],
+    cancel: asyncio.Event,
+    full_frames: FullFrames,
+) -> bool:
+    """Image mode on the whole frame, sample by sample, each call shared by every vessel; False once stopped or
+    capped. SAM sees small objects in the whole frame that it misses in a crop of one vessel (KB 04)."""
+    for sample in samples:
+        if cancel.is_set():
+            return False
+        single = await _full_frame(ctx, sample, concept, full_frames)
+        if isinstance(single, Skipped):
+            if single.reason == "cap":
+                return False
+            continue
+        patches = [track.frames[0].patch for track in single.tracks]
+        masks[sample.frame_id].setdefault(vessel.id, {})[concept] = _keep(ctx, vessel, concept, patches, shape)
+    return True
 
 
 def _store_labels(ctx: RunContext, manifest_path: Path, names: Mapping[str, str]) -> None:
@@ -337,7 +360,16 @@ async def run_import(ctx: RunContext, request: ImportRequest, *, cancel: asyncio
                 vessel = next(v for v in vessels if v.id == vessel_id)  # its region in this stretch of video
                 part = [s for s in samples if since <= s.t < until]
                 await _segment_vessel(
-                    ctx, part, vessel, concept, shape, masks, cancel, full_frames, first_clip=k * 1000
+                    ctx,
+                    part,
+                    vessel,
+                    concept,
+                    shape,
+                    masks,
+                    cancel,
+                    full_frames,
+                    first_clip=k * 1000,
+                    stills=request.manifest is not None,
                 )
             done += 1
             ctx.publish("run_progress", {"stage": "segment", "done": done, "total": len(jobs)})

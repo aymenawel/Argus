@@ -82,13 +82,13 @@ def germinated(result):
 
 def test_a_seed_whose_outline_grew_enough_counts():
     first = measure([seed(20), seed(80)])
-    assert germinated(first) == [(0.0, 0.0, "grown_count/1")]  # first sighting: nothing has grown yet
+    assert germinated(first) == [(0.0, 0.0, "grown_count/2")]  # first sighting: nothing has grown yet
     later = measure([seed(20, 60 + 30), seed(80, 60 + 10)], first.first_seen)  # 3 mm and 1 mm longer
-    assert germinated(later) == [(1.0, 0.0, "grown_count/1")]
+    assert germinated(later) == [(1.0, 0.0, "grown_count/2")]
 
 
 def test_an_object_first_seen_already_long_does_not_count():
-    assert germinated(measure([seed(20, 160)])) == [(0.0, 0.0, "grown_count/1")]
+    assert germinated(measure([seed(20, 160)])) == [(0.0, 0.0, "grown_count/2")]
 
 
 def test_no_objects_found_is_a_gap_not_zero():
@@ -99,10 +99,10 @@ def test_seeds_whose_outlines_touch_are_kept_apart_by_their_own_masks():
     a, b = seed(20), seed(32)  # stacked: their union is one blob
     first = measure([a, b])
     later = measure([seed(20, 95), seed(32, 95)], first.first_seen)
-    assert germinated(later) == [(2.0, 0.0, "grown_count/1")]
+    assert germinated(later) == [(2.0, 0.0, "grown_count/2")]
     merged_first = measure(None, union=a | b)
     merged_later = measure(None, {**merged_first.first_seen}, union=seed(20, 95) | seed(32, 95))
-    assert germinated(merged_later) == [(1.0, 0.0, "grown_count/1")]  # without masks per object: one blob
+    assert germinated(merged_later) == [(1.0, 0.0, "grown_count/2")]  # without masks per object: one blob
 
 
 def test_grown_count_takes_a_minimum_length_and_nothing_to_touch():
@@ -112,3 +112,11 @@ def test_grown_count_takes_a_minimum_length_and_nothing_to_touch():
     with pytest.raises(ValidationError, match="touching"):
         MeasurementSpec.model_validate(base | {"min_length_mm": 2, "touching": "root"})
     assert MeasurementSpec.model_validate(base | {"min_length_mm": 2}).min_length_mm == 2
+
+
+def test_a_seed_seen_grown_stays_counted_when_its_outline_shrinks_back():
+    """Germination doesn't undo itself: SAM's outline may leave the sprout out on a later frame."""
+    first = measure([seed(20), seed(80)])
+    grown = measure([seed(20, 90), seed(80)], first.first_seen)
+    shrunk = measure([seed(20), seed(80)], grown.first_seen)
+    assert germinated(grown)[0][0] == 1.0 and germinated(shrunk) == [(1.0, 0.0, "grown_count/2")]

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import cv2
 import numpy as np
@@ -51,10 +51,12 @@ def baseline_key(measurement_id: str, corrected: bool) -> str:
 
 @dataclass(frozen=True)
 class FirstSeen:
-    """An object as Argus first saw it in a vessel: its outline (in the vessel's measuring view) and its length."""
+    """An object as Argus first saw it in a vessel: its outline (in the vessel's measuring view), its length, and
+    whether it has since been seen grown (growth such as germination doesn't undo itself, so it stays counted)."""
 
     mask: np.ndarray
     length_mm: float
+    grown: bool = False
 
 
 @dataclass(frozen=True)
@@ -223,18 +225,20 @@ def measure_vessel(
                 if not found:
                     continue  # nothing seen: no count, not a count of zero
                 library = list((first_seen or {}).get(spec.id, ()))
-                grown = 0
                 for obj in found:
                     length = skeleton_length_mm(obj, mmpp).value
-                    overlap, earlier = max(
-                        ((np.count_nonzero(obj & f.mask), f) for f in library), key=lambda o: o[0], default=(0, None)
+                    overlap, index = max(
+                        ((np.count_nonzero(obj & f.mask), i) for i, f in enumerate(library)),
+                        key=lambda o: o[0],
+                        default=(0, -1),
                     )
-                    if earlier is None or overlap == 0:
+                    if overlap == 0:
                         library.append(FirstSeen(obj, length))  # first sighting: its own baseline
-                    elif length - earlier.length_mm >= spec.min_length_mm:
-                        grown += 1
+                    elif length - library[index].length_mm >= spec.min_length_mm:
+                        library[index] = replace(library[index], grown=True)
                 seen[spec.id] = library
-                draft(spec.id, float(grown), 0.0, "count", "grown_count/1")  # an exact count of what was seen
+                # Objects seen grown so far: SAM's outline may leave a sprout out on a later frame.
+                draft(spec.id, float(sum(f.grown for f in library)), 0.0, "count", "grown_count/2")
             elif spec.method == "touching_count" and spec.touching is not None and spec.min_length_mm is not None:
                 touched = views[spec.touching]
                 n = touching_count(_objects(view, mmpp), touched, mmpp, min_length_mm=spec.min_length_mm)

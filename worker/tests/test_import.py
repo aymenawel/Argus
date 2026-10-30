@@ -377,3 +377,38 @@ async def test_an_import_counts_an_object_whose_outline_grew(ctx, clip):
     values = [m.value for m in rows if m.vessel_id == a]
     assert status is RunStatus.FINISHED and values[0] == 0.0 and values[-1] == 1.0
     assert not [m for m in rows if m.vessel_id == b]
+
+
+@pytest.mark.anyio
+async def test_a_published_image_sequence_is_segmented_as_whole_stills(ctx, tmp_path):
+    """Stills 30 min apart aren't video: one image call per frame and concept on the whole frame, shared by every
+    vessel (SAM found small seeds on the whole Genze plate that it missed in one-dish crops)."""
+    import json
+
+    folder = tmp_path / "plate"
+    folder.mkdir()
+    names = []
+    for i, length in enumerate((10, 20, 30)):
+        image, _ = scene_with_bar_on_card_plane(STANDARD, length_mm=length, width_mm=2)
+        cv2.imencode(".jpg", image)[1].tofile(folder / f"frame_{i}.jpg")
+        names.append(f"frame_{i}.jpg")
+    tile = {"label": "A", "condition": "x", "run": "r1", "dish": 1, "box": [0, 0, 10, 10], "seeds": 1}
+    body = {
+        "dataset": "d",
+        "doi": "10.0/x",
+        "url": "https://example.org",
+        "licence": "CC BY 4.0",
+        "credit": "c",
+        "interval_s": 1800,
+        "frames": names,
+        "tiles": [tile],
+    }
+    (folder / "manifest.json").write_text(json.dumps(body), encoding="utf-8")
+    request = ImportRequest(paths=[], time_scale=1.0, manifest=folder / "manifest.json")
+    status = await run_import(ctx, request, cancel=asyncio.Event())
+    assert status is RunStatus.FINISHED
+    assert ctx.segmenter.modes == ["image"] * 3  # never a video clip, and one call per frame for both vessels
+    rows = lengths_of_a(ctx)
+    assert len(rows) == 3
+    for row, true_mm in zip(rows, (10, 20, 30), strict=True):  # each within its own ± (skeleton ends included)
+        assert abs(row.value - true_mm) <= row.uncertainty, (row.value, row.uncertainty, true_mm)
