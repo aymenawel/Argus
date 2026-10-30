@@ -38,3 +38,8 @@ Use these words consistently in code, UI and docs.
 | **Retrospective** | A verdict on data recorded before the plan existed; judged against a plan locked before Argus measured it, and labelled so (D-71) |
 | **Reference values** | A dataset's own values (its human labels), kept apart from Argus's measurements |
 | **Agreement** | Argus's readings against the reference values at the same times: mean difference, share of exact matches, time to half the final value |
+| **Judged quantity** | What a plan predicts: the level at the checkpoint, the half-way time or the rate (D-78) |
+| **Fit** | The recipe's curve fitted in code to one vessel's readings, with ± from its covariance; refused with a reason when it doesn't describe the data (D-79) |
+| **Half-way time** | When a vessel's fitted curve reaches half its plateau, in hours with ±; "not reached" when that is after the last reading |
+| **Plateau** | The level a fitted growth curve levels off at |
+| **Next run** | Argus's suggestion after a run: vessels per condition, run length and, for a numeric factor, levels to try; computed in code, explained by the model, never started by Argus (D-80) |
