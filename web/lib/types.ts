@@ -244,6 +244,7 @@ export type VerdictBody = {
   findings: { item: string; problem: string; consequence: string; fix: string }[];
   written_by: "model" | "code";
   critique_dropped: string[];
+  retrospective?: boolean; // published data judged after it existed (D-71)
 };
 
 export type Verdict = {

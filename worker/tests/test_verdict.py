@@ -65,6 +65,11 @@ def judged(db, exp):
     save_plan_draft(db, exp.id, plan())
     lock_plan(db, exp.id)
     run = create_run(db, exp.id, RunMode.LIVE, RunSource(kind=SourceKind.WEBCAM, camera_index=0))
+    return db, fill(db, run)
+
+
+def fill(db, run):
+    """Two room-temperature controls (A, B) and two warm treatments (C, D) with clear effects by 600 s."""
     drafts = [
         VesselDraft(
             label=label,
@@ -104,7 +109,7 @@ def judged(db, exp):
             for vid, t, value in rows
         ],
     )
-    return db, run
+    return run
 
 
 def model_calls(db, run):
@@ -459,3 +464,94 @@ async def test_the_spend_cap_is_checked_before_each_call(judged):
     verdict = await judge(db, run, FakeReasoner([costly]))
     assert model_calls(db, run)[-1] == ("verdict_draft", "ok") and verdict.critique is None
     assert any("spend cap" in r for r in verdict.body["critique_dropped"])
+
+
+def published_source(tmp_path, runs_by_label: dict[str, str]):
+    """A published, retrospective import recorded yesterday, its tiles from the given source runs."""
+    import json
+    from datetime import UTC, datetime
+
+    from argus.domain import Provenance
+
+    tiles = [
+        {"label": label, "condition": "x", "run": source_run, "dish": i, "box": [0, 0, 10, 10], "seeds": 10}
+        for i, (label, source_run) in enumerate(runs_by_label.items())
+    ]
+    fields = {"dataset": "Plates", "doi": "10.0/x", "url": "https://example.org", "licence": "CC BY 4.0"}
+    body = fields | {"credit": "Lab", "interval_s": 1800, "frames": ["f.jpg"], "tiles": tiles}
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(body), encoding="utf-8")
+    provenance = Provenance(**fields, credit="Lab", assembled=True, retrospective=True)
+    return RunSource(
+        kind=SourceKind.IMAGES,
+        manifest=str(path),
+        provenance=provenance,
+        start_time=datetime(2020, 5, 1, 9, 0, tzinfo=UTC),  # recorded long before the plan
+    )
+
+
+ONE_RUN = {"A": "sc1", "B": "sc1", "C": "sc1", "D": "sc1"}
+TWO_RUNS = {"A": "sc1", "B": "sc1", "C": "pg2", "D": "pg2"}
+
+
+def answers():
+    return FakeReasoner([verdict_draft("INCONCLUSIVE", refs_used=[], explanation="Judged."), critique("INCONCLUSIVE")])
+
+
+@pytest.mark.anyio
+async def test_published_data_is_judged_retrospectively(db, exp, tmp_path):
+    save_plan_draft(db, exp.id, plan())
+    lock_plan(db, exp.id)  # long after the data was recorded, but before Argus measured it
+    run = fill(db, create_run(db, exp.id, RunMode.IMPORTED, published_source(tmp_path, ONE_RUN)))
+    verdict = await judge(db, run, answers())
+    assert verdict.allowed == [VerdictLevel.SUPPORTED, VerdictLevel.INCONCLUSIVE]
+    flag = next(c for c in verdict.checks if c["id"] == "retrospective")
+    assert flag["ok"] is None and "after" in flag["text"]
+    assert not any(c["id"] == "preregistered" for c in verdict.checks) and verdict.body["retrospective"] is True
+
+
+@pytest.mark.anyio
+async def test_the_same_import_without_provenance_stays_too_early(db, exp, tmp_path):
+    save_plan_draft(db, exp.id, plan())
+    lock_plan(db, exp.id)
+    source = published_source(tmp_path, ONE_RUN).model_copy(update={"provenance": None, "kind": SourceKind.VIDEO})
+    run = fill(db, create_run(db, exp.id, RunMode.IMPORTED, source))
+    verdict = await judge(db, run, FakeReasoner([]))
+    assert verdict.allowed == [VerdictLevel.TOO_EARLY] and verdict.body.get("retrospective") is False
+
+
+@pytest.mark.anyio
+async def test_a_plan_locked_after_argus_measured_published_data_is_not_judged(db, exp, tmp_path):
+    run = fill(db, create_run(db, exp.id, RunMode.IMPORTED, published_source(tmp_path, ONE_RUN)))
+    time.sleep(0.05)
+    save_plan_draft(db, exp.id, plan())
+    lock_plan(db, exp.id)  # written with Argus's numbers in view
+    verdict = await judge(db, run, FakeReasoner([]))
+    assert verdict.allowed == [VerdictLevel.TOO_EARLY]
+
+
+@pytest.mark.anyio
+async def test_dishes_from_different_source_runs_add_an_open_rival_until_resolved(db, exp, tmp_path):
+    save_plan_draft(db, exp.id, plan())
+    lock_plan(db, exp.id)
+    run = fill(db, create_run(db, exp.id, RunMode.IMPORTED, published_source(tmp_path, TWO_RUNS)))
+    assert rival_states(db, run, [])["run-to-run differences"] == "open"
+    verdict = await judge(db, run, answers())
+    assert verdict.allowed == [VerdictLevel.INCONCLUSIVE]
+    assert next(c for c in verdict.checks if c["id"] == "rival:run-to-run differences")["ok"] is None
+    review = ReviewDraft(
+        t=600.0,
+        target_kind="rival",
+        target_id="run-to-run differences",
+        action="resolve",
+        comment="Same rig, same paper and same lab conditions in every run, per the paper's methods.",
+    )
+    add_review(db, run.id, review)
+    verdict = await judge(db, run, answers())
+    assert verdict.allowed == [VerdictLevel.SUPPORTED, VerdictLevel.INCONCLUSIVE]
+
+
+def test_dishes_from_one_source_run_add_no_rival(db, exp, tmp_path):
+    run = create_run(db, exp.id, RunMode.IMPORTED, published_source(tmp_path, ONE_RUN))
+    fill(db, run)
+    assert "run-to-run differences" not in rival_states(db, run, ["lighting change"])

@@ -63,6 +63,7 @@ class VerdictInputs:
     metric: str = ""
     planned: int = 0  # treatment vessels in the comparison, measured or not
     recording_start_known: bool = True  # an import whose recording start nobody gave can't show the plan came first
+    retrospective: bool = False  # published data judged after it existed (D-71): said so, never passed off as a test
 
 
 def _effect(ref: Ref, inputs: VerdictInputs) -> Literal["clear", "opposed", "small", "unclear"]:
@@ -97,7 +98,17 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
         ]
     metric = inputs.metric or "the plan's metric"
     checks = [_check("checkpoint", True, "Past the plan's checkpoint.", ("plan:checkpoint",))]
-    if not inputs.recording_start_known:
+    if inputs.retrospective:
+        checks.append(
+            _check(
+                "retrospective",
+                None,
+                "Retrospective: this is published data, recorded before the plan was written, so the verdict "
+                "re-analyses it after the fact rather than testing a prediction made beforehand. The plan was locked "
+                "before Argus measured it.",
+            )
+        )
+    elif not inputs.recording_start_known:
         checks.append(
             _check(
                 "preregistered",

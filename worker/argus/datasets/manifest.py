@@ -59,8 +59,9 @@ class Manifest(BaseModel):
         return Provenance(**{name: getattr(self, name) for name in fields})
 
 
-def load_manifest(path: str | Path) -> Manifest:
-    """The manifest with every frame checked on disk; ManifestError names the first missing or unreadable one."""
+def load_manifest(path: str | Path, *, check_frames: bool = True) -> Manifest:
+    """The manifest with every frame checked on disk (unless only its tiles and provenance are wanted);
+    ManifestError names the first missing or unreadable one."""
     path = Path(path)
     try:
         manifest = Manifest.model_validate(json.loads(path.read_text(encoding="utf-8")))
@@ -69,7 +70,7 @@ def load_manifest(path: str | Path) -> Manifest:
     except (json.JSONDecodeError, ValidationError) as error:
         raise ManifestError(f"{path.name} isn't a valid manifest: {error}") from error
     manifest._root = path.parent
-    for frame in manifest.frame_paths():
+    for frame in manifest.frame_paths() if check_frames else ():
         if not frame.is_file():
             raise ManifestError(f"{frame.name} is missing (listed in {path.name})")
         with frame.open("rb") as file:

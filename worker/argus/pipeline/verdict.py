@@ -13,6 +13,7 @@ from argus.claims.checker import check_text_fields, render
 from argus.claims.refs import NOTABLE, RefTable, build_refs
 from argus.claims.schema import schema_errors
 from argus.config import Settings
+from argus.datasets.manifest import ManifestError, load_manifest
 from argus.domain import Plan, Role, Run, RunMode, RunStatus, Verdict, VerdictDraft, VerdictLevel
 from argus.reason import Reasoner, ReasonError, ReasonResult
 from argus.reason.prompts import critique_task, load_schema, verdict_task
@@ -46,8 +47,23 @@ class VerdictRefused(RuntimeError):
     """No verdict can be asked for now: no locked plan, or the spend cap would be passed."""
 
 
+RUN_TO_RUN = "run-to-run differences"
+
+
+def _source_runs(run: Run) -> set[str]:
+    """The dataset runs a published plate's dishes came from (one vessel per tile); none without a manifest."""
+    if run.source.manifest is None:
+        return set()
+    try:
+        return {tile.run for tile in load_manifest(run.source.manifest, check_frames=False).tiles}
+    except ManifestError:
+        return {"unknown", "unreadable"}  # can't show the dishes share a run: the rival stays
+
+
 def rival_states(db: Database, run: Run, rivals: Sequence[str]) -> dict[str, Literal["resolved", "open"]]:
-    """Each rival explanation resolved by its check in code, by the researcher (a 'resolve' review), or open."""
+    """Each rival explanation resolved by its check in code, by the researcher (a 'resolve' review), or open. A
+    published plate whose dishes come from more than one dataset run adds its own: the runs differ in more than the
+    condition (date, batch, rig), until the researcher resolves it."""
     events = events_for_run(db, run.id)
     resolved_by_researcher = {
         r.target_id for r in reviews_for_run(db, run.id) if r.target_kind == "rival" and r.action == "resolve"
@@ -63,6 +79,8 @@ def rival_states(db: Database, run: Run, rivals: Sequence[str]) -> dict[str, Lit
     moved = any(e.kind == "camera_moved" for e in events)
     handled = any(e.kind == "intervention" for e in events)
     states: dict[str, Literal["resolved", "open"]] = {}
+    if len(_source_runs(run)) > 1 and RUN_TO_RUN not in rivals:
+        rivals = [*rivals, RUN_TO_RUN]
     for rival in rivals:
         name = rival.lower()
         if rival in resolved_by_researcher:
@@ -81,7 +99,10 @@ def rival_states(db: Database, run: Run, rivals: Sequence[str]) -> dict[str, Lit
 def verdict_inputs(db: Database, run: Run, refs: RefTable, *, plan: Plan | None, t: float) -> VerdictInputs:
     """What the ceiling needs, from refs already built for this call (built once, so derived rows aren't doubled)."""
     metric = plan.metric if plan is not None and plan.metric else ""
+    retrospective = run.source.provenance is not None and run.source.provenance.retrospective
     data_began = run.source.start_time if run.mode is RunMode.IMPORTED and run.source.start_time else run.started_at
+    if retrospective:  # published data existed long before any plan (D-71): the plan must come before Argus's numbers
+        data_began = run.started_at
     vessels = vessels_for_run(db, run.id)
     controls = [v for v in vessels if v.role is Role.CONTROL and f"m:{v.label}:{metric}" in refs]
     compared = [
@@ -101,7 +122,8 @@ def verdict_inputs(db: Database, run: Run, refs: RefTable, *, plan: Plan | None,
         # Locked before the data began, or it isn't a prediction: a plan written with the data in view can't be tested.
         # An import's data began when it was recorded, if the researcher said when; the import's start otherwise.
         locked=plan is not None and plan.locked_at is not None and plan.locked_at <= data_began,
-        recording_start_known=run.mode is not RunMode.IMPORTED or run.source.start_time is not None,
+        recording_start_known=retrospective or run.mode is not RunMode.IMPORTED or run.source.start_time is not None,
+        retrospective=retrospective,
         checkpoint_s=plan.checkpoint_s if plan is not None else None,
         controls=len(controls),
         treatments=sum(ref is not None for ref in effects.values()),  # measured, not just drawn
@@ -323,6 +345,7 @@ async def _write_verdict(
         ],
         "written_by": draft.get("written_by", "model"),
         "critique_dropped": dropped,
+        "retrospective": inputs.retrospective,
     }
     used = list(dict.fromkeys([*draft.get("refs_used", []), *(kept_critique or {}).get("refs_used", [])]))
     stored = VerdictDraft(

@@ -108,7 +108,11 @@ export function VerdictPanel({ snapshot }: Props) {
     <div className={styles.panel}>
       <div className={styles.top}>
         {verdict ? (
-          <VerdictChip level={verdict.verdict} provisional={verdict.provisional} />
+          <VerdictChip
+            level={verdict.verdict}
+            provisional={verdict.provisional}
+            retrospective={verdict.body.retrospective ?? false}
+          />
         ) : (
           <p className={styles.none}>No verdict yet.</p>
         )}

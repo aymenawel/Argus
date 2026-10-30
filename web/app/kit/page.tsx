@@ -124,6 +124,10 @@ export default function KitPage() {
                 <VerdictChip key={level} level={level} provisional />
               ))}
             </div>
+            <div className={styles.row}>
+              <VerdictChip level="SUPPORTED" retrospective />
+              <VerdictChip level="INCONCLUSIVE" retrospective provisional />
+            </div>
           </div>
         </Panel>
 
