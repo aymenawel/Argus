@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import cv2
@@ -46,3 +47,22 @@ def component_count(mask: np.ndarray, mm_per_px: float, *, min_area_mm2: float) 
     return MetricValue(
         "component_count", float(np.count_nonzero(areas_mm2 >= min_area_mm2)), "count", "component_count/1"
     )
+
+
+def touching_count(
+    objects: Sequence[np.ndarray], touched: np.ndarray, mm_per_px: float, *, min_length_mm: float, dilate_px: int = 3
+) -> int:
+    """How many objects (a seed each) touch a piece of `touched` (a root) at least `min_length_mm` along its centre
+    line. An object grown by `dilate_px` must meet the piece; it counts once however many pieces it has, and one
+    piece can carry two objects."""
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(np.asarray(touched, np.uint8), connectivity=8)
+    long_enough = np.zeros(count, bool)
+    for i in range(1, count):
+        x, y, w, h = stats[i, :4]
+        piece = labels[y : y + h, x : x + w] == i
+        long_enough[i] = skeleton_length_mm(piece, mm_per_px).value >= min_length_mm
+    if not long_enough.any():
+        return 0
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * dilate_px + 1, 2 * dilate_px + 1))
+    grown = (cv2.dilate(np.asarray(obj, np.uint8), kernel).astype(bool) for obj in objects)
+    return sum(bool(long_enough[np.unique(labels[g])].any()) for g in grown)

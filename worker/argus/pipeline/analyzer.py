@@ -26,7 +26,7 @@ from argus.measure.engine import ColourBaseline, VesselMeasurements, measure_ves
 from argus.measure.uncertainty import format_measurement
 from argus.pipeline.notes import NoteWriter
 from argus.reason import Reasoner
-from argus.recipes.model import Recipe
+from argus.recipes.model import MeasurementSpec, Recipe
 from argus.segment import Clip, MaskPatch, SegmentError, SegmentResult, segment
 from argus.segment.outline import outline_polygons
 from argus.segment.sam import sam_client
@@ -279,6 +279,12 @@ def _store_detections(
     return add_detection_rows(ctx.db, rows)
 
 
+def due_measurements(recipe: Recipe, segmented: set[str]) -> list[MeasurementSpec]:
+    """The geometry a vessel can be measured for on this frame: every concept a measurement reads was segmented
+    here (a touching count needs both its objects and what they touch)."""
+    return [m for m in recipe.measurements if m.source in segmented and (m.touching is None or m.touching in segmented)]
+
+
 def _union(patches: Sequence[tuple[str, MaskPatch]], shape: tuple[int, int]) -> np.ndarray:
     canvas = np.zeros(shape, bool)
     for _, patch in patches:
@@ -427,9 +433,7 @@ async def analyze_frame(
     drafts: list[MeasurementDraft] = []
     for vessel in (v for v in ctx.vessels if v.id not in blocked):
         segmented_here = set(keyed.get(vessel.id, {}))
-        geometry_recipe = ctx.recipe.model_copy(
-            update={"measurements": [m for m in ctx.recipe.measurements if m.source in segmented_here]}
-        )
+        geometry_recipe = ctx.recipe.model_copy(update={"measurements": due_measurements(ctx.recipe, segmented_here)})
         vessel_masks = ctx.last_masks.get(vessel.id, {})
         baselines = ctx.baselines.setdefault(vessel.id, {})
         common = dict(t=t, frame_id=frame_id, current_reference=current_reference, baselines=baselines)

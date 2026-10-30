@@ -16,7 +16,14 @@ from argus.calibration.colour import ColourReference, correct_lab
 from argus.calibration.detect import rectify
 from argus.calibration.run import RunCalibration
 from argus.domain import MeasurementDraft, Vessel
-from argus.measure.geometry import MetricValue, area_mm2, component_count, height_mm, skeleton_length_mm
+from argus.measure.geometry import (
+    MetricValue,
+    area_mm2,
+    component_count,
+    height_mm,
+    skeleton_length_mm,
+    touching_count,
+)
 from argus.measure.uncertainty import combined_uncertainty
 from argus.recipes.model import MeasurementSpec, Recipe
 from argus.rois import roi_box, roi_mask
@@ -102,6 +109,12 @@ def _length_boundary_px(mask: np.ndarray) -> float:
     return total
 
 
+def _objects(view: np.ndarray, mm_per_px: float) -> list[np.ndarray]:
+    """The separate objects in a concept's mask, as component_count sees them (specks below its size filter out)."""
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(np.asarray(view, np.uint8), connectivity=8)
+    return [labels == i for i in range(1, count) if stats[i, cv2.CC_STAT_AREA] * mm_per_px**2 >= MIN_COUNT_AREA_MM2]
+
+
 def _colour(
     image_bgr: np.ndarray, mask: np.ndarray, cal: RunCalibration, current: ColourReference | None
 ) -> tuple[ColourBaseline, ColourBaseline, np.ndarray] | None:
@@ -165,11 +178,12 @@ def measure_vessel(
             continue
         mask = np.asarray(masks.get(spec.source, empty), bool)
         if spec.family in ("size", "count"):
-            if spec.method not in ("area", "height", "skeleton_length", "component_count"):
+            if spec.method not in ("area", "height", "skeleton_length", "component_count", "touching_count"):
                 continue  # rule-based counts and thresholds are evaluated in phase 4
             region = region or _Region(vessel, image_bgr, cal)
-            if spec.source not in views:
-                views[spec.source] = region.view(mask)
+            for concept in (spec.source, spec.touching):
+                if concept is not None and concept not in views:
+                    views[concept] = region.view(np.asarray(masks.get(concept, empty), bool))
             view, mmpp = views[spec.source], region.mm_per_px
             present = bool(view.any())
             if spec.method == "area":
@@ -180,6 +194,10 @@ def measure_vessel(
             elif spec.method == "skeleton_length":
                 metric = skeleton_length_mm(view, mmpp)
                 sized(spec, metric, _length_boundary_px(view) * mmpp if present else 0.0, power=1)
+            elif spec.method == "touching_count" and spec.touching is not None and spec.min_length_mm is not None:
+                touched = views[spec.touching]
+                n = touching_count(_objects(view, mmpp), touched, mmpp, min_length_mm=spec.min_length_mm)
+                draft(spec.id, float(n), 0.0, "count", "touching_count/1")  # an exact count of what was seen
             else:
                 metric = component_count(view, mmpp, min_area_mm2=MIN_COUNT_AREA_MM2)
                 draft(spec.id, metric.value, 0.0, metric.unit, metric.method_version)
