@@ -13,7 +13,8 @@ from dataclasses import dataclass, field
 from scipy import stats
 
 from argus.analyze.fits import Fit, vessel_fits
-from argus.domain import Plan, Run, Vessel
+from argus.analyze.levels import level_bounds, suggest_levels
+from argus.domain import Direction, Plan, Run, Vessel
 from argus.recipes.model import Recipe
 from argus.storage.db import Database
 from argus.storage.repos import measurements_for_run, vessels_for_run
@@ -33,6 +34,7 @@ class NextRunNumbers:
     hours_reason: str
     levels: list[float] = field(default_factory=list)
     levels_reason: str = ""
+    levels_unit: str = ""  # the factor's unit, for a numeric factor
 
 
 def _power(n: int, d: float, alpha: float) -> float:
@@ -130,6 +132,37 @@ def _hours(h: float) -> str:
     return f"{h:.0f} h" if h >= 10 else f"{h:.1f} h"
 
 
+JUDGED = {"level": "level at the checkpoint", "half_time": "half-way time", "rate": "rate"}
+
+
+def _next_levels(
+    vessels: Sequence[Vessel], judged: Mapping[str, float], plan: Plan | None, quantity: str
+) -> tuple[list[float], str, str]:
+    """Ax's levels for a numeric factor, from each measured vessel's (level, judged value); the factor's unit; why."""
+    conditions = [v.condition for v in vessels if v.condition is not None]
+    if not conditions:
+        return [], "", "the vessels have no condition to vary"
+    if not all(isinstance(c.value, float | int) for c in conditions):
+        return [], "", f"{conditions[0].factor} isn't numeric, so there are no levels to search"
+    unit = next((c.unit for c in conditions if c.unit), None) or ""
+    tested = [(float(v.condition.value), judged[v.id]) for v in vessels if v.condition is not None and v.id in judged]
+    if len({level for level, _ in tested}) < 2:
+        return [], unit, "at least two tested levels are needed to search for the next ones"
+    bounds = level_bounds([level for level, _ in tested])
+    minimize = plan is not None and plan.direction is Direction.LOWER
+    try:
+        levels = suggest_levels(tested, minimize=minimize, bounds=bounds)
+    except Exception as error:  # noqa: BLE001 - whatever breaks inside Ax, the rest of the suggestion stands
+        return [], unit, f"the level search failed: {error}"
+    goal = "lowest" if minimize else "highest"
+    span = f"{bounds[0]:g} to {bounds[1]:g} {unit}".strip()
+    return (
+        levels,
+        unit,
+        f"Ax's picks for the {goal} {JUDGED[quantity]}, searched over {span} from {len(tested)} vessels",
+    )
+
+
 def next_run_numbers(db: Database, run: Run, recipe: Recipe, plan: Plan | None) -> NextRunNumbers:
     """Replicates from the spread of the judged quantity within conditions (each vessel's level at the checkpoint, or
     its fitted half-way time or rate), run length from the fitted curves, from this run only."""
@@ -183,11 +216,5 @@ def next_run_numbers(db: Database, run: Run, recipe: Recipe, plan: Plan | None) 
     else:
         hours_reason = f"unknown: a {recipe.curve} curve never levels off"
 
-    conditions = [v.condition for v in vessels if v.condition is not None]
-    if not conditions:
-        levels_reason = "the vessels have no condition to vary"
-    elif all(isinstance(c.value, float | int) for c in conditions):
-        levels_reason = "the level search isn't available yet"
-    else:
-        levels_reason = f"{conditions[0].factor} is not a number, so there are no levels to search"
-    return NextRunNumbers(replicates, replicates_reason, hours, hours_reason, [], levels_reason)
+    levels, levels_unit, levels_reason = _next_levels(vessels, judged, plan, quantity)
+    return NextRunNumbers(replicates, replicates_reason, hours, hours_reason, levels, levels_reason, levels_unit)

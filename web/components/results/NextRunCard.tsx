@@ -78,7 +78,9 @@ export function NextRunCard({ runId, running }: Props) {
         </div>
         <div>
           <dt>Levels to try</dt>
-          <dd className="num">{numbers.levels.length > 0 ? numbers.levels.join(", ") : "None"}</dd>
+          <dd className="num">
+            {numbers.levels.length > 0 ? `${numbers.levels.join(", ")} ${numbers.levels_unit}`.trim() : "None"}
+          </dd>
           <dd className={styles.reason}>{numbers.levels_reason}</dd>
         </div>
       </dl>

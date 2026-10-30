@@ -275,6 +275,7 @@ export type NextRunNumbers = {
   hours_reason: string;
   levels: number[];
   levels_reason: string;
+  levels_unit: string; // the factor's unit (numeric factors only)
 };
 
 export type NextRun = {

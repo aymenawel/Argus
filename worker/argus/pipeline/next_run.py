@@ -44,7 +44,7 @@ def _hours(h: float) -> str:
     return f"{h:.0f} h" if h >= 10 else f"{h:.1f} h"
 
 
-def _next_refs(numbers: NextRunNumbers, factor_unit: str) -> dict[str, Ref]:
+def _next_refs(numbers: NextRunNumbers) -> dict[str, Ref]:
     """The numbers as refs the model may cite: next:replicates, next:hours, next:level:<i>."""
     refs: dict[str, Ref] = {}
     if numbers.replicates is not None:
@@ -56,9 +56,9 @@ def _next_refs(numbers: NextRunNumbers, factor_unit: str) -> dict[str, Ref]:
         h = numbers.hours
         refs["next:hours"] = Ref("next:hours", "next run's length", h, 0.0, "h", _hours(h), "next", None, None)
     for i, level in enumerate(numbers.levels, start=1):
-        display = f"{level:g} {factor_unit}".strip()
+        display = f"{level:g} {numbers.levels_unit}".strip()
         refs[f"next:level:{i}"] = Ref(
-            f"next:level:{i}", f"level {i} to try", level, 0.0, factor_unit, display, "next", None, None
+            f"next:level:{i}", f"level {i} to try", level, 0.0, numbers.levels_unit, display, "next", None, None
         )
     return refs
 
@@ -68,11 +68,9 @@ def _prepare(db: Database, run: Run, recipe: Recipe) -> dict[str, Any]:
     plan = first_locked_plan(db, run.experiment_id)
     t = run_last_t(db, run.id)
     numbers = next_run_numbers(db, run, recipe, plan)
-    vessels = vessels_for_run(db, run.id)
-    conditions = [v.condition for v in vessels if v.condition is not None]
-    factor_unit = next((c.unit for c in conditions if c.unit), "")
+    conditions = [v.condition for v in vessels_for_run(db, run.id) if v.condition is not None]
     base = build_refs(db, run.id, t, recipe=recipe, plan=plan)
-    refs = RefTable({**base.refs, **_next_refs(numbers, factor_unit)})
+    refs = RefTable({**base.refs, **_next_refs(numbers)})
     verdict = latest_verdict(db, run.id)
     words = " ".join(dict.fromkeys(f"{c.factor} {c.value}" for c in conditions))
     return {
