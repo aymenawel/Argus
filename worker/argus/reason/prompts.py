@@ -218,6 +218,39 @@ def critique_task(
     )
 
 
+def next_run_task(
+    recipe: Recipe,
+    plan: Plan | None,
+    refs: RefTable,
+    *,
+    numbers: Sequence[tuple[str, str]],
+    verdict: str,
+    checks: Sequence[str],
+    open_rivals: Sequence[str],
+    experiment_id: str,
+    rejected: Sequence[str] = (),
+) -> ReasonTask:
+    """The next-run suggestion's task (D-80): code's numbers as (ref id or name, reason) pairs, the reasons' digits
+    masked so the only numbers the model can cite are the refs."""
+    task = load_prompt("deep/next-run.md")
+    if rejected:
+        task += "\n\nYour previous answer was rejected: " + "; ".join(rejected) + ". Fix exactly these."
+    return ReasonTask(
+        function="next_run",
+        experiment_id=experiment_id,
+        prompt_version=prompt_version(recipe),
+        stable=_stable(recipe, plan),
+        variable=(
+            measurements_block(refs),
+            f"VERDICT: {verdict}\nCHECKS (computed in code)\n" + "\n".join(f"- {c}" for c in checks),
+            "OPEN RIVALS: " + ("; ".join(open_rivals) if open_rivals else "none"),
+            "NEXT-RUN NUMBERS (computed in code; cite as {ref:<id>}, reasons with numbers masked as [n])\n"
+            + "\n".join(f"- {name}: {NUMBER.sub('[n]', reason)}" for name, reason in numbers),
+            task,
+        ),
+    )
+
+
 def describe_task(experiment: Experiment, recipe: Recipe, words: str) -> tuple[ReasonTask, dict]:
     """The setup draft's task, and its schema with the recipe's metrics filled into the `metric` enum."""
     schema = load_schema("recipe_draft")

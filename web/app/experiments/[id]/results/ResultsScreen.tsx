@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CurveChart } from "@/components/results/CurveChart";
 import { FitTable } from "@/components/results/FitTable";
+import { NextRunCard } from "@/components/results/NextRunCard";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Panel } from "@/components/ui/Panel";
@@ -277,6 +278,10 @@ export function ResultsScreen() {
         {view.run.source.provenance && plan?.metric && (
           <AgreementTable runId={view.run.id} metric={plan.metric} refresh={view.run.id} />
         )}
+      </Panel>
+
+      <Panel title="Next run" className={styles.panel}>
+        <NextRunCard runId={view.run.id} running={view.running} />
       </Panel>
     </>
   );

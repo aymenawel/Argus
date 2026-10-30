@@ -1,0 +1,12 @@
+{
+  "$comment": "Output schema for prompts/deep/next-run.md (D-80). Text fields cite numbers only as {ref:<id>} tokens; the numbers themselves are code's.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["why", "change", "watch_for", "refs_used"],
+  "properties": {
+    "why": {"type": "string", "description": "Two to four sentences; every number as a {ref:<id>} token."},
+    "change": {"type": "string", "description": "What to do differently next run, by hand."},
+    "watch_for": {"type": "string", "description": "One if-this-then-that for the next run."},
+    "refs_used": {"type": "array", "items": {"type": "string"}}
+  }
+}

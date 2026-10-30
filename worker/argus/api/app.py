@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from argus.api.cameras import register_camera_routes
 from argus.api.events import EventBroker, event_stream
+from argus.api.next_run import register_next_run_routes
 from argus.api.notes import register_note_routes
 from argus.api.preferences import register_preference_routes
 from argus.api.results import register_results_routes
@@ -242,6 +243,7 @@ def create_app(
     register_note_routes(app, db=db, broker=broker, settings=settings, jobs=jobs, recipes=recipes)
     register_preference_routes(app, db=db, settings=settings)
     register_results_routes(app, db=db, recipes=recipes)
+    register_next_run_routes(app, db=db, settings=settings, jobs=jobs, recipes=recipes)
     register_camera_routes(app, hub=hub)
     return app
 

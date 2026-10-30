@@ -4,6 +4,7 @@ import type {
   Experiment,
   FitsView,
   FrameRequest,
+  NextRun,
   Note,
   NotesView,
   Plan,
@@ -175,6 +176,16 @@ export function getAgreement(runId: string, metric: string): Promise<Agreement |
 export function getFits(runId: string, metric?: string): Promise<FitsView> {
   const query = metric ? `?metric=${encodeURIComponent(metric)}` : "";
   return request(`${runPath(runId)}/fits${query}`);
+}
+
+/** The latest next-run suggestion for a run, or null. */
+export function getNextRun(runId: string): Promise<NextRun | null> {
+  return request(`${runPath(runId)}/next-run`);
+}
+
+/** A new suggestion: code's numbers, explained by Muse Wonder (409 while the run is still going). */
+export function suggestNextRun(runId: string): Promise<NextRun> {
+  return request(`${runPath(runId)}/next-run`, send("POST"));
 }
 
 // ---- Preferences ----

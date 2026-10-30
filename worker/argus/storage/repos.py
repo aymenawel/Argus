@@ -23,6 +23,8 @@ from argus.domain import (
     MeasurementDraft,
     ModelCall,
     ModelCallDraft,
+    NextRun,
+    NextRunDraft,
     Note,
     NoteAttempt,
     NoteAttemptDraft,
@@ -693,6 +695,7 @@ DERIVED_JSON = ("inputs",)
 NOTE_JSON = ("body", "refs", "evidence")
 ATTEMPT_JSON = ("raw", "reasons")
 VERDICT_JSON = ("allowed", "checks", "body", "draft", "critique", "refs", "model_call_ids")
+NEXT_RUN_JSON = ("numbers", "body", "refs", "model_call_ids")
 
 
 def add_derived(db: Database, run_id: str, drafts: Sequence[DerivedDraft]) -> list[Derived]:
@@ -767,6 +770,21 @@ def latest_verdict(db: Database, run_id: str) -> Verdict | None:
             "SELECT * FROM verdicts WHERE run_id=? ORDER BY t DESC, rowid DESC LIMIT 1", (run_id,)
         ).fetchone()
     return None if row is None else _load(Verdict, row, VERDICT_JSON)
+
+
+def add_next_run(db: Database, run_id: str, draft: NextRunDraft) -> NextRun:
+    suggestion = NextRun(**draft.model_dump(), id=new_id("nxt"), run_id=run_id)
+    with db.write() as c:
+        _insert(c, "next_runs", suggestion, NEXT_RUN_JSON)
+    return suggestion
+
+
+def latest_next_run(db: Database, run_id: str) -> NextRun | None:
+    with db.read() as c:
+        row = c.execute(
+            "SELECT * FROM next_runs WHERE run_id=? ORDER BY t DESC, rowid DESC LIMIT 1", (run_id,)
+        ).fetchone()
+    return None if row is None else _load(NextRun, row, NEXT_RUN_JSON)
 
 
 def add_review(db: Database, run_id: str, draft: ReviewDraft) -> Review:

@@ -265,6 +265,36 @@ export type FitsView = {
   }[];
 };
 
+// ---- Next run (worker/argus/api/next_run.py, D-80) ----
+
+/** Code's numbers for the next run, each with its reason; null when it can't be known from this run. */
+export type NextRunNumbers = {
+  replicates: number | null; // vessels per condition
+  replicates_reason: string;
+  hours: number | null;
+  hours_reason: string;
+  levels: number[];
+  levels_reason: string;
+};
+
+export type NextRun = {
+  id: string;
+  run_id: string;
+  t: number;
+  numbers: NextRunNumbers;
+  body: {
+    why: string;
+    change: string;
+    watch_for: string;
+    written_by: "model" | "code";
+    code_reason?: string;
+    safety: string[];
+  };
+  refs: string[];
+  model_call_ids: string[];
+  fell_back: boolean;
+};
+
 /** `models`: each AI note's model call id -> the model that wrote it. */
 export type NotesView = { notes: Note[]; rejected: number; models?: Record<string, string> };
 

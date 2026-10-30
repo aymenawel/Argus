@@ -391,6 +391,22 @@ class Verdict(VerdictDraft):
     run_id: str
 
 
+class NextRunDraft(Record):
+    """A next-run suggestion (D-80): code's numbers and the reasons for them, written by the model or by code."""
+
+    t: float = Field(ge=0)
+    numbers: dict[str, Any]  # replicates, run length and levels, each with its reason (analyze/next_run.py)
+    body: dict[str, Any]  # why, change, watch_for, written_by, safety
+    refs: list[str]
+    model_call_ids: list[str]
+    fell_back: bool
+
+
+class NextRun(NextRunDraft):
+    id: str
+    run_id: str
+
+
 class ReviewDraft(Record):
     t: float = Field(ge=0)
     target_kind: Literal["note", "verdict", "rival", "event"]
