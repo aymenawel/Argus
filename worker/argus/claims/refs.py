@@ -11,6 +11,7 @@ import statistics
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
+from argus.analyze.fits import fit_series
 from argus.analyze.noise import noise_floor, wobble_floor
 from argus.domain import DerivedDraft, Measurement, Plan, Role, RunEvent, Vessel
 from argus.measure.uncertainty import format_measurement
@@ -68,6 +69,64 @@ def _vessel_label(vessel: Vessel) -> str:
     return f"Vessel {vessel.label} ({vessel.role.value}{condition})"
 
 
+# A plan judged on a fitted quantity (D-78): its per-vessel ref, its difference ref, its words.
+FITTED = {"half_time": ("t50", "dt50", "half-way time"), "rate": ("rate", "drate", "rate")}
+
+
+def _fitted(
+    t: float, curve: str, quantity: str, metric: str, vessels: Sequence[Vessel], rows: Mapping[str, list[Measurement]]
+) -> list[tuple[str, DerivedDraft, float | None, str | None]]:
+    """Each vessel's fitted half-way time (h) or rate (unit/h), and each treatment's difference from the controls'
+    mean, as derived rows; a refused or unreached fit gives no ref (the verdict names it)."""
+    own, diff, words = FITTED[quantity]
+    fitted: dict[str, tuple[DerivedDraft, Measurement]] = {}
+    out: list[tuple[str, DerivedDraft, float | None, str | None]] = []
+    for vessel in vessels:
+        readings = rows.get(vessel.id)
+        if not readings:
+            continue
+        fit = fit_series([r.t for r in readings], [r.value for r in readings], curve)
+        pair = fit.half_time_h if quantity == "half_time" else fit.rate_per_h
+        if not fit.ok or pair is None:
+            continue
+        last = readings[-1]
+        draft = DerivedDraft(
+            t=t,
+            kind="fit",
+            label=f"{_vessel_label(vessel)}: {metric} {words} (fitted {curve} curve)",
+            value=pair[0],
+            uncertainty=pair[1],
+            unit="h" if quantity == "half_time" else f"{last.unit}/h",
+            inputs=[r.id for r in readings],
+            method_version=f"fit_{curve}/1",
+        )
+        fitted[vessel.id] = (draft, last)
+        out.append((f"{own}:{vessel.label}:{metric}", draft, last.t, vessel.id))
+    controls = [fitted[v.id] for v in vessels if v.role is Role.CONTROL and v.id in fitted]
+    if not controls:
+        return out
+    values = [d.value for d, _ in controls]
+    spread = statistics.stdev(values) / math.sqrt(len(values)) if len(values) >= 2 else 0.0
+    measured = _quadrature(*(d.uncertainty for d, _ in controls)) / len(controls)
+    mean, u_mean = statistics.fmean(values), _quadrature(spread, measured)
+    for vessel in vessels:
+        if vessel.role is not Role.TREATMENT or vessel.id not in fitted:
+            continue
+        mine, last = fitted[vessel.id]
+        difference = DerivedDraft(
+            t=t,
+            kind="difference",
+            label=f"{_vessel_label(vessel)}: {metric} {words} minus the controls' mean",
+            value=mine.value - mean,
+            uncertainty=_quadrature(mine.uncertainty, u_mean),
+            unit=mine.unit,
+            inputs=[last.id, *(c.id for _, c in controls)],
+            method_version="difference/1",
+        )
+        out.append((f"{diff}:{vessel.label}:{metric}", difference, last.t, vessel.id))
+    return out
+
+
 def _still_until(vessel_id: str, rows: Sequence[Measurement], events: Sequence[RunEvent], t: float) -> float:
     """The end of the vessel's still period: its first intervention, rule crossing or watcher change; without
     one, the first tenth of the run so far (and at least its first three readings)."""
@@ -107,6 +166,7 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
 
     for metric in recipe.stored_metrics():
         latest: dict[str, Measurement] = {}
+        by_vessel: dict[str, list[Measurement]] = {}
         floors: list[tuple[float, list[str]]] = []
         wobbled = False  # a vessel's floor came from its wobble, not a still period
         for vessel in vessels:
@@ -115,6 +175,7 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
                 continue
             first, last = rows[0], rows[-1]
             latest[vessel.id] = last
+            by_vessel[vessel.id] = rows
             refs[f"m:{vessel.label}:{metric}"] = _measurement_ref(vessel, metric, last)
             if len(rows) >= 2:
                 change = DerivedDraft(
@@ -170,6 +231,8 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
                 method_version="noise_floor_wobble/1" if wobbled else "noise_floor/1",
             )
             pending.append((f"noise:{metric}", noise, t, None))
+        if plan is not None and plan.quantity in FITTED and plan.metric == metric:
+            pending += _fitted(t, recipe.curve, plan.quantity, metric, vessels, by_vessel)
 
     if pending:
         stored = add_derived(db, run_id, [draft for _, draft, _, _ in pending])

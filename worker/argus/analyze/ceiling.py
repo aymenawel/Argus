@@ -66,6 +66,10 @@ class VerdictInputs:
     recording_start_known: bool = True  # an import whose recording start nobody gave can't show the plan came first
     retrospective: bool = False  # published data judged after it existed (D-71): said so, never passed off as a test
     registered: bool = True  # some compared vessel's reading moved by the smallest effect: the measurement can see it
+    quantity: str = "level"  # D-78: "half_time" or "rate" are judged on fitted curves, each with its fit's ±
+    fit_notes: tuple[
+        tuple[str, bool | None, str], ...
+    ] = ()  # (check id, ok, text): refused or unreached fits, plateaus
 
 
 def _effect(ref: Ref, inputs: VerdictInputs) -> Literal["clear", "opposed", "small", "unclear"]:
@@ -82,6 +86,11 @@ def _effect(ref: Ref, inputs: VerdictInputs) -> Literal["clear", "opposed", "sma
     if inputs.min_effect > 0 and toward + K_UNCERTAINTY * ref.uncertainty < inputs.min_effect:
         return "small"
     return "unclear"
+
+
+def _without_digits(text: str) -> str:
+    """A check's words for the model: its numbers are in the refs, never copied from text."""
+    return " ".join(word for word in text.split() if not any(c.isdigit() for c in word))
 
 
 def _hours(seconds: float) -> str:
@@ -160,7 +169,14 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
             else "Too few treatment vessels in the comparison to count replicates.",
         )
     )
-    if inputs.noise is not None:
+    fitted = inputs.quantity in ("half_time", "rate")
+    if fitted:
+        words = "half-way times" if inputs.quantity == "half_time" else "rates"
+        text = f"Judged on fitted {words}: each carries its fit's ±, in place of a noise floor."
+        checks.append(_check("fits", True, text))
+        for id_, ok, note in inputs.fit_notes:
+            checks.append(_check(id_, ok, note, prompt=_without_digits(note)))
+    elif inputs.noise is not None:
         checks.append(
             _check(
                 "noise",
@@ -200,7 +216,11 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
     for label, ref in inputs.effects.items():
         verdicts[label] = _effect(ref, inputs)
         smallest = inputs.min_effect_display or inputs.min_effect
-        bar = f"3 × the noise floor, twice its ± and the smallest effect ({smallest})"
+        bar = (
+            f"twice its ± and the smallest effect ({smallest})"
+            if fitted
+            else f"3 × the noise floor, twice its ± and the smallest effect ({smallest})"
+        )
         checks.append(
             _check(
                 f"effect:{label}",
@@ -213,7 +233,12 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
             )
         )
 
-    if not inputs.measured or inputs.controls == 0 or inputs.treatments < MIN_REPLICATES or inputs.noise is None:
+    if (
+        not inputs.measured
+        or inputs.controls == 0
+        or inputs.treatments < MIN_REPLICATES
+        or (inputs.noise is None and not fitted)
+    ):
         return {INCONCLUSIVE}, checks
     if any(state == "open" for state in inputs.rivals.values()):
         return {INCONCLUSIVE}, checks

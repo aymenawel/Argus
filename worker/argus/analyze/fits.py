@@ -15,6 +15,10 @@ import numpy as np
 from scipy.optimize import OptimizeWarning, curve_fit
 from uncertainties import correlated_values, umath
 
+from argus.recipes.model import Recipe
+from argus.storage.db import Database
+from argus.storage.repos import measurements_for_run
+
 MIN_POINTS = 6
 MIN_DISTINCT = 4
 PLATEAU_LIMIT = 1.5  # a fitted plateau above 1.5 × the highest reading is far from the data
@@ -162,3 +166,15 @@ def fit_series(times_s: Sequence[float], values: Sequence[float], curve: str) ->
         rmse=rmse,
         samples=samples,
     )
+
+
+def vessel_fits(db: Database, run_id: str, recipe: Recipe, metric: str, t: float | None = None) -> dict[str, Fit]:
+    """Each vessel's fit of this run's readings of `metric` up to t (all of them when t is None)."""
+    rows = measurements_for_run(db, run_id, metric=metric, t_to=t)
+    by_vessel: dict[str, list] = {}
+    for row in rows:
+        by_vessel.setdefault(row.vessel_id, []).append(row)
+    return {
+        vessel_id: fit_series([r.t for r in readings], [r.value for r in readings], recipe.curve)
+        for vessel_id, readings in by_vessel.items()
+    }

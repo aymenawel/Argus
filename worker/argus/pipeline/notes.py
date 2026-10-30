@@ -191,7 +191,7 @@ class NoteWriter:
 
         events = [e for e in await asyncio.to_thread(events_for_run, ctx.db, ctx.run.id, None, t) if e.kind in NOTABLE]
         notes = await asyncio.to_thread(notes_for_run, ctx.db, ctx.run.id, None, t)
-        allowed = await asyncio.to_thread(allowed_now, ctx.db, ctx.run, refs, t=t)
+        allowed = await asyncio.to_thread(allowed_now, ctx.db, ctx.run, refs, t=t, recipe=ctx.recipe)
         names = [str(v) for v in VerdictLevel if v in allowed]
         labels = {v.id: v.label for v in ctx.vessels}
         images = (await asyncio.to_thread(snapshot_jpeg, image_bgr, ctx.settings.snapshot_px),)
