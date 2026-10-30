@@ -148,3 +148,16 @@ async def test_a_level_plan_is_judged_as_before(db, exp):
     verdict = await judge(db, run)
     assert check(verdict, "fits") is None and check(verdict, "noise") is not None
     assert not any(r.startswith("t50:") for r in verdict.refs)
+
+
+@pytest.mark.parametrize(("quantity", "unit"), [("half_time", "h"), ("rate", "count/h"), ("level", "count")])
+def test_the_smallest_effect_is_in_the_judged_quantitys_unit(db, exp, quantity, unit):
+    from argus.claims.refs import build_refs
+    from argus.storage.repos import first_locked_plan
+
+    run = run_with(db, exp, {"A": logistic(10, 22), "C": logistic(10, 14)}, quantity=quantity)
+    refs = build_refs(db, run.id, 48 * 3600.0, recipe=RECIPE, plan=first_locked_plan(db, exp.id))
+    ref = refs.get("plan:min_effect")
+    assert ref is not None and ref.unit == unit
+    if unit != "count":  # a count prints bare
+        assert ref.display.endswith(f" {unit}")

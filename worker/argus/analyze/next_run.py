@@ -204,8 +204,8 @@ def next_run_numbers(db: Database, run: Run, recipe: Recipe, plan: Plan | None) 
         )
     elif hours is not None:
         hours_reason = (
-            f"when the slowest vessel's fitted {recipe.curve} curve reaches {LEVEL_OFF:.0%} of its plateau, "
-            f"plus {MARGIN:.0%}"
+            f"when the slowest vessel's fitted {recipe.curve} curve reaches {LEVEL_OFF * 100:.0f} % of its plateau, "
+            f"plus {MARGIN * 100:.0f} %"
         )
     elif not any(f.ok for f in fits.values()):
         hours_reason = f"unknown: no vessel's readings follow a {recipe.curve} curve"

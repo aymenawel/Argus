@@ -267,6 +267,10 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
 
     if plan is not None and plan.locked_at is not None:
         unit = next((r.unit for r in readings if r.metric == plan.metric), "")
+        if plan.quantity == "half_time":  # the smallest effect is in the judged quantity's unit (D-78)
+            unit = "h"
+        elif plan.quantity == "rate":
+            unit = f"{unit}/h"
         if plan.min_effect is not None:
             refs["plan:min_effect"] = Ref(
                 id="plan:min_effect",
