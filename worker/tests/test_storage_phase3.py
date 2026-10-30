@@ -223,7 +223,7 @@ def test_a_version_3_database_upgrades(tmp_path):
     conn.close()
     database = Database(path)
     with database.read() as c:
-        assert c.execute("PRAGMA user_version").fetchone()[0] == 6
+        assert c.execute("PRAGMA user_version").fetchone()[0] == 7
     [plan] = get_plans(database, "exp_old")
     assert plan.hypothesis == "h" and plan.metric is None and plan.direction is None
     database.close()

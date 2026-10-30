@@ -22,7 +22,7 @@ Argus is an AI lab partner that watches experiments through a webcam or USB micr
 
 ## Stack
 
-Python 3.12 worker (OpenCV, scikit-image, numpy/scipy, statsmodels, uncertainties, Ax, ruptures, FastAPI) · Meta Model API via the `openai` SDK at `https://api.meta.ai/v1`: `muse-spark-1.3` (routine), `muse-wonder-1.0` (deep), `sam-3.1`, `muse-voice-transcribe-1.0`. Optional later: routine tier on Muse Spark Open via Baseten (config only, D-33) · `meta-sam-parser` · SQLite + files · Next.js + TypeScript dashboard over SSE · ffmpeg CLI. Windows machine with a 4 GB GPU: SAM runs through the API.
+Python 3.12 worker (OpenCV, scikit-image, numpy/scipy, statsmodels, uncertainties, Ax, ruptures, FastAPI) · Meta Model API via the `openai` SDK at `https://api.meta.ai/v1`: `muse-spark-1.3` (routine), `muse-wonder-1.0` (deep), `sam-3.1`, `muse-voice-transcribe-1.0`. The routine tier can run on Muse Spark Open via Baseten instead (`meta-models/muse-spark-open-1026`), switched in the app's Settings, falling back to `muse-spark-1.3` (D-77) · `meta-sam-parser` · SQLite + files · Next.js + TypeScript dashboard over SSE · ffmpeg CLI. Windows machine with a 4 GB GPU: SAM runs through the API.
 
 ## Where things go
 

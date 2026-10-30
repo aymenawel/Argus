@@ -19,8 +19,8 @@ from tests.test_import import FakeSegmenter
 
 
 @contextmanager
-def api_client(db, tmp_path, *, reasoner=None) -> Iterator[TestClient]:
-    settings = load_settings({"ARGUS_DATA_DIR": str(tmp_path / "data")})
+def api_client(db, tmp_path, *, reasoner=None, env=None) -> Iterator[TestClient]:
+    settings = load_settings({"ARGUS_DATA_DIR": str(tmp_path / "data"), **(env or {})})
     broker, recipes = EventBroker(), load_all(REPO_ROOT / "recipes")
     hub = CameraHub(opener=fake_opener)
     jobs = RunJobs(db, broker, settings, recipes, hub, segmenter=FakeSegmenter(), reasoner=reasoner)

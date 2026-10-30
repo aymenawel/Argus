@@ -2,6 +2,7 @@
 
 import { type KeyboardEvent, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { modelName } from "@/lib/models";
 import { addMeasurement, measurementInWords, renameConcept, stepInWords, withMethod } from "@/lib/recipe";
 import type { MeasurementSpec, RecipeDraftResult, RecipeSpec, Tool } from "@/lib/types";
 import styles from "./RecipeDraftView.module.css";
@@ -180,7 +181,10 @@ export function RecipeDraftView({ draft, toolbox, onChange }: Props) {
 
   return (
     <section className={styles.draft} aria-label="Argus's draft">
-      <p className={styles.title}>{recipe.title}</p>
+      <p className={styles.title}>
+        {recipe.title}
+        {draft.model && <span className={styles.by}>Drafted by {modelName(draft.model)}</span>}
+      </p>
 
       {draft.safety_notes.length > 0 && (
         <div className={styles.safety} role="note">

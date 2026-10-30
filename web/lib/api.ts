@@ -8,6 +8,7 @@ import type {
   Plan,
   PlanDraft,
   Preview,
+  ReasoningPreference,
   RecipeDetail,
   RecipeDraft,
   RecipeDraftResult,
@@ -165,6 +166,17 @@ export function askVerdict(runId: string): Promise<Verdict> {
 /** Null when the run has no labels for this metric (only published data carries them). */
 export function getAgreement(runId: string, metric: string): Promise<Agreement | null> {
   return request(`${runPath(runId)}/agreement?metric=${encodeURIComponent(metric)}`);
+}
+
+// ---- Preferences ----
+
+export function getReasoningPreference(): Promise<ReasoningPreference> {
+  return request("/api/preferences/reasoning");
+}
+
+/** A 422 says which key is missing from the worker's .env. */
+export function putReasoningPreference(provider: ReasoningPreference["provider"]): Promise<ReasoningPreference> {
+  return request("/api/preferences/reasoning", send("PUT", { provider }));
 }
 
 export function getReviews(runId: string): Promise<Review[]> {

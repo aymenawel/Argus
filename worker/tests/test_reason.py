@@ -174,3 +174,72 @@ def imports_of(path: Path) -> set[str]:
 def test_only_the_two_model_modules_import_openai():
     importers = {p.relative_to(ARGUS).as_posix() for p in ARGUS.rglob("*.py") if "openai" in imports_of(p)}
     assert importers == {"segment/sam.py", "reason/client.py"}
+
+
+OPEN = Settings(model_api_key=SecretStr("test-key"), baseten_api_key=SecretStr("open-key"))
+
+
+@pytest.mark.anyio
+async def test_the_routine_tier_on_muse_spark_open_uses_its_own_client_and_price():
+    meta, open_ = FakeClient(), FakeClient(fixture("note-response"))
+    result = await reason(
+        TASK,
+        tier="routine",
+        schema=NOTE_SCHEMA,
+        schema_name="ArgusNote",
+        settings=OPEN,
+        client=meta,
+        open_client=open_,
+        provider="baseten",
+    )
+    assert meta.requests == [] and open_.requests[0]["model"] == "meta-models/muse-spark-open-1026"
+    assert open_.requests[0]["reasoning"] == {"effort": "minimal"}
+    assert result.model == "meta-models/muse-spark-open-1026" and not result.fell_back
+    assert result.call.model == "meta-models/muse-spark-open-1026"
+    assert result.call.cost_usd == pytest.approx(expected_cost(fixture("note-response"), (1.25, 0.15, 4.25)))
+
+
+@pytest.mark.anyio
+async def test_a_failed_open_model_call_falls_back_to_muse_spark_on_meta():
+    meta, open_ = FakeClient(fixture("note-response")), FakeClient(RuntimeError("baseten unavailable"))
+    result = await reason(
+        TASK,
+        tier="routine",
+        schema=NOTE_SCHEMA,
+        schema_name="ArgusNote",
+        settings=OPEN,
+        client=meta,
+        open_client=open_,
+        provider="baseten",
+    )
+    assert meta.requests[0]["model"] == "muse-spark-1.3" and result.model == "muse-spark-1.3" and result.fell_back
+    assert [(c.model, c.status) for c in result.failed_calls] == [("meta-models/muse-spark-open-1026", "error")]
+
+
+@pytest.mark.anyio
+async def test_the_deep_tier_stays_on_meta_whatever_the_switch_says():
+    meta, open_ = FakeClient(fixture("note-response")), FakeClient()
+    result = await reason(
+        TASK,
+        tier="deep",
+        schema=NOTE_SCHEMA,
+        schema_name="ArgusNote",
+        settings=OPEN,
+        client=meta,
+        open_client=open_,
+        provider="baseten",
+    )
+    assert open_.requests == [] and result.model == "muse-wonder-1.0"
+
+
+@pytest.mark.anyio
+async def test_the_reasoner_asks_the_switch_on_every_call():
+    choice = {"provider": "meta"}
+    reasoner = SettingsReasoner(OPEN, provider=lambda: choice["provider"])
+    assert reasoner.current_provider() == "meta"
+    choice["provider"] = "baseten"
+    assert reasoner.current_provider() == "baseten"
+    assert str(reasoner.open_client.base_url).startswith("https://inference.baseten.co/v1")
+    without_key = SettingsReasoner(SETTINGS, provider=lambda: "baseten")
+    assert without_key.current_provider() == "meta"  # no Baseten key: the switch can't take effect
+    await reasoner.aclose()

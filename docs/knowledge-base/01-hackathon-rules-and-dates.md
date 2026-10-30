@@ -87,7 +87,7 @@ Startups track ($550K) prize table not received; not relevant to an Indie entry.
 | Source | Amount | Notes |
 | --- | --- | --- |
 | Meta Model API | $150 | **Claimed.** Needs a credit card on the account (temporary pre-authorization charge). Set a **Spend Limit** notification on the Billing page. Each person claims individually by Nov 4, 9 PM. |
-| Baseten | $100 + 2M TPM | **Not received.** Per individual. For hackathon use model `meta-models/muse-spark-open-1026` (not the name in their docs). |
+| Baseten | $100 + 2M TPM | **Received Oct 30** (D-77). Per individual. For hackathon use model `meta-models/muse-spark-open-1026` (not the name in their docs). |
 | Modal | $100 (first 1,000) | **Not received.** Separately received a **$30 signup credit**, kept as backup. |
 | Fireworks | $25 per team | **Not received.** |
 

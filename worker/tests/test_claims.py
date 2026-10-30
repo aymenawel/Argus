@@ -163,3 +163,21 @@ def test_inflected_and_derived_quantities_are_rejected(text):
 @pytest.mark.parametrize("text", ["The dye unfolded slowly.", "Someone opened the lid.", "One glass changed."])
 def test_ordinary_words_are_not_quantities(text):
     assert check_note(clean_note(observation=text), REFS, allowed=ALL, evidence=set()) == []
+
+
+DISHES = refs_table({"m:pg1-2:count": "6 count", "chg:sc1-2:count": "3 count", "m:3:count": "2 count"})
+
+
+def test_vessel_labels_with_digits_are_names_not_numbers():
+    """Genze's dishes are called pg1-2 and sc1-2: naming one is not a claim (it was 4 of 11 rejections)."""
+    text = "Vessel pg1-2 reads {ref:m:pg1-2:count}; control sc1-2 rose by {ref:chg:sc1-2:count}."
+    assert check_text_fields({"observation": text}, ["observation"], DISHES) == []
+
+
+def test_a_label_does_not_excuse_a_number_around_it():
+    assert check_text_fields({"observation": "pg1-23 rose"}, ["observation"], DISHES) != []  # not the label
+    assert check_text_fields({"observation": "sc1-2 rose by 4"}, ["observation"], DISHES) == [
+        "number outside a ref in observation: '4'"
+    ]
+    # A label that is only a number ("3") names nothing a reader couldn't mistake for a count: digits stay checked.
+    assert check_text_fields({"observation": "vessel 3 rose"}, ["observation"], DISHES) != []

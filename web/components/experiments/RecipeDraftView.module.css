@@ -9,7 +9,17 @@
 }
 
 .title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
   font-weight: 600;
+}
+
+.by {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: 500;
 }
 
 .safety {

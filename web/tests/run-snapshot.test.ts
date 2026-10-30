@@ -170,3 +170,21 @@ test("a verdict event replaces the verdict", () => {
   frame();
   assert.equal(seen.at(-1)!.verdict?.id, "v2");
 });
+
+test("each note keeps the model that wrote it, from the load and from live notes", () => {
+  const { store, seen, frame } = harness();
+  store.beginLoad();
+  const loaded = store.finishLoad(VIEW, timeline([]), {
+    notes: { notes: [note("n1", 120, { model_call_id: "mc_1" })], rejected: 0, models: { mc_1: "muse-spark-1.3" } },
+    verdict: null,
+  });
+  assert.deepEqual(loaded.models, { mc_1: "muse-spark-1.3" });
+  store.receive("note", {
+    run_id: "run_1",
+    t: 240,
+    note: note("n2", 240, { model_call_id: "mc_2" }),
+    model: "meta-models/muse-spark-open-1026",
+  });
+  frame();
+  assert.deepEqual(seen.at(-1)!.models, { mc_1: "muse-spark-1.3", mc_2: "meta-models/muse-spark-open-1026" });
+});

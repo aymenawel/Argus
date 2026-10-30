@@ -32,7 +32,13 @@ export function Feed({ snapshot }: { snapshot: RunSnapshot }) {
         <ol className={styles.list} aria-label="Notes, newest first">
           {shown.map((note) => (
             <li key={note.id}>
-              <NoteCard note={note} span={span} events={events} labels={labels} />
+              <NoteCard
+                note={note}
+                span={span}
+                events={events}
+                labels={labels}
+                model={note.model_call_id ? snapshot.models[note.model_call_id] : undefined}
+              />
             </li>
           ))}
         </ol>

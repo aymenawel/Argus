@@ -22,12 +22,13 @@ export type RunSnapshot = {
   notes: Note[]; // sorted by t
   rejected: number; // AI answers the claim checker turned back
   verdict: Verdict | null; // the latest
+  models: Record<string, string>; // model call id -> the model that wrote a note
 };
 
 /** What a load brings besides the view and the timeline. */
 export type RunExtras = { notes: NotesView; verdict: Verdict | null };
 
-const NO_EXTRAS: RunExtras = { notes: { notes: [], rejected: 0 }, verdict: null };
+const NO_EXTRAS: RunExtras = { notes: { notes: [], rejected: 0, models: {} }, verdict: null };
 
 export type EventData = Record<string, unknown> & { run_id?: string };
 
@@ -83,6 +84,7 @@ export class SnapshotStore {
       notes: [...extras.notes.notes].sort(byT),
       rejected: extras.notes.rejected,
       verdict: extras.verdict,
+      models: { ...(extras.notes.models ?? {}) },
     };
     if (this.loads === 0 && this.waiting.length > 0) {
       const waiting = this.waiting;
@@ -129,6 +131,7 @@ export class SnapshotStore {
     let frames: FrameRow[] | null = null;
     let events: RunEvent[] | null = null;
     let notes: Note[] | null = null;
+    let models: Record<string, string> | null = null;
     let rejected = s.rejected;
     let verdict = s.verdict;
     let progress = s.progress;
@@ -179,6 +182,9 @@ export class SnapshotStore {
       } else if (type === "note") {
         // A quiet note that goes on comes again with a later end time: it replaces itself.
         const note = data.note as Note;
+        if (note.model_call_id && typeof data.model === "string") {
+          models = { ...(models ?? s.models), [note.model_call_id]: data.model };
+        }
         notes ??= s.notes.slice();
         const at = notes.findIndex((n) => n.id === note.id);
         if (at >= 0) notes[at] = note;
@@ -193,8 +199,9 @@ export class SnapshotStore {
 
     if (measurements && !measurementsSorted) measurements.sort(byT);
     const same = progress === s.progress && view === s.view && rejected === s.rejected && verdict === s.verdict;
-    if (!measurements && !frames && !events && !notes && same) return s;
+    if (!measurements && !frames && !events && !notes && !models && same) return s;
     return {
+      models: models ?? s.models,
       view,
       progress,
       rejected,

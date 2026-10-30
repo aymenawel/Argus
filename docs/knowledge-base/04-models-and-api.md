@@ -32,7 +32,9 @@ print(r.output_text, r.usage)
 
 Not on the Model API: **Muse Spark Open** (~816B params; hosted providers such as Baseten `meta-models/muse-spark-open-1026`) and **Muse Glimmer** (30B, Apache 2.0, self-host or Fireworks/Together/OpenRouter/Ollama). **Muse Wonder Full** is Muse Code subscription only.
 
-## Optional: Muse Spark Open on Baseten for the $10K open-weight bonus [kept as an option, D-33]
+## Muse Spark Open on Baseten for everyday calls [built, D-77; was an option in D-33]
+
+**Tested Oct 30:** Baseten serves `meta-models/muse-spark-open-1026` and `meta-models/muse-spark-open` over the same Responses API as Meta (images, `reasoning.effort`, `prompt_cache_key` accepted). It doesn't enforce a JSON schema for this model, but every one of ~40 answers was valid JSON; Argus's own schema and claim checks guard it anyway. Recipe drafts: 5 of 5 valid first time, 2-7 s. Notes on the Genze run, after the note prompt forbade bare digits and number words and the claim checker learnt that vessel labels such as `pg1-2` are names: 7 of 7 passed, 1 of 8 attempts turned back (Muse Spark 1.3 on the same run: 7 of 7, 2 of 9), 6-13 s each. Default reasoning effort without the parameter is high (~1,300 reasoning tokens for a trivial answer); `minimal` keeps it near 70. No better Meta model exists on either provider: Meta's API serves Muse Spark 1.1-1.3 and Muse Wonder 1.0; Baseten's only Meta models are the two Muse Spark Open names; neither serves Muse Glimmer.
 
 Not used for now (no partner credits; it would be paid by card). Switching the routine tier is one config change if Aymen decides to go for the bonus later.
 

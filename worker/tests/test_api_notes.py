@@ -93,7 +93,7 @@ def test_a_researcher_note_is_saved_and_listed(client, run_id):
     note = posted.json()
     assert note["author"] == "researcher" and note["check_status"] == "researcher" and note["tag"] == "observation"
     assert note["body"]["text"] == "Foam at 2 cm"  # the researcher's own words, numbers and all
-    assert client.get(f"/api/runs/{run_id}/notes").json() == {"notes": [note], "rejected": 0}
+    assert client.get(f"/api/runs/{run_id}/notes").json() == {"notes": [note], "rejected": 0, "models": {}}
 
 
 def test_a_researcher_intervention_note_is_also_an_event(client, run_id):
@@ -169,3 +169,10 @@ def test_reviews_are_listed_for_the_verdict_panel(client, run_id):
     assert client.get(f"/api/runs/{run_id}/reviews").json() == []
     saved = client.post(f"/api/runs/{run_id}/reviews", json=body).json()
     assert client.get(f"/api/runs/{run_id}/reviews").json() == [saved]
+
+
+def test_each_ai_note_says_which_model_wrote_it(client, imported):
+    wait_for(lambda: client.get(f"/api/runs/{imported}/verdict").json())
+    view = client.get(f"/api/runs/{imported}/notes").json()
+    written = [n for n in view["notes"] if n["model_call_id"]]
+    assert written and all(view["models"][n["model_call_id"]] == "muse-spark-1.3" for n in written)

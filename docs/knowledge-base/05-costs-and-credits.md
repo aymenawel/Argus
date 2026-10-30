@@ -80,7 +80,7 @@ The 7 relevant skills total ~21,000 tokens. Adding them to 3,000 Spark calls ≈
 | Meta Model API $150 | **Claimed** | Everything runs here first |
 | Modal $30 signup credit | Received | Backup only (self-hosted SAM if Meta credits run low or the API fails during the demo) |
 | Modal $100 | **Not received** | — |
-| Baseten $100 + 2M TPM | **Not received** | Routine tier on Muse Spark Open (D-27) would be **paid by card on Baseten**: about 2,700 calls × (6,000 in + 300 out tokens) ≈ $20.25 + $3.44 ≈ **$24 out of pocket**, while Meta's credit then covers only deep tier + SAM + voice (≈ $28). **Skipped for now, kept as an option (D-33)** |
+| Baseten $100 + 2M TPM | **Received Oct 30** | Muse Spark Open costs the same as Muse Spark 1.3 ($1.25 in, $0.15 cached, $4.25 out per 1M tokens): about $0.008 a note and $0.006 a recipe draft, so the credit covers the build and the demo many times over. Set a monthly budget on Baseten (D-77) |
 | Fireworks $25 | **Not received** | — |
 
 Partner credits are **not needed** to finish Argus. They are backups and a way to add more Meta models if time allows.

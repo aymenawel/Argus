@@ -32,6 +32,7 @@ from argus.storage.repos import (
     events_for_run,
     extend_note,
     first_locked_plan,
+    models_of_calls,
     notes_for_run,
     run_spend_usd,
 )
@@ -142,8 +143,14 @@ class NoteWriter:
         note = await asyncio.to_thread(add_note, self.ctx.db, self.ctx.run.id, draft)
         self.last = note
         self.values = {i: r.value for i in refs.ids() if i.startswith("m:") and (r := refs.get(i)) is not None}
-        self.ctx.publish("note", {"t": t, "note": note.model_dump(mode="json")})
+        await self._publish(t, note)
         return note
+
+    async def _publish(self, t: float, note: Note) -> None:
+        """The note for the page, with the model that wrote it (Muse Spark or Muse Spark Open; none for code)."""
+        call = note.model_call_id
+        models = await asyncio.to_thread(models_of_calls, self.ctx.db, [call]) if call else {}
+        self.ctx.publish("note", {"t": t, "note": note.model_dump(mode="json"), "model": models.get(call or "")})
 
     async def write(self, t: float, level: Level, *, image_bgr: np.ndarray) -> Note | None:
         """A note at t, checked, retried once, or written by code. Notes are an add-on to measuring: an unexpected
@@ -178,7 +185,7 @@ class NoteWriter:
         quiet = level == "checkpoint" and self._quiet(refs)
         if quiet and self.last_quiet and self.last is not None:  # nothing moved since a quiet note: it goes on
             self.last = await asyncio.to_thread(extend_note, ctx.db, self.last.id, t)
-            ctx.publish("note", {"t": t, "note": self.last.model_dump(mode="json")})
+            await self._publish(t, self.last)
             return self.last
         self.last_quiet = quiet
 

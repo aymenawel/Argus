@@ -19,7 +19,7 @@ Theme fit, almost word for word: Push the Frontier = "accelerate a scientific ex
 
 | Prize | Plan | Deadline |
 | --- | --- | --- |
-| Best Build on Meta Open Weight Models ($10K) | **Skipped for now (D-33).** Option: switch the routine tier to Muse Spark Open on Baseten (~$24 by card) if the core is done early | — |
+| Best Build on Meta Open Weight Models ($10K) | **Entered (D-77).** Drafting from words and run notes run on Muse Spark Open via Baseten, switchable in Settings; show the switch and a note labelled Muse Spark Open in the video | — |
 | Best Agentic Use-Case ($5K) | Show autonomy step by step: decides when to look, what to measure, flags a confounder, asks the researcher a question, proposes and (with approval) executes the next action | Nov 4 |
 | Most Viral Project ($20K) | Post a 20–30 s clip on X right after submitting: the multi-day timelapse with measurements overlaid ("3 days of seeds in 25 seconds, measured by AI"); tag the hackathon/Meta accounts; submit the post link on the platform; share in Discord and with friends/classmates | Engagement counts **until Nov 8 EOD** |
 | Community Vote ($10K) | Share the public gallery link (tutoring network, school, Discord, social) | Votes until results Nov 16 |

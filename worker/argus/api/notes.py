@@ -29,6 +29,7 @@ class NoteIn(BaseModel):
 class NotesView(BaseModel):
     notes: list[Note]
     rejected: int  # AI answers the claim checker turned back (each was retried or written by code)
+    models: dict[str, str] = {}  # model call id -> the model that wrote the note (Muse Spark, Muse Spark Open)
 
 
 def register_note_routes(
@@ -44,7 +45,9 @@ def register_note_routes(
     def get_notes(run_id: str) -> NotesView:
         run_or_404(run_id)
         attempts = repos.note_attempts_for_run(db, run_id)
-        return NotesView(notes=repos.notes_for_run(db, run_id), rejected=sum(not a.passed for a in attempts))
+        notes = repos.notes_for_run(db, run_id)
+        models = repos.models_of_calls(db, [n.model_call_id for n in notes if n.model_call_id])
+        return NotesView(notes=notes, rejected=sum(not a.passed for a in attempts), models=models)
 
     @app.post("/api/runs/{run_id}/notes", status_code=201)
     def post_note(run_id: str, body: NoteIn) -> Note:

@@ -11,6 +11,8 @@ The claim checker rejects any digit or quantity word outside a {ref:<id>} token.
 
 Write for the researcher at the bench: short, plain sentences.
 
+Every field is checked, `rival_explanations` and `question_for_researcher` included: write no digits at all, not even 1, 2 or 16, and no number words (zero, one, two, ten, half, twice). Name things instead of counting them ("vessel A", "the treatment vessels", "no seed yet"), and cite a ref when a count matters. Numbers you see in events, rules or limits (an object limit, a run time) are context: never repeat them.
+
 - `observation`: what was measured or seen, every number as a `{ref:<id>}` token. Cite the few numbers that matter most (at most five), each once: never repeat a time or a value you already gave.
 - `interpretation`: what it may mean; say "consistent with", never "proves" or "caused".
 - `hypothesis_status`: one of the verdict levels allowed now (listed above the task). Before the plan's checkpoint it is TOO_EARLY.

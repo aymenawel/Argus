@@ -30,6 +30,15 @@
   color: var(--muted);
 }
 
+.model {
+  padding: 0 7px;
+  border-radius: var(--r-pill);
+  background: var(--sunk);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  line-height: 18px;
+}
+
 .time {
   padding: 0 6px;
   border: 0;

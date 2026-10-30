@@ -1,6 +1,7 @@
 "use client";
 
 import { playhead } from "@/lib/playhead";
+import { modelName } from "@/lib/models";
 import { formatRunTime } from "@/lib/scale";
 import type { Note, RunEvent, VerdictLevel } from "@/lib/types";
 import { EvidenceChip } from "./EvidenceChip";
@@ -32,7 +33,13 @@ const EVENT: Record<string, string> = {
   interrupted: "Interrupted",
 };
 
-type Props = { note: Note; span: number; events: Map<string, RunEvent>; labels: Map<string, string> };
+type Props = {
+  note: Note;
+  span: number;
+  events: Map<string, RunEvent>;
+  labels: Map<string, string>;
+  model?: string; // the model that wrote an AI note (none: code wrote it)
+};
 
 // An event's time is its event chip; the run's time and the plan's values are context, not evidence.
 const CONTEXT = ["ev:", "run:", "plan:"];
@@ -46,7 +53,7 @@ function Check() {
 }
 
 // One note: who wrote it, when, whether the claim checker passed it, its sections and the evidence behind it.
-export function NoteCard({ note, span, events, labels }: Props) {
+export function NoteCard({ note, span, events, labels, model }: Props) {
   const ai = note.author === "ai";
   const kind = note.level ?? note.tag;
   const when =
@@ -76,6 +83,11 @@ export function NoteCard({ note, span, events, labels }: Props) {
     <article className={`${styles.card} ${ai ? "" : styles.mine}`}>
       <header className={styles.head}>
         <span className={styles.author}>{ai ? "Argus" : "You"}</span>
+        {ai && model && (
+          <span className={styles.model} title={`Written by ${modelName(model)} (${model})`}>
+            {modelName(model)}
+          </span>
+        )}
         {kind && <span className={styles.kind}>{KIND[kind] ?? kind}</span>}
         <button
           type="button"

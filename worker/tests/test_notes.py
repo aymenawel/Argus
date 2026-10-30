@@ -255,3 +255,11 @@ async def test_an_unexpected_error_never_stops_the_run(ctx):
     note = await ctx.notes.write(600.0, "checkpoint", image_bgr=FRAME)  # raises nothing
     assert note is not None and note.check_status == "fallback" and note.body["written_by"] == "code"
     assert "connection reset" in note.body["reason"]
+
+
+@pytest.mark.anyio
+async def test_a_published_note_says_which_model_wrote_it(ctx):
+    ctx.reasoner = FakeReasoner([clean_note()])
+    note = await ctx.notes.write(600.0, "checkpoint", image_bgr=FRAME)
+    event = published(ctx, "note")[-1]
+    assert event["note"]["id"] == note.id and event["model"] == "muse-spark-1.3"

@@ -18,6 +18,7 @@ TOKEN = re.compile(r"\{ref:([A-Za-z0-9_:.\-]+)\}")
 # Model and product names carry digits that are not claims; they are taken out before the digit check.
 MODEL_NAMES = ("Muse Wonder 1.0", "Muse Spark 1.3", "muse-wonder-1.0", "muse-spark-1.3", "SAM 3.1", "sam-3.1")
 NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
+VESSEL_REFS = ("m:", "chg:", "diff:")  # ref ids that carry a vessel's label: m:<label>:<metric>
 COUNTING = (
     "two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|"
     "eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|"
@@ -74,9 +75,17 @@ def _texts(data: Any, path: str) -> list[str]:
     return [value] if isinstance(value, str) else []
 
 
+def vessel_names(refs: RefTable) -> list[str]:
+    """The vessels' labels ("pg1-2", "A1") the refs name: a reader takes them for names, not counts, so their digits
+    are not claims. A label that is only digits ("3") stays checked: it reads like a number. Longest first."""
+    labels = {i.split(":")[1] for i in refs.ids() if i.startswith(VESSEL_REFS) and i.count(":") >= 2}
+    return sorted((label for label in labels if any(c.isalpha() for c in label)), key=len, reverse=True)
+
+
 def check_text_fields(data: dict, fields: Sequence[str], refs: RefTable) -> list[str]:
     """Reasons a model's text fails, empty when it is clean: unknown refs, numbers or quantity words outside refs."""
     reasons: list[str] = []
+    names = [re.compile(rf"(?<![\w-]){re.escape(label)}(?![\w-])") for label in vessel_names(refs)]
     for path in fields:
         for text in _texts(data, path):
             for ref_id in TOKEN.findall(text):
@@ -85,6 +94,8 @@ def check_text_fields(data: dict, fields: Sequence[str], refs: RefTable) -> list
             bare = TOKEN.sub(" ", text)
             for name in MODEL_NAMES:
                 bare = bare.replace(name, " ")
+            for label in names:  # a whole vessel label only: "pg1-23" is not "pg1-2"
+                bare = label.sub(" ", bare)
             for number in NUMBER.findall(bare):
                 reasons.append(f"number outside a ref in {path}: '{number}'")
             for char in sorted({c for c in bare if c.isnumeric() and not c.isascii()}):  # ½, Ⅲ, other scripts' digits

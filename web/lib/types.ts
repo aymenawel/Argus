@@ -70,6 +70,7 @@ export type RecipeDraftResult = {
   setup_hints: { factor: string; factor_unit: string; conditions: { value: string; role: Role }[] };
   safety_notes: string[];
   question: string;
+  model?: string | null; // the model whose answer became the draft
 };
 
 export type RunStatus = "running" | "finished" | "stopped";
@@ -231,7 +232,23 @@ export type Note = {
   model_call_id: string | null;
 };
 
-export type NotesView = { notes: Note[]; rejected: number };
+/** `models`: each AI note's model call id -> the model that wrote it. */
+export type NotesView = { notes: Note[]; rejected: number; models?: Record<string, string> };
+
+/** Where everyday model calls run (GET /api/preferences/reasoning, D-77); keys never leave the worker. */
+export type ReasoningOption = {
+  id: "meta" | "baseten";
+  label: string;
+  model: string;
+  open_weight: boolean;
+  available: boolean;
+};
+
+export type ReasoningPreference = {
+  provider: ReasoningOption["id"];
+  options: ReasoningOption[];
+  fixed: { verdicts: string; segmentation: string };
+};
 
 /** Argus's readings against a published dataset's labels (GET /runs/{id}/agreement); null without labels. */
 export type VesselAgreement = {

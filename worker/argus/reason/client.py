@@ -40,9 +40,24 @@ def reason_client(settings: Settings, *, http_client: Any = None) -> AsyncOpenAI
     )
 
 
+def open_client(settings: Settings, *, http_client: Any = None) -> AsyncOpenAI:
+    """Baseten's endpoint for Muse Spark Open, set up like Meta's: no SDK retries, a bounded wait."""
+    if settings.baseten_api_key is None:
+        raise RuntimeError("BASETEN_API_KEY is not set")
+    return AsyncOpenAI(
+        base_url=settings.baseten_base_url,
+        api_key=settings.baseten_api_key.get_secret_value(),
+        max_retries=0,
+        timeout=Timeout(settings.reason_timeout_s, connect=5.0),
+        http_client=http_client,
+    )
+
+
 def _prices(settings: Settings, model: str) -> tuple[float, float, float]:
     if model == settings.deep_model:
         return settings.wonder_input_usd, settings.wonder_cached_usd, settings.wonder_output_usd
+    if model == settings.open_model:
+        return settings.open_input_usd, settings.open_cached_usd, settings.open_output_usd
     return settings.spark_input_usd, settings.spark_cached_usd, settings.spark_output_usd
 
 

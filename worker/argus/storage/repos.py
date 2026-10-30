@@ -227,6 +227,21 @@ def get_setup(db: Database, experiment_id: str) -> Setup:
     return Setup() if row is None else Setup.model_validate_json(row["body"])
 
 
+def get_preference(db: Database, key: str) -> str | None:
+    with db.read() as c:
+        row = c.execute("SELECT value FROM preferences WHERE key=?", (key,)).fetchone()
+    return None if row is None else str(row["value"])
+
+
+def set_preference(db: Database, key: str, value: str) -> None:
+    with db.write() as c:
+        c.execute(
+            "INSERT INTO preferences(key, value, updated_at) VALUES (?,?,?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+            (key, value, _now()),
+        )
+
+
 # ---- Runs, vessels, frames ----
 
 
@@ -713,6 +728,16 @@ def notes_for_run(db: Database, run_id: str, t_from: float | None = None, t_to: 
     with db.read() as c:
         rows = c.execute(f"SELECT * FROM notes WHERE {clauses} ORDER BY t, rowid", params).fetchall()
     return [_load(Note, r, NOTE_JSON) for r in rows]
+
+
+def models_of_calls(db: Database, call_ids: Sequence[str]) -> dict[str, str]:
+    """The model that answered each logged call (for showing who wrote a note)."""
+    if not call_ids:
+        return {}
+    marks = ",".join("?" * len(call_ids))
+    with db.read() as c:
+        rows = c.execute(f"SELECT id, model FROM model_calls WHERE id IN ({marks})", list(call_ids)).fetchall()
+    return {r["id"]: r["model"] for r in rows}
 
 
 def add_note_attempt(db: Database, run_id: str, draft: NoteAttemptDraft) -> NoteAttempt:

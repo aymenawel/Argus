@@ -121,3 +121,7 @@ def test_the_recipe_freezes_once_a_run_has_started(client, db, own_experiment):
     edited = client.put(f"/api/experiments/{own_experiment}/recipe", json=recipe | {"analysis_step_s": 900})
     assert edited.status_code == 409 and "run" in edited.json()["detail"]
     assert client.get(f"/api/experiments/{own_experiment}/recipe").json()["analysis_step_s"] == 1800
+
+
+def test_a_draft_says_which_model_wrote_it(client, reasoner):
+    assert drafted(client, reasoner)["model"] == "muse-spark-1.3"
