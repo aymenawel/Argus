@@ -232,6 +232,39 @@ export type Note = {
   model_call_id: string | null;
 };
 
+// ---- Results (worker/argus/api/results.py, phase 4) ----
+
+/** (value, ±) */
+export type FitPair = [number, number];
+
+/** A vessel's fitted curve: refused with a reason, or its half-way time (h), rate (unit/h) and plateau with ±. */
+export type VesselFit = {
+  curve: string;
+  ok: boolean;
+  reason: string;
+  reached: boolean;
+  half_time_h: FitPair | null;
+  rate_per_h: FitPair | null;
+  plateau: FitPair | null;
+  rmse: number;
+  samples: [number, number][]; // (t in s, fitted value)
+};
+
+export type FitsView = {
+  metric: string;
+  unit: string;
+  curve: string;
+  quantity: "level" | "half_time" | "rate";
+  vessels: {
+    vessel_id: string;
+    label: string;
+    role: Role;
+    condition: Condition | null;
+    readings: [number, number][]; // (t in s, value)
+    fit: VesselFit | null;
+  }[];
+};
+
 /** `models`: each AI note's model call id -> the model that wrote it. */
 export type NotesView = { notes: Note[]; rejected: number; models?: Record<string, string> };
 

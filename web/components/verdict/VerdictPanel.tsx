@@ -45,7 +45,7 @@ function Mark({ ok }: { ok: Check["ok"] }) {
 }
 
 /** The plan this run is judged against: the first locked version, if it was locked before the run began. */
-function judgedPlan(plans: Plan[], startedAt: string): Plan | null {
+export function judgedPlan(plans: Plan[], startedAt: string): Plan | null {
   const first = plans.find((p) => p.locked_at !== null) ?? null;
   return first && first.locked_at !== null && Date.parse(first.locked_at) <= Date.parse(startedAt) ? first : null;
 }
@@ -208,6 +208,28 @@ export function VerdictPanel({ snapshot }: Props) {
   );
 }
 
+/** What the data allows now and the checks, computed in code, that decided it. */
+export function VerdictChecks({ verdict }: { verdict: Verdict }) {
+  return (
+    <>
+      <p className={styles.allowed}>
+        Allowed now: <strong>{either(verdict.allowed)}</strong>
+        {verdict.fell_back && <span className={styles.fellBack}>Fell back to Muse Spark</span>}
+        {verdict.body.written_by === "code" && <span className={styles.fellBack}>Explanation written by code</span>}
+      </p>
+
+      <ul className={styles.checks} aria-label="Checks computed in code">
+        {verdict.checks.map((c) => (
+          <li key={c.id}>
+            <Mark ok={c.ok} />
+            <span>{c.text}</span>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
 function Body({
   verdict,
   resolved,
@@ -221,20 +243,7 @@ function Body({
   const findings = b.findings ?? [];
   return (
     <div className={styles.body}>
-      <p className={styles.allowed}>
-        Allowed now: <strong>{either(verdict.allowed)}</strong>
-        {verdict.fell_back && <span className={styles.fellBack}>Fell back to Muse Spark</span>}
-        {b.written_by === "code" && <span className={styles.fellBack}>Explanation written by code</span>}
-      </p>
-
-      <ul className={styles.checks} aria-label="Checks computed in code">
-        {verdict.checks.map((c) => (
-          <li key={c.id}>
-            <Mark ok={c.ok} />
-            <span>{c.text}</span>
-          </li>
-        ))}
-      </ul>
+      <VerdictChecks verdict={verdict} />
 
       {b.explanation && <p className={styles.explanation}>{b.explanation}</p>}
 

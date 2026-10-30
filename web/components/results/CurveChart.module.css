@@ -1,0 +1,92 @@
+/* Readings and fitted curves per vessel: controls grey, treatments teal. */
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+
+.chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.tick {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.axis {
+  fill: var(--faint);
+  font-size: 11px;
+}
+
+.checkpoint {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.control {
+  --series: var(--muted);
+}
+
+.treatment {
+  --series: var(--accent);
+}
+
+.dot {
+  fill: var(--series);
+  opacity: 0.35;
+}
+
+.curve {
+  fill: none;
+  stroke: var(--series);
+  stroke-width: 1.8;
+}
+
+.half {
+  fill: var(--surface);
+  stroke: var(--series);
+  stroke-width: 2;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch {
+  width: 18px;
+  height: 4px;
+  stroke: var(--series);
+  stroke-width: 2.5;
+}
+
+.ring {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px var(--muted);
+}
+
+.empty {
+  color: var(--muted);
+}

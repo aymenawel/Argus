@@ -2,6 +2,7 @@ import type {
   Agreement,
   DetectionOutline,
   Experiment,
+  FitsView,
   FrameRequest,
   Note,
   NotesView,
@@ -166,6 +167,14 @@ export function askVerdict(runId: string): Promise<Verdict> {
 /** Null when the run has no labels for this metric (only published data carries them). */
 export function getAgreement(runId: string, metric: string): Promise<Agreement | null> {
   return request(`${runPath(runId)}/agreement?metric=${encodeURIComponent(metric)}`);
+}
+
+// ---- Results ----
+
+/** Each vessel's readings and fitted curve; the plan's metric unless `metric` is given. */
+export function getFits(runId: string, metric?: string): Promise<FitsView> {
+  const query = metric ? `?metric=${encodeURIComponent(metric)}` : "";
+  return request(`${runPath(runId)}/fits${query}`);
 }
 
 // ---- Preferences ----
