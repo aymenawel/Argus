@@ -161,3 +161,7 @@ async def test_real_drafts_validate_without_edits(words):
     finally:
         await reasoner.aclose()
     assert draft.recipe.concepts and draft.plan.metric in draft.recipe.stored_metrics()
+    # Conditions are told apart by vessel: a concept named after one ("rye seed") finds nothing in the other dishes.
+    values = [c["value"].lower() for c in draft.setup_hints["conditions"] if len(c["value"]) > 2]
+    named_after = [c.name for c in draft.recipe.concepts if any(v in c.name.lower() for v in values)]
+    assert not named_after, f"concepts named after a condition: {named_after}"

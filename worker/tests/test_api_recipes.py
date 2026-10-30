@@ -96,3 +96,17 @@ def test_drafting_without_reasoning_is_unavailable(db, tmp_path):
 def test_saved_recipe_versions_are_evidence(db, client, own_experiment):
     with pytest.raises(sqlite3.IntegrityError), db.write() as c:
         c.execute("UPDATE experiment_recipes SET body='{}' WHERE experiment_id=?", (own_experiment,))
+
+
+def test_the_toolbox_lists_what_argus_can_measure(client):
+    tools = {t["method"]: t for t in client.get("/api/toolbox").json()}
+    assert tools["touching_count"]["family"] == "count" and tools["touching_count"]["unit"] == "count"
+    assert tools["skeleton_length"]["unit"] == "mm" and tools["skeleton_length"]["words"]
+
+
+def test_the_recipe_detail_serves_own_recipes_and_templates(client, own_experiment):
+    detail = client.get(f"/api/experiments/{own_experiment}/recipe/detail").json()
+    assert detail["id"] == "own" and detail["concepts"] == ["seed", "root"]
+    assert detail["main_measurement"] == "germinated" and {"id": "germinated", "unit": "count"} in detail["metrics"]
+    template = client.post("/api/experiments", json={"title": "Dye", "recipe_id": "colour-reaction"}).json()
+    assert client.get(f"/api/experiments/{template['id']}/recipe/detail").json()["id"] == "colour-reaction"

@@ -10,7 +10,7 @@ The numbers here are suggestions the researcher confirms, not measurements.
 The researcher said what they will do (RESEARCHER'S WORDS). Draft how Argus should watch and measure it, using only the TOOLBOX above. The EXAMPLES show recipes for experiments Argus already knows.
 
 - `title`: a short name for the experiment.
-- `concepts`: 1–4 things a camera can see and SAM can outline, each a short noun phrase for one thing ("seed", "root", "foam", "apple slice"). Never two things in one concept, never an abstract idea ("growth", "the change").
+- `concepts`: 1–4 things a camera can see and SAM can outline, each a short noun phrase for one thing ("seed", "root", "foam", "apple slice"). Never two things in one concept, never an abstract idea ("growth", "the change"). The same concepts are found in every vessel: the conditions (a species, a temperature, a dose) are told apart by which vessel they are in, so never name a concept after a condition ("rye seed" and "millet seed" are both "seed").
 - `measurements`: what to measure on those concepts, each from the TOOLBOX, with a snake_case `id`. `from` names one concept. Use `touching_count` to count objects that carry another (a seed with a root): set `touching` to the touched concept and `min_length_mm` to the smallest length that counts; leave both null for every other method.
 - `main_measurement`: the measurement that best answers the researcher's question.
 - `analysis_step_s`: how often to take a reading, matched to how fast the thing changes (seconds for a fast reaction, minutes for dough, half an hour or more for seeds).

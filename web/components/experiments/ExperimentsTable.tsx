@@ -44,7 +44,9 @@ export function ExperimentsTable({ experiments, recipes }: { experiments: Experi
                 <Link className={styles.title} href={`/experiments/${e.id}/${e.status === "draft" ? "setup" : "run"}`}>
                   {e.title}
                 </Link>
-                <span className={styles.sub}>{recipeTitle.get(e.recipe_id) ?? e.recipe_id}</span>
+                <span className={styles.sub}>
+                  {e.recipe_id === "own" ? "Own recipe" : (recipeTitle.get(e.recipe_id) ?? e.recipe_id)}
+                </span>
               </td>
               <td>
                 <span className={`${styles.state} ${STATUS[e.status].className}`}>

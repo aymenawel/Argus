@@ -12,7 +12,7 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Panel } from "@/components/ui/Panel";
-import { ApiError, apiBase, getExperiment, getRecipes, getRuns, stopRun } from "@/lib/api";
+import { ApiError, apiBase, getExperiment, getExperimentRecipeDetail, getRuns, stopRun } from "@/lib/api";
 import { playhead } from "@/lib/playhead";
 import { runNotice } from "@/lib/run-data";
 import { LiveSource, type RunSnapshot } from "@/lib/run-source";
@@ -55,8 +55,8 @@ export function RunScreen() {
   useEffect(() => {
     let live = true;
     let unsubscribe = () => {};
-    Promise.all([getExperiment(id), getRecipes(), getRuns(id)])
-      .then(([experiment, recipes, runs]) => {
+    Promise.all([getExperiment(id), getExperimentRecipeDetail(id), getRuns(id)])
+      .then(([experiment, recipe, runs]) => {
         if (!live) return;
         if (runs.length === 0) {
           setLoad({ state: "empty", experiment });
@@ -73,7 +73,7 @@ export function RunScreen() {
             .catch(() => undefined);
         };
         const source = new LiveSource(shown, onOtherRun);
-        const mainMetric = recipes.find((r) => r.id === experiment.recipe_id)?.main_measurement ?? "";
+        const mainMetric = recipe.main_measurement;
         playhead.reset();
         unsubscribe = source.subscribe((next) => live && setSnapshot(next));
         setLoad({ state: "ready", experiment, mainMetric, runNumber: runs.length, source });

@@ -9,6 +9,8 @@ import type {
   Preview,
   RecipeDetail,
   RecipeDraft,
+  RecipeDraftResult,
+  RecipeSpec,
   RecipeSummary,
   Review,
   ReviewDraft,
@@ -16,6 +18,7 @@ import type {
   RunView,
   Setup,
   Timeline,
+  Tool,
   Verdict,
   VesselProposal,
 } from "./types";
@@ -27,21 +30,29 @@ export function apiBase(): string {
 
 /** status 0 means the worker could not be reached at all. */
 export class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    readonly detail: string,
-  ) {
+  readonly status: number;
+  readonly detail: string;
+
+  // Plain fields, not parameter properties, so the node test runner can load this file.
+  constructor(status: number, detail: string) {
     super(status ? `${status}: ${detail}` : detail);
     this.name = "ApiError";
+    this.status = status;
+    this.detail = detail;
   }
 }
 
-// FastAPI sends `detail` as a string for our own errors and as a list of {msg} for validation errors.
-function detailOf(body: unknown, fallback: string): string {
+// FastAPI sends `detail` as a string for our own errors and as a list of {msg} for validation errors; a refused
+// recipe sends its reasons as a list of strings.
+export function detailOf(body: unknown, fallback: string): string {
   const detail = body && typeof body === "object" && "detail" in body ? body.detail : undefined;
   if (typeof detail === "string") return detail;
   if (Array.isArray(detail)) {
-    return detail.map((item) => (item && typeof item === "object" && "msg" in item ? String(item.msg) : "")).join("; ");
+    return detail
+      .map((item) =>
+        typeof item === "string" ? item : item && typeof item === "object" && "msg" in item ? String(item.msg) : "",
+      )
+      .join("; ");
   }
   return fallback;
 }
@@ -74,8 +85,22 @@ export function getRecipe(id: string): Promise<RecipeDetail> {
   return request(`/api/recipes/${encodeURIComponent(id)}`);
 }
 
-export function createExperiment(title: string, recipeId: string): Promise<Experiment> {
-  return request("/api/experiments", { method: "POST", body: JSON.stringify({ title, recipe_id: recipeId }) });
+/** From a template by id, or with its own recipe (drafted from the researcher's words) and the plan drafted with it. */
+export function createExperiment(
+  title: string,
+  recipe: string | { recipe: RecipeSpec; plan: PlanDraft },
+): Promise<Experiment> {
+  const body = typeof recipe === "string" ? { title, recipe_id: recipe } : { title, ...recipe };
+  return request("/api/experiments", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function getToolbox(): Promise<Tool[]> {
+  return request("/api/toolbox");
+}
+
+/** A 422 lists why the words couldn't become a recipe Argus can run; a 503 means reasoning is off. */
+export function draftRecipe(words: string): Promise<RecipeDraftResult> {
+  return request("/api/experiments/draft", { method: "POST", body: JSON.stringify({ words }) });
 }
 
 export function getExperiment(id: string): Promise<Experiment> {
@@ -145,6 +170,20 @@ export function postReview(runId: string, review: ReviewDraft): Promise<Review> 
 }
 
 // ---- Setup, plan and start ----
+
+export function getExperimentRecipe(experimentId: string): Promise<RecipeSpec> {
+  return request(`${experimentPath(experimentId)}/recipe`);
+}
+
+/** What the wizard offers for the experiment's recipe, its own or a template. */
+export function getExperimentRecipeDetail(experimentId: string): Promise<RecipeDetail> {
+  return request(`${experimentPath(experimentId)}/recipe/detail`);
+}
+
+/** A 409 once the plan is locked: the recipe is frozen with it. */
+export function putExperimentRecipe(experimentId: string, recipe: RecipeSpec): Promise<RecipeSpec> {
+  return request(`${experimentPath(experimentId)}/recipe`, send("PUT", recipe));
+}
 
 export function getSetup(experimentId: string): Promise<Setup> {
   return request(`${experimentPath(experimentId)}/setup`);

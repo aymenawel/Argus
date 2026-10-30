@@ -14,7 +14,17 @@ import { VesselsStep } from "@/components/setup/VesselsStep";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Panel } from "@/components/ui/Panel";
-import { ApiError, apiBase, getExperiment, getPlans, getRecipe, getRuns, getSetup, putPlan, putSetup } from "@/lib/api";
+import {
+  ApiError,
+  apiBase,
+  getExperiment,
+  getExperimentRecipeDetail,
+  getPlans,
+  getRuns,
+  getSetup,
+  putPlan,
+  putSetup,
+} from "@/lib/api";
 import { STEPS, stepProblems, type StepId, type WizardState } from "@/lib/setup";
 import type { Experiment, FrameRequest, Plan, PlanDraft, Preview, RecipeDetail, RecipeDraft, Setup } from "@/lib/types";
 import styles from "./page.module.css";
@@ -93,7 +103,7 @@ export function SetupScreen() {
     let live = true;
     Promise.all([getExperiment(id), getSetup(id), getPlans(id), getRuns(id)])
       .then(async ([experiment, saved, versions, runs]) => {
-        const recipe = await getRecipe(experiment.recipe_id);
+        const recipe = await getExperimentRecipeDetail(experiment.id); // its own recipe or a template
         if (!live) return;
         const firstLocked = versions.find((p) => p.locked_at !== null);
         setSetup(saved);

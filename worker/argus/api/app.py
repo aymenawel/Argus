@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,6 +26,7 @@ from argus.recipes.draft import RecipeRefused, draft_recipe
 from argus.recipes.loader import load_all
 from argus.recipes.model import Recipe
 from argus.recipes.resolve import recipe_for
+from argus.recipes.toolbox import TOOLBOX
 from argus.storage import repos
 from argus.storage.db import Database
 
@@ -79,6 +81,20 @@ class RecipeDetail(RecipeSummary):
     rivals: list[str]
 
 
+def recipe_detail(recipe: Recipe) -> RecipeDetail:
+    units = {m.id: m.unit for m in recipe.measurements}
+    metrics = [
+        MetricInfo(id=name, unit=units.get(name, units.get(name.rsplit("_", 1)[0], "")))
+        for name in recipe.stored_metrics()
+    ]
+    return RecipeDetail(
+        **recipe.model_dump(include=set(RecipeSummary.model_fields)),
+        concepts=[c.name for c in recipe.concepts],
+        metrics=metrics,
+        rivals=list(recipe.rivals),
+    )
+
+
 def create_app(
     settings: Settings,
     db: Database,
@@ -120,17 +136,12 @@ def create_app(
         recipe = recipes.get(recipe_id)
         if recipe is None:
             raise HTTPException(status_code=404, detail="recipe not found")
-        units = {m.id: m.unit for m in recipe.measurements}
-        metrics = [
-            MetricInfo(id=name, unit=units.get(name, units.get(name.rsplit("_", 1)[0], "")))
-            for name in recipe.stored_metrics()
-        ]
-        return RecipeDetail(
-            **recipe.model_dump(include=set(RecipeSummary.model_fields)),
-            concepts=[c.name for c in recipe.concepts],
-            metrics=metrics,
-            rivals=list(recipe.rivals),
-        )
+        return recipe_detail(recipe)
+
+    @app.get("/api/toolbox")
+    def get_toolbox() -> list[dict]:
+        """Every method a recipe may use, with its family, unit and what it measures (D-73)."""
+        return [asdict(tool) for tool in TOOLBOX]
 
     @app.get("/api/experiments")
     def list_experiments() -> list[Experiment]:
@@ -182,6 +193,14 @@ def create_app(
         if experiment is None:
             raise HTTPException(status_code=404, detail="experiment not found")
         return recipe_for(db, recipes, experiment).model_dump(by_alias=True, mode="json")
+
+    @app.get("/api/experiments/{experiment_id}/recipe/detail")
+    def get_experiment_recipe_detail(experiment_id: str) -> RecipeDetail:
+        """What the wizard offers for this experiment's recipe, whether its own or a template."""
+        experiment = repos.get_experiment(db, experiment_id)
+        if experiment is None:
+            raise HTTPException(status_code=404, detail="experiment not found")
+        return recipe_detail(recipe_for(db, recipes, experiment))
 
     @app.put("/api/experiments/{experiment_id}/recipe")
     def put_experiment_recipe(experiment_id: str, body: dict) -> dict:

@@ -30,6 +30,48 @@ export type RecipeDetail = RecipeSummary & {
   rivals: string[];
 };
 
+// ---- Recipes drafted from the researcher's words (worker/argus/recipes, D-73) ----
+
+/** One method in Argus's measuring toolbox (GET /api/toolbox). */
+export type Tool = { method: string; family: MeasurementSpec["family"]; unit: string; words: string };
+
+export type MeasurementSpec = {
+  id: string;
+  family: "size" | "colour" | "count" | "motion" | "state";
+  method: string;
+  from: string; // the concept it reads from
+  unit: string;
+  rule?: string | null;
+  touching?: string | null; // touching_count: the concept an object must touch
+  min_length_mm?: number | null; // touching_count: how long the touched part must be
+};
+
+/** A recipe as the worker validates it: a template, or an experiment's own (id "own"). */
+export type RecipeSpec = {
+  id: string;
+  version: number;
+  title: string;
+  default_mode: "continuous" | "smart_trigger" | "hybrid";
+  analysis_step_s: number;
+  curve: "logistic" | "gompertz" | "exponential" | "first_order" | "linear";
+  rivals: string[];
+  default_views: string[];
+  watcher: { signals: ("ssim" | "colour")[]; light_normalization: "normal" | "strong"; day_night: boolean };
+  concepts: { name: string }[];
+  measurements: MeasurementSpec[];
+  events: { id: string; when: string }[];
+  main_measurement: string;
+};
+
+/** POST /api/experiments/draft: a checked recipe and plan for the researcher's words; nothing is saved yet. */
+export type RecipeDraftResult = {
+  recipe: RecipeSpec;
+  plan: PlanDraft;
+  setup_hints: { factor: string; factor_unit: string; conditions: { value: string; role: Role }[] };
+  safety_notes: string[];
+  question: string;
+};
+
 export type RunStatus = "running" | "finished" | "stopped";
 
 export type Run = {

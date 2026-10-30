@@ -126,7 +126,7 @@ export default function ExperimentsPage() {
           <div className={styles.message}>
             <p className={styles.messageTitle}>No experiments yet</p>
             <p className={styles.messageText}>
-              Start one from a recipe: seed germination, a colour change, foam height.
+              Say what you will do and Argus drafts the recipe, or start from a template.
             </p>
             {newButton}
           </div>

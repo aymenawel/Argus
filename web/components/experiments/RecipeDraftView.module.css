@@ -1,0 +1,241 @@
+/* Argus's draft of a recipe, in words, each line editable. */
+.draft {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border-radius: var(--r-tile);
+  background: var(--raised);
+}
+
+.title {
+  font-weight: 600;
+}
+
+.safety {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+  border-radius: var(--r-small);
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+}
+
+.line {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 4px 12px;
+  align-items: start;
+}
+
+.line dt {
+  padding-top: 7px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.line dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.concepts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.conceptChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 4px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.concept {
+  height: 32px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.concept:focus-visible,
+.number:focus-visible,
+.select:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+}
+
+.concept[aria-invalid="true"],
+.number[aria-invalid="true"] {
+  box-shadow: inset 0 0 0 1.5px var(--neg);
+}
+
+.measurements {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.measurement {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: var(--r-small);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.measureName {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.unit {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.measureEdit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.joiner {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.select,
+.number {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--control);
+  border-radius: var(--r-small);
+  background: var(--surface);
+  font-size: var(--fs-sm);
+}
+
+.number {
+  width: 64px;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.remove {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.conceptChip .remove {
+  margin-left: 0;
+}
+
+.remove:hover:not(:disabled) {
+  background: var(--raised);
+  color: var(--text);
+}
+
+.remove:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.remove:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+}
+
+.tag,
+.suggested {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: var(--r-pill);
+  background: var(--primary-bg);
+  color: var(--primary-ink);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.suggested {
+  background: var(--surface);
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--border);
+  font-weight: 500;
+}
+
+.plan {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  line-height: 20px;
+}
+
+.planLabel {
+  margin-right: 4px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.help {
+  color: var(--faint);
+  font-size: var(--fs-xs);
+}
+
+@media (max-width: 480px) {
+  .line {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .line dt {
+    padding-top: 0;
+  }
+}
