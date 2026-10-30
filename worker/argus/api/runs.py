@@ -62,6 +62,9 @@ class RunCreate(BaseModel):
     paths: list[str] = []
     manifest: str | None = None  # a published image sequence: its vessels come from the manifest's tiles
     roles: dict[str, Role] | None = None  # with a manifest: each condition's role
+    # With a manifest: which of this experiment's metrics each of the dataset's labels measures (its "germinated"
+    # is the recipe's "germination_count"); a label not named here keeps its own name.
+    labels: dict[str, str] = {}
     time_scale: float = Field(1.0, gt=0)
     start_time: datetime | None = None
     vessels: list[VesselIn] | None = None  # None: the experiment's saved setup's vessels
@@ -217,6 +220,7 @@ def register_run_routes(app: FastAPI, *, db: Database, settings: Settings, jobs:
                     print_check_mm=print_check_mm,
                     ruler=ruler,
                     manifest=Path(body.manifest) if body.manifest else None,
+                    labels=body.labels,
                     dish_diameter_mm=(manifest.dish_diameter_mm if manifest else None) or setup.dish_diameter_mm,
                 )
                 jobs.start_import(run, vessels, request)

@@ -253,9 +253,11 @@ def test_a_published_plates_labels_are_kept_for_the_agreement(client, experiment
     manifest = write_manifest(tmp_path / "plate", tiles=tiles)
     roles = {"rye": "control", "millet": "treatment"}
     url = f"/api/experiments/{experiment['id']}/runs"
-    created = client.post(url, json={"mode": "imported", "manifest": manifest, "roles": roles})
+    # the dataset's "germinated" labels measure what this experiment calls "sprouted"
+    body = {"mode": "imported", "manifest": manifest, "roles": roles, "labels": {"germinated": "sprouted"}}
+    created = client.post(url, json=body)
     view = wait_until_done(client, created.json()["run"]["id"])
-    result = client.get(f"/api/runs/{view['run']['id']}/agreement", params={"metric": "germinated"}).json()
+    result = client.get(f"/api/runs/{view['run']['id']}/agreement", params={"metric": "sprouted"}).json()
     assert result["source"] == "Test plates" and [v["label"] for v in result["vessels"]] == ["A1", "B1"]
     assert all(v["frames"] == 0 for v in result["vessels"])  # nothing measured: no calibration in this plate
     assert client.get(f"/api/runs/{view['run']['id']}/agreement", params={"metric": "area"}).json() is None

@@ -16,8 +16,8 @@ import math
 import shutil
 import subprocess
 import time
-from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
+from collections.abc import Iterator, Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import cv2
@@ -49,6 +49,7 @@ class ImportRequest:
     ruler: RulerInput | None = None
     manifest: Path | None = None  # a published image sequence instead of video files
     dish_diameter_mm: float | None = None  # with no card or ruler, the dishes' rims in the vessel regions set the scale
+    labels: Mapping[str, str] = field(default_factory=dict)  # a dataset label's name -> the metric it measures here
 
 
 def _frames(request: ImportRequest) -> Iterator[VideoFrame]:
@@ -280,7 +281,7 @@ async def _segment_vessel(
             masks[sample.frame_id].setdefault(vessel.id, {})[concept] = _keep(ctx, vessel, concept, patches, shape)
 
 
-def _store_labels(ctx: RunContext, manifest_path: Path) -> None:
+def _store_labels(ctx: RunContext, manifest_path: Path, names: Mapping[str, str]) -> None:
     """The dataset's own values for each dish, frame by frame, beside (never among) Argus's measurements."""
     manifest = load_manifest(manifest_path, check_frames=False)
     by_label = {v.label: v.id for v in ctx.vessels}
@@ -288,7 +289,7 @@ def _store_labels(ctx: RunContext, manifest_path: Path) -> None:
         ReferenceValueDraft(
             vessel_id=by_label[tile.label],
             t=i * manifest.interval_s,
-            metric=metric,
+            metric=names.get(metric, metric),
             value=value,
             source=manifest.dataset,
         )
@@ -314,7 +315,7 @@ async def run_import(ctx: RunContext, request: ImportRequest, *, cancel: asyncio
         return await asyncio.to_thread(_finish, ctx, RunStatus.STOPPED)
     samples, calibrations, epochs = scanned
     if request.manifest is not None:
-        await asyncio.to_thread(_store_labels, ctx, request.manifest)
+        await asyncio.to_thread(_store_labels, ctx, request.manifest, request.labels)
     if not samples:
         return await asyncio.to_thread(_finish, ctx, RunStatus.FINISHED)
 

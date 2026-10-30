@@ -140,12 +140,22 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--api", default="http://localhost:8000", help="the worker's address")
     card = sub.add_parser("card", help="export the printable Argus Card sheet (SVG, PDF, PNG preview)")
     card.add_argument("--out", type=Path, required=True, help="folder to write the files into")
+    dataset = sub.add_parser("dataset", help="turn a published dataset into a plate Argus can import")
+    dataset.add_argument("name", choices=["genze"], help="the dataset")
+    dataset.add_argument("--zip", type=Path, required=True, help="the dataset's archive, as downloaded")
+    dataset.add_argument("--out", type=Path, required=True, help="folder for the plate's frames and manifest.json")
     args = parser.parse_args(argv)
 
     if args.command == "dev":
         return run_dev(REPO_ROOT)
     if args.command == "run":
         return post_run(args.file, args.api)
+    if args.command == "dataset":
+        from argus.datasets import genze
+
+        manifest = genze.build_plate(args.zip, args.out, dishes=genze.DEFAULT_PLATE, expected_sha256=genze.GENZE_SHA256)
+        print(f"{len(manifest.tiles)} dishes, {len(manifest.frames)} frames: {args.out / 'manifest.json'}")
+        return 0
     from argus.calibration import card_export  # needs a Chromium browser, so only loaded on demand
 
     for path in card_export.export(args.out):

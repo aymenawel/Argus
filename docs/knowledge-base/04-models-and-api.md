@@ -148,4 +148,4 @@ Request (image):
 - [x] SAM 3.1 image + video, parsed with `meta-sam-parser` (results above)
 - [x] Short MP4 to Muse Spark: **~72 input tokens per second** of 240×240, 10 fps video (6 s clip = 906 tokens total, 12 s = 1,338)
 - [x] Voice note through `/v1/asr/transcribe` (results above)
-- [ ] SAM concept quality on real experiment frames (seeds, roots, foam, liquid level): needs the real setup
+- [x] SAM concept quality on germinating seeds (Genze dishes, Oct 29): **seeds yes, roots no.** On the six-dish plate, video mode found ~10 seeds per rye dish but none in two of three millet dishes (small grains); **`root` returned 0 objects on every frame**, and image mode on a late frame (roots plainly visible) gave 0 for root, radicle, sprout, white root, seedling, rootlet, plant root, germinated seed and tail, at 1×, 2× and 3×. In video mode the **`seed` masks grow along the radicle** (SAM treats it as part of the seed). Image mode on a lone 624 × 624 dish crop returned 0 seeds where the same frame tiled into the plate returned 47: send whole frames, not small crops. Foam and liquid level: still untested

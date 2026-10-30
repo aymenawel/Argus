@@ -27,3 +27,13 @@ Use these words consistently in code, UI and docs.
 | **Argus Card** | Printed card with ArUco markers and neutral/color patches for scale and color correction |
 | **Intervention** | Anything done to the experiment by a person or by Argus (logged automatically for plug actions) |
 | **Highlights reel** | Short video of detected events; the full timelapse is separate |
+| **Own recipe** | A recipe Argus drafted from the researcher's words for one experiment (id `own`), editable until the plan locks, then frozen with it (D-73) |
+| **Toolbox** | The measurements Argus can make (area, height, skeleton length, component count, touching count, Lab mean, ΔE); a drafted recipe may use only these |
+| **Touching count** | How many objects of one concept touch another at least a set length long (seeds with a root ≥ 2 mm) |
+| **Published data** | Frames someone else recorded and published, re-analysed by Argus with their provenance (dataset, DOI, licence, credit) shown on every view |
+| **Manifest** | The file naming a published image sequence: its frames, interval, tiles, labels and provenance |
+| **Virtual plate** | Published per-dish images tiled by Argus into one frame per time point, one vessel per tile (D-72) |
+| **Dish ruler** | Millimetres per pixel from the rims of dishes of a known diameter, when no card is in view; ± at least about 5 % |
+| **Retrospective** | A verdict on data recorded before the plan existed; judged against a plan locked before Argus measured it, and labelled so (D-71) |
+| **Reference values** | A dataset's own values (its human labels), kept apart from Argus's measurements |
+| **Agreement** | Argus's readings against the reference values at the same times: mean difference, share of exact matches, time to half the final value |

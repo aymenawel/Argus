@@ -18,6 +18,20 @@ Argus includes or adapts material from the projects below. Each keeps its own li
 
 `prompts/system/scientific-rules.md` and `prompts/deep/verdict-critique.md` are condensed adaptations of the hypothesis-generation and scientific-critical-thinking skills from K-Dense-AI/scientific-agent-skills (MIT). The what-if-oracle skill (CC BY-NC-SA 4.0) was deliberately not copied or adapted.
 
+## Published data re-analysed in the demo (not in this repository)
+
+| Dataset | Credit | License | Used as |
+| --- | --- | --- | --- |
+| Genze & Grimm germination dataset, v3 ([Mendeley Data](https://data.mendeley.com/datasets/4wkt6thgp6/3), doi:10.17632/4wkt6thgp6.3) | Genze N., Bharti R., Grieb M., Schultheiss S.J., Grimm D.G. (2020), "Accurate machine learning-based germination detection, prediction and quality assessment of three grain crops", *Plant Methods* 16:157 | CC BY 4.0 | Six dishes (rye runs 1–2, pearl millet runs 1–2) cropped and tiled by Argus into a virtual plate; the dataset's per-seed labels are compared with Argus's counts |
+
+The data stays out of git (`data/` is ignored). To rebuild the plate, download `GermPredDataset.zip` (840 MB, no login) from the Mendeley page into `data/datasets/genze/`, then run from `worker/`:
+
+```bash
+uv run python -m argus dataset genze --zip ../data/datasets/genze/GermPredDataset.zip --out ../data/datasets/genze/plate
+```
+
+The command checks the archive's SHA-256 against the published file before using it. Argus credits the data under every frame of it in the app.
+
 ---
 
 ## License: K-Dense-AI/scientific-agent-skills
