@@ -3,7 +3,7 @@
 import { type KeyboardEvent, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { modelName } from "@/lib/models";
-import { addMeasurement, measurementInWords, renameConcept, stepInWords, withMethod } from "@/lib/recipe";
+import { addMeasurement, measurementInWords, quantityUnit, renameConcept, stepInWords, withMethod } from "@/lib/recipe";
 import type { MeasurementSpec, RecipeDraftResult, RecipeSpec, Tool } from "@/lib/types";
 import styles from "./RecipeDraftView.module.css";
 
@@ -301,9 +301,14 @@ export function RecipeDraftView({ draft, toolbox, onChange }: Props) {
         </p>
         {metric && (
           <p>
-            <span className={styles.planLabel}>Judged on</span> {measurementInWords(metric)},{" "}
-            {plan.direction === "lower" ? "lower" : "higher"} in {plan.treatment || "the treatment"} by at least{" "}
-            {plan.min_effect} {metric.unit} <span className={styles.suggested}>suggested</span>, from{" "}
+            <span className={styles.planLabel}>Judged on</span>{" "}
+            {plan.quantity === "half_time"
+              ? `how fast ${measurementInWords(metric)} reaches half its final value, ${plan.direction === "lower" ? "sooner" : "later"}`
+              : plan.quantity === "rate"
+                ? `the rate of ${measurementInWords(metric)}, ${plan.direction === "lower" ? "slower" : "faster"}`
+                : `${measurementInWords(metric)}, ${plan.direction === "lower" ? "lower" : "higher"}`}{" "}
+            in {plan.treatment || "the treatment"} by at least {plan.min_effect}{" "}
+            {quantityUnit(plan.quantity, metric.unit)} <span className={styles.suggested}>suggested</span>, from{" "}
             {plan.checkpoint_s != null ? stepInWords(plan.checkpoint_s) : "—"}{" "}
             <span className={styles.suggested}>suggested</span>
           </p>

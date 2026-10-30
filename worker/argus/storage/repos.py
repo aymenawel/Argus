@@ -123,6 +123,7 @@ PLAN_COLUMNS = (
     "min_effect",
     "checkpoint_s",
     "treatment",
+    "quantity",
 )
 
 

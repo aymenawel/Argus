@@ -320,6 +320,7 @@ export type PlanDraft = {
   min_effect: number | null;
   checkpoint_s: number | null;
   treatment: string | null;
+  quantity?: "level" | "half_time" | "rate" | null; // what is compared (D-78); unset = level
 };
 
 export type Plan = PlanDraft & {
@@ -368,6 +369,7 @@ export type RecipeDraft = {
   min_effect: number;
   checkpoint_s: number;
   treatment: string;
+  quantity?: "level" | "half_time" | "rate";
   factor: string;
   factor_unit: string;
   conditions: { value: string; role: Role }[];

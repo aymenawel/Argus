@@ -39,6 +39,7 @@ const EMPTY_PLAN: PlanDraft = {
   min_effect: null,
   checkpoint_s: null,
   treatment: null,
+  quantity: null,
 };
 
 const SAVE_AFTER_MS = 500;
@@ -50,7 +51,19 @@ type Load =
 
 function asDraft(plan: Plan): PlanDraft {
   const { hypothesis, prediction, threshold, rivals, metric, direction, min_effect, checkpoint_s, treatment } = plan;
-  return { hypothesis, prediction, threshold, rivals, metric, direction, min_effect, checkpoint_s, treatment };
+  const quantity = plan.quantity ?? null;
+  return {
+    hypothesis,
+    prediction,
+    threshold,
+    rivals,
+    metric,
+    direction,
+    min_effect,
+    checkpoint_s,
+    treatment,
+    quantity,
+  };
 }
 
 /** Saves `value` a moment after the researcher stops changing it; markChanged() tells an edit from a load. */
@@ -253,6 +266,7 @@ export function SetupScreen() {
                 min_effect: d.min_effect,
                 checkpoint_s: d.checkpoint_s,
                 treatment: d.treatment || null,
+                quantity: d.quantity && d.quantity !== "level" ? d.quantity : null,
               });
               changeSetup({ ...setup, factor: d.factor || null, factor_unit: d.factor_unit || null });
             }}

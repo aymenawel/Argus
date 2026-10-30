@@ -22,6 +22,7 @@ def answer(**overrides) -> dict:
         "prediction": "Millet dishes count more seeds with a root than rye dishes at the checkpoint.",
         "threshold": "A clear difference at the checkpoint.",
         "metric": "germinated",
+        "quantity": "level",
         "direction": "higher",
         "min_effect": 2,
         "checkpoint_s": 86400,

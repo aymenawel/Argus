@@ -182,6 +182,9 @@ def register_setup_routes(
         if body.metric is not None and body.metric not in metrics:
             detail = f"the {recipe.title} recipe doesn't measure '{body.metric}': use one of {', '.join(metrics)}"
             raise HTTPException(status_code=422, detail=detail)
+        if body.quantity == "half_time" and recipe.curve == "linear":
+            detail = f"the {recipe.title} recipe's curve is linear, so it has no half-way time: judge a level or a rate"
+            raise HTTPException(status_code=422, detail=detail)
         return repos.save_plan_draft(db, experiment_id, body)
 
     @app.post("/api/experiments/{experiment_id}/plan/lock")

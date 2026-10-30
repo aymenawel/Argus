@@ -16,6 +16,7 @@ The researcher said what they will do (RESEARCHER'S WORDS). Draft how Argus shou
 - `analysis_step_s`: how often to take a reading, matched to how fast the thing changes (seconds for a fast reaction, minutes for dough, half an hour or more for seeds).
 - `curve`: the shape the main measurement should follow over time.
 - `rivals`: other explanations that could produce the same result in this setup (light, temperature, position, handling).
+- `plan.quantity`: what the prediction compares. `half_time` when it is about speed (faster, sooner, slower: the fitted time to half the final value; `direction` `lower` means faster, `min_effect` in hours); `rate` when it is about a growth or reaction rate (`min_effect` in the metric's unit per hour); `level` when it is about how much by a time.
 - `plan`: the hypothesis, the prediction (treatment against control), the success threshold in words, the `metric` (a measurement id; for lab_mean add _l, _a or _b), the `direction` (treatment higher or lower), the smallest difference that matters in the metric's unit, the run time in seconds from which a verdict makes sense, and the `treatment` condition the prediction is about (empty for every treatment vessel).
 - `setup_hints`: the factor that differs between vessels, its unit (or empty), and the conditions the researcher mentioned with a role each. Suggest at least two vessels per condition.
 - `safety_notes`: anything the researcher should take care with, or an empty list.

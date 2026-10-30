@@ -82,6 +82,9 @@ class PlanDraft(Record):
     min_effect: float | None = Field(None, ge=0)  # the smallest effect that matters, in the metric's unit
     checkpoint_s: float | None = Field(None, ge=0)  # run time from which a verdict may be given
     treatment: str | None = None  # a condition value; None: every treatment vessel
+    # What is compared (D-78): None or "level" = the latest readings; "half_time" = the fitted time to half the
+    # plateau (h); "rate" = the fitted maximum rate (unit/h). min_effect is in that quantity's unit.
+    quantity: Literal["level", "half_time", "rate"] | None = None
 
 
 class Plan(PlanDraft):

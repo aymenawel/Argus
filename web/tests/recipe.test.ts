@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { detailOf } from "../lib/api.ts";
-import { addMeasurement, recipeInWords, renameConcept, stepInWords, withMethod } from "../lib/recipe.ts";
+import { addMeasurement, quantityUnit, recipeInWords, renameConcept, stepInWords, withMethod } from "../lib/recipe.ts";
 import type { RecipeSpec, Tool } from "../lib/types.ts";
 
 const TOOLBOX: Tool[] = [
@@ -101,4 +101,11 @@ test("a grown count reads as the objects that grew, and keeps its own minimum", 
   const switched = withMethod(GERMINATION.measurements[0], tool, GERMINATION);
   assert.equal(switched.touching, null);
   assert.equal(switched.min_length_mm, 2);
+});
+
+test("the smallest effect is in the unit of what the plan compares", () => {
+  assert.equal(quantityUnit(null, "count"), "count");
+  assert.equal(quantityUnit("level", "mm"), "mm");
+  assert.equal(quantityUnit("half_time", "count"), "h");
+  assert.equal(quantityUnit("rate", "count"), "count/h");
 });

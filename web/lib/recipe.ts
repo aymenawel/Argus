@@ -1,6 +1,6 @@
 // A recipe in the researcher's words, and the edits the "What will you do?" dialog makes to a drafted one (D-73).
 // The worker validates every recipe again when it is saved; these only keep an edit consistent with itself.
-import type { MeasurementSpec, RecipeSpec, Tool } from "./types";
+import type { MeasurementSpec, PlanDraft, RecipeSpec, Tool } from "./types";
 
 const trim = (n: number) => String(Number(n.toFixed(1)));
 
@@ -24,6 +24,13 @@ export function recipeInWords(recipe: RecipeSpec): { lookFor: string; measure: s
     measure: recipe.measurements.map((m) => `${measurementInWords(m)} (${m.unit})`).join(", "),
     every: `every ${stepInWords(recipe.analysis_step_s)}`,
   };
+}
+
+/** The unit of what a plan compares (D-78): a half-way time is in hours, a rate per hour, a level as measured. */
+export function quantityUnit(quantity: PlanDraft["quantity"], unit: string): string {
+  if (quantity === "half_time") return "h";
+  if (quantity === "rate") return `${unit}/h`;
+  return unit;
 }
 
 /** A concept's new name, carried to every measurement that reads from it or counts what touches it. */

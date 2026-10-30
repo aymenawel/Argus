@@ -28,12 +28,13 @@
     "plan": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["hypothesis", "prediction", "threshold", "metric", "direction", "min_effect", "checkpoint_s", "treatment"],
+      "required": ["hypothesis", "prediction", "threshold", "metric", "quantity", "direction", "min_effect", "checkpoint_s", "treatment"],
       "properties": {
         "hypothesis": {"type": "string"},
         "prediction": {"type": "string"},
         "threshold": {"type": "string"},
         "metric": {"type": "string", "description": "A measurement id (a lab_mean id with _l, _a or _b)."},
+        "quantity": {"type": "string", "enum": ["level", "half_time", "rate"], "description": "What is compared: the latest level, the fitted half-way time (h) or the fitted rate."},
         "direction": {"type": "string", "enum": ["higher", "lower"]},
         "min_effect": {"type": "number"},
         "checkpoint_s": {"type": "number"},

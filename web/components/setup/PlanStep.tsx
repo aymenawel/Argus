@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { quantityUnit } from "@/lib/recipe";
 import type { Plan, PlanDraft, RecipeDetail, Setup } from "@/lib/types";
 import styles from "./Step.module.css";
 
@@ -28,7 +29,7 @@ export function PlanStep({ plan, locked, recipe, setup, onChange }: Props) {
   const [checkpoint, setCheckpoint] = useState(toClock(plan.checkpoint_s));
   const [rival, setRival] = useState("");
   const set = (next: Partial<PlanDraft>) => onChange({ ...plan, ...next });
-  const unit = recipe.metrics.find((m) => m.id === plan.metric)?.unit ?? "";
+  const unit = quantityUnit(plan.quantity, recipe.metrics.find((m) => m.id === plan.metric)?.unit ?? "");
   const treatments = [
     ...new Set(
       setup.vessels.filter((v) => v.role === "treatment" && v.condition).map((v) => String(v.condition!.value)),
@@ -84,6 +85,23 @@ export function PlanStep({ plan, locked, recipe, setup, onChange }: Props) {
               </option>
             ))}
           </select>
+        </label>
+        <label className={styles.field}>
+          <span className={styles.label}>Judged on</span>
+          <select
+            className={styles.select}
+            value={plan.quantity ?? "level"}
+            onChange={(e) =>
+              set({ quantity: e.target.value === "level" ? null : (e.target.value as PlanDraft["quantity"]) })
+            }
+          >
+            <option value="level">Its level by the checkpoint</option>
+            <option value="half_time">How fast: time to half its final value</option>
+            <option value="rate">Its rate of change</option>
+          </select>
+          <span className={styles.help}>
+            Speed is read off a curve fitted to each vessel, with its ±. Faster means a lower half-way time.
+          </span>
         </label>
         <label className={styles.field}>
           <span className={styles.label}>Direction</span>

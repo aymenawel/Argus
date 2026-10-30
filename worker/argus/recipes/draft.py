@@ -176,6 +176,7 @@ def _build(data: dict) -> tuple[Recipe, PlanDraft]:
         min_effect=max(0.0, float(plan["min_effect"])),
         checkpoint_s=max(0.0, float(plan["checkpoint_s"])),
         treatment=plan["treatment"] or None,
+        quantity=None if plan.get("quantity") in (None, "level") else plan["quantity"],
     )
     return recipe, draft
 

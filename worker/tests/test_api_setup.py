@@ -62,6 +62,7 @@ def recipe_draft(**overrides):
         "prediction": "The warm glasses change colour more than the cold ones.",
         "threshold": "A clear difference by the checkpoint.",
         "metric": "delta_e",
+        "quantity": "level",
         "direction": "higher",
         "min_effect": 5.0,
         "checkpoint_s": 300.0,
