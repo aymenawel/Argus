@@ -16,15 +16,16 @@ import math
 import shutil
 import subprocess
 import time
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
 
 from argus.calibration.run import RulerInput, RunCalibration, calibrate, card_moved
+from argus.capture.images import ImageSequenceSource
 from argus.capture.quality import REBASELINED, QualityGate
-from argus.capture.video import VideoFileSource
+from argus.capture.video import VideoFileSource, VideoFrame
 from argus.domain import EventKind, RunStatus, Vessel, new_id
 from argus.pipeline.analyzer import KeyedPatches, RunContext, Skipped, _write_jpeg, analyze_frame, segment_with_retries
 from argus.pipeline.moves import after_card_moved
@@ -45,6 +46,13 @@ class ImportRequest:
     time_scale: float
     print_check_mm: float | None = None
     ruler: RulerInput | None = None
+    manifest: Path | None = None  # a published image sequence instead of video files
+
+
+def _frames(request: ImportRequest) -> Iterator[VideoFrame]:
+    if request.manifest is not None:
+        return ImageSequenceSource(request.manifest).frames()
+    return VideoFileSource(request.paths, time_scale=request.time_scale).frames()
 
 
 @dataclass(frozen=True)
@@ -88,7 +96,7 @@ def _scan(
     gate = QualityGate(ctx.vessels)
     scene_moved = False
     hands: set[str] = set()  # vessels with something in front of them, logged once per stretch
-    for frame in VideoFileSource(request.paths, time_scale=request.time_scale).frames():
+    for frame in _frames(request):
         if cancel.is_set():
             return None
         changes = [trig for trig in watcher.observe(frame.t, frame.image) if trig.reason == "change"]

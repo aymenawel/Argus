@@ -191,3 +191,37 @@ def test_a_database_left_by_another_process_is_tidied_too(tmp_path, app_parts):
             assert get_run(db, run.id).status is RunStatus.STOPPED
     finally:
         db.close()
+
+
+def test_a_published_plate_runs_with_vessels_from_its_tiles(client, experiment, tmp_path):
+    from tests.test_images_source import PROVENANCE, write_manifest
+
+    manifest = write_manifest(tmp_path / "plate")
+    roles = {"rye": "control", "millet": "treatment"}
+    created = client.post(
+        f"/api/experiments/{experiment['id']}/runs", json={"mode": "imported", "manifest": manifest, "roles": roles}
+    )
+    assert created.status_code == 201, created.text
+    view = wait_until_done(client, created.json()["run"]["id"])
+    assert view["run"]["status"] == "finished" and view["run"]["source"]["kind"] == "images"
+    assert view["run"]["source"]["provenance"] == PROVENANCE | {"assembled": True, "retrospective": True}
+    vessels = {v["label"]: v for v in view["vessels"]}
+    assert vessels["A1"]["role"] == "control" and vessels["B1"]["role"] == "treatment"
+    assert vessels["B1"]["roi"] == [[40, 0], [80, 0], [80, 40], [40, 40]]
+    assert vessels["B1"]["condition"]["value"] == "millet"
+    assert len(client.get(f"/api/runs/{view['run']['id']}/timeline").json()["frames"]) == 3
+
+
+def test_a_published_plate_needs_a_role_for_every_condition_and_a_control(client, experiment, tmp_path):
+    from tests.test_images_source import write_manifest
+
+    url = f"/api/experiments/{experiment['id']}/runs"
+    manifest = write_manifest(tmp_path / "plate")
+    missing = client.post(url, json={"mode": "imported", "manifest": manifest, "roles": {"rye": "control"}})
+    assert missing.status_code == 422 and "millet" in missing.json()["detail"]
+    no_control = {"rye": "treatment", "millet": "treatment"}
+    assert client.post(url, json={"mode": "imported", "manifest": manifest, "roles": no_control}).status_code == 422
+    broken = write_manifest(tmp_path / "broken", skip="frame_001.jpg")
+    roles = {"rye": "control", "millet": "treatment"}
+    answer = client.post(url, json={"mode": "imported", "manifest": broken, "roles": roles})
+    assert answer.status_code == 422 and "frame_001.jpg" in answer.json()["detail"]

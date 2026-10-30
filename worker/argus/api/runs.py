@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, model_validator
 from argus.calibration.run import RulerInput
 from argus.capture.webcam import CameraSettings
 from argus.config import Settings
+from argus.datasets.manifest import Manifest, ManifestError, load_manifest
 from argus.domain import (
     Calibration,
     Condition,
@@ -57,6 +58,8 @@ class RunCreate(BaseModel):
     mode: Literal["live", "imported"]
     camera_index: int | None = Field(None, ge=0)
     paths: list[str] = []
+    manifest: str | None = None  # a published image sequence: its vessels come from the manifest's tiles
+    roles: dict[str, Role] | None = None  # with a manifest: each condition's role
     time_scale: float = Field(1.0, gt=0)
     start_time: datetime | None = None
     vessels: list[VesselIn] | None = None  # None: the experiment's saved setup's vessels
@@ -67,8 +70,8 @@ class RunCreate(BaseModel):
     def source_fits_mode(self) -> RunCreate:
         if self.mode == "live" and self.camera_index is None:
             raise ValueError("a live run needs camera_index")
-        if self.mode == "imported" and not self.paths:
-            raise ValueError("an imported run needs paths")
+        if self.mode == "imported" and not self.paths and self.manifest is None:
+            raise ValueError("an imported run needs paths or a manifest")
         if self.vessels is not None:
             if not 1 <= len(self.vessels) <= MAX_VESSELS:
                 raise ValueError(f"a run has 1 to {MAX_VESSELS} vessels")
@@ -107,6 +110,31 @@ class VesselProposal(BaseModel):
     confidence: float | None
 
 
+def vessels_from_tiles(manifest: Manifest, roles: dict[str, Role] | None, factor: str) -> list[VesselDraft]:
+    """One vessel per tile, its region the tile's box; ValueError unless every condition has a role and one is
+    the control."""
+    roles = roles or {}
+    conditions = list(dict.fromkeys(tile.condition for tile in manifest.tiles))
+    missing = [c for c in conditions if c not in roles]
+    if missing:
+        raise ValueError(f"give every condition a role: {', '.join(missing)} has none")
+    if Role.CONTROL not in {roles[c] for c in conditions}:
+        raise ValueError("one condition must be the control")
+    if not 1 <= len(manifest.tiles) <= MAX_VESSELS:
+        raise ValueError(f"a run has 1 to {MAX_VESSELS} vessels")
+    unique_labels([tile.label for tile in manifest.tiles])
+    return [
+        VesselDraft(
+            label=tile.label,
+            role=roles[tile.condition],
+            condition=Condition(factor=factor, value=tile.condition),
+            roi=[(x0, y0), (x1, y0), (x1, y1), (x0, y1)],
+        )
+        for tile in manifest.tiles
+        for x0, y0, x1, y1 in [tile.box]
+    ]
+
+
 def register_run_routes(app: FastAPI, *, db: Database, settings: Settings, jobs: RunJobs, hub: CameraHub) -> None:
     def view(run: Run) -> RunView:
         return RunView(
@@ -134,15 +162,28 @@ def register_run_routes(app: FastAPI, *, db: Database, settings: Settings, jobs:
         if any(jobs.running(r.id) for r in await asyncio.to_thread(repos.runs_for_experiment, db, experiment_id)):
             raise HTTPException(status_code=409, detail="a run is already running for this experiment")
         live = body.mode == "live"
+        manifest = None
+        if body.manifest is not None:
+            try:
+                manifest = await asyncio.to_thread(load_manifest, body.manifest)
+            except ManifestError as error:
+                raise HTTPException(status_code=422, detail=str(error)) from error
         source = RunSource(
-            kind=SourceKind.WEBCAM if live else SourceKind.VIDEO,
+            kind=SourceKind.WEBCAM if live else SourceKind.IMAGES if manifest else SourceKind.VIDEO,
             camera_index=body.camera_index,
             paths=body.paths,
             start_time=body.start_time,
             start_time_source="researcher" if body.start_time else "run_start",
+            manifest=body.manifest if manifest else None,
+            provenance=manifest.provenance() if manifest else None,
         )
         setup = await asyncio.to_thread(repos.get_setup, db, experiment_id)
-        if body.vessels is not None:
+        if manifest is not None:
+            try:
+                drafts = vessels_from_tiles(manifest, body.roles, setup.factor or "condition")
+            except ValueError as error:
+                raise HTTPException(status_code=422, detail=str(error)) from error
+        elif body.vessels is not None:
             drafts = [VesselDraft(**v.model_dump()) for v in body.vessels]
         elif setup.vessels:
             unroled = [v.label for v in setup.vessels if v.role is None]
@@ -173,6 +214,7 @@ def register_run_routes(app: FastAPI, *, db: Database, settings: Settings, jobs:
                     time_scale=body.time_scale,
                     print_check_mm=print_check_mm,
                     ruler=ruler,
+                    manifest=Path(body.manifest) if body.manifest else None,
                 )
                 jobs.start_import(run, vessels, request)
         except RuntimeError as error:  # the camera didn't open

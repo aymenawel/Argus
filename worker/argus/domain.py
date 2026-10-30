@@ -94,6 +94,20 @@ class Plan(PlanDraft):
 class SourceKind(StrEnum):
     WEBCAM = "webcam"
     VIDEO = "video"
+    IMAGES = "images"  # a published image sequence, named by a manifest
+
+
+class Provenance(Record):
+    """Where published data came from, shown with every view of it (D-70): who made it, under which licence, and
+    whether Argus assembled the frames (a virtual plate, D-72) or judges it after the fact (D-71)."""
+
+    dataset: str
+    doi: str
+    url: str
+    licence: str
+    credit: str
+    assembled: bool
+    retrospective: bool
 
 
 class RunSource(Record):
@@ -104,6 +118,8 @@ class RunSource(Record):
     paths: list[str] = []
     start_time: datetime | None = None
     start_time_source: Literal["researcher", "file", "run_start"] = "run_start"
+    manifest: str | None = None  # images: the manifest's path
+    provenance: Provenance | None = None  # published data: its source and credit
 
 
 class RulerInput(Record):

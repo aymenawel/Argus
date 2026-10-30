@@ -172,3 +172,16 @@
     bottom: 10px;
   }
 }
+
+.credit {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  line-height: 17px;
+}
+
+.credit a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

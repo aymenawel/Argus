@@ -74,12 +74,30 @@ export type RecipeDraftResult = {
 
 export type RunStatus = "running" | "finished" | "stopped";
 
+/** Where published data came from (D-70): shown with every view of it. */
+export type Provenance = {
+  dataset: string;
+  doi: string;
+  url: string;
+  licence: string;
+  credit: string;
+  assembled: boolean; // Argus put the frames together (a virtual plate)
+  retrospective: boolean; // judged after the data existed
+};
+
 export type Run = {
   id: string;
   experiment_id: string;
   mode: RunMode;
   status: RunStatus;
-  source: { kind: "webcam" | "video"; camera_index: number | null; paths: string[]; start_time: string | null };
+  source: {
+    kind: "webcam" | "video" | "images";
+    camera_index: number | null;
+    paths: string[];
+    start_time: string | null;
+    manifest?: string | null;
+    provenance?: Provenance | null;
+  };
   time_scale: number;
   round: number;
   started_at: string;

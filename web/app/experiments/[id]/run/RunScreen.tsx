@@ -167,7 +167,7 @@ export function RunScreen() {
         actions={
           view && (
             <>
-              <Badge source={view.run.mode} />
+              <Badge source={view.run.mode} provenance={view.run.source.provenance} />
               <span className={`${styles.spend} num`}>Spend ${view.spend_usd.toFixed(2)}</span>
               {view.running && (
                 <Button
