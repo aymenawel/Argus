@@ -17,6 +17,28 @@ METHODS_BY_FAMILY = {
 
 
 MAX_CONCEPT_WORDS = 4  # SAM finds short noun phrases ("seed", "root hair"), not descriptions
+# Processes and quantities, not things: SAM can't outline "growth" or "the change" (a recipe measures them from the
+# things it finds). Matched on any word of the concept, articles ignored.
+PROCESS_WORDS = frozenset(
+    {
+        "growth",
+        "growing",
+        "change",
+        "changes",
+        "germination",
+        "rate",
+        "speed",
+        "progress",
+        "development",
+        "reaction",
+        "difference",
+        "increase",
+        "decrease",
+        "rising",
+        "spreading",
+        "browning",
+    }
+)
 
 
 class Spec(BaseModel):
@@ -106,6 +128,12 @@ class Recipe(Spec):
                 raise ValueError(
                     f"'{concept.name}' names more than one thing; give each thing its own concept (SAM takes one "
                     "concept per request)"
+                )
+            process = next((w for w in name.lower().split() if w in PROCESS_WORDS), None)
+            if process is not None:
+                raise ValueError(
+                    f"'{concept.name}' names a process, not a thing a camera can outline ('{process}'): name the "
+                    "objects to find (a seed, a root, foam) and measure the process from them"
                 )
             if len(name.split()) > MAX_CONCEPT_WORDS:
                 raise ValueError(f"'{concept.name}' is too long for SAM: use a short noun phrase (at most 4 words)")

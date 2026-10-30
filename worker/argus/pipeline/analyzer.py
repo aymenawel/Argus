@@ -111,6 +111,7 @@ class RunContext:
     spend_lock: asyncio.Lock = field(init=False, default_factory=asyncio.Lock)
     reserved_usd: float = 0.0  # expected cost of the calls in flight, not yet logged
     limit_reported: set[str] = field(default_factory=set)  # concepts that hit SAM's object limit
+    calibration_problem: str | None = None  # why the first frame without millimetres had none, when known
     notes: NoteWriter = field(init=False)
 
     def __post_init__(self) -> None:
@@ -380,7 +381,8 @@ async def analyze_frame(
     if ctx.calibration is None:
         if not ctx.calibration_reported:
             ctx.calibration_reported = True
-            detail = {"message": "no Argus Card or ruler: frames are recorded, nothing is measured"}
+            problem = ctx.calibration_problem or "no Argus Card or ruler in view"
+            detail = {"message": f"{problem}: frames are recorded but not measured until a scale is found"}
             await ctx.event(t, EventKind.NO_CALIBRATION, "pipeline", detail, frame_ids=[frame_id])
         await asyncio.to_thread(mark_frame_analyzed, ctx.db, frame_id)
         ctx.publish("frame_analyzed", {"frame_id": frame_id, "t": t, "quality_flags": list(quality_flags)})

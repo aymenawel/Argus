@@ -24,6 +24,7 @@ from argus.storage.repos import (
     add_verdict,
     events_for_run,
     first_locked_plan,
+    measurements_for_run,
     notes_for_run,
     reviews_for_run,
     run_last_t,
@@ -114,6 +115,13 @@ def verdict_inputs(db: Database, run: Run, refs: RefTable, *, plan: Plan | None,
         )
     ]
     effects = {v.label: refs.get(f"diff:{v.label}:{metric}") for v in compared}
+    smallest = plan.min_effect if plan is not None and plan.min_effect is not None else 0.0
+    spans: dict[str, list[float]] = {}
+    for m in measurements_for_run(db, run.id, metric=metric) if metric else []:
+        spans.setdefault(m.vessel_id, []).append(m.value)
+    judged = {v.id for v in [*controls, *compared]}
+    # A measurement that never moved anywhere (a count of roots SAM can't see) is no evidence that nothing happened.
+    registered = any(max(values) - min(values) >= smallest for vid, values in spans.items() if vid in judged)
     noise = refs.get(f"noise:{metric}")
     min_effect = refs.get("plan:min_effect")
     return VerdictInputs(
@@ -124,6 +132,7 @@ def verdict_inputs(db: Database, run: Run, refs: RefTable, *, plan: Plan | None,
         locked=plan is not None and plan.locked_at is not None and plan.locked_at <= data_began,
         recording_start_known=retrospective or run.mode is not RunMode.IMPORTED or run.source.start_time is not None,
         retrospective=retrospective,
+        registered=registered,
         checkpoint_s=plan.checkpoint_s if plan is not None else None,
         controls=len(controls),
         treatments=sum(ref is not None for ref in effects.values()),  # measured, not just drawn

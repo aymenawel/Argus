@@ -209,6 +209,8 @@ def create_app(
             raise HTTPException(status_code=404, detail="experiment not found")
         if repos.first_locked_plan(db, experiment_id) is not None:
             raise HTTPException(status_code=409, detail="the plan is locked: the recipe is frozen with it")
+        if repos.runs_for_experiment(db, experiment_id):  # its readings were made with this version
+            raise HTTPException(status_code=409, detail="a run has started: the recipe it measured with stays")
         repos.save_recipe(db, experiment_id, own_recipe_or_422(body), "edited")
         return (repos.own_recipe(db, experiment_id) or own_recipe_or_422(body)).model_dump(by_alias=True, mode="json")
 

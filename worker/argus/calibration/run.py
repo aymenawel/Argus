@@ -11,7 +11,7 @@ import numpy as np
 
 from argus.calibration.colour import ColourReference, read_patches
 from argus.calibration.detect import CardDetection, RulerScale, detect_card, ruler_scale, with_print_check
-from argus.calibration.dish import DishScale, dish_scale
+from argus.calibration.dish import DishScale, dish_scale, dish_scale_or_reason
 from argus.domain import CalibrationDraft, CameraProperty, RulerInput  # RulerInput lives in domain (Setup holds one)
 
 
@@ -97,6 +97,17 @@ def calibrate(
         if dish is not None:
             return RunCalibration(detection=None, ruler=None, reference=None, marker_corners_px=None, dish=dish)
     return None
+
+
+def missing_scale(
+    image_bgr: np.ndarray, *, dish_diameter_mm: float | None, rois: Sequence[Sequence[tuple[float, float]]]
+) -> str:
+    """Why a frame gave no millimetres, in words for the run's event."""
+    if dish_diameter_mm is None or not rois:
+        return "no Argus Card or ruler in view"
+    result = dish_scale_or_reason(image_bgr, rois, dish_diameter_mm)
+    reason = result if isinstance(result, str) else "the scale changed between checks"
+    return f"no Argus Card or ruler, and the dish rims gave no scale: {reason}"
 
 
 def plane_shift(old: RunCalibration, new: RunCalibration) -> np.ndarray | None:

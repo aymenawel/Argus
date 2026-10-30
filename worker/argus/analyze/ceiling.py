@@ -3,7 +3,8 @@
 The first rule that applies sets the allowed verdicts:
 1. no locked plan, or before the plan's checkpoint → {TOO_EARLY};
 2. the plan's metric unmeasured, no control, fewer than 2 treatment vessels, or no noise floor yet → {INCONCLUSIVE};
-3. an open rival explanation → {INCONCLUSIVE};
+3. an open rival explanation, or a metric that never changed by the smallest effect in any compared vessel (Argus
+   may not be seeing it at all) → {INCONCLUSIVE};
 4. a treatment vessel shows a clear effect when its difference from the controls is larger than 3 × the noise
    floor, twice its own ± and at least the plan's smallest effect, in the predicted direction (against it:
    opposed); it is small when its ± rules out the smallest effect in the predicted direction. 2+ clear and none
@@ -64,6 +65,7 @@ class VerdictInputs:
     planned: int = 0  # treatment vessels in the comparison, measured or not
     recording_start_known: bool = True  # an import whose recording start nobody gave can't show the plan came first
     retrospective: bool = False  # published data judged after it existed (D-71): said so, never passed off as a test
+    registered: bool = True  # some compared vessel's reading moved by the smallest effect: the measurement can see it
 
 
 def _effect(ref: Ref, inputs: VerdictInputs) -> Literal["clear", "opposed", "small", "unclear"]:
@@ -82,6 +84,10 @@ def _effect(ref: Ref, inputs: VerdictInputs) -> Literal["clear", "opposed", "sma
     return "unclear"
 
 
+def _hours(seconds: float) -> str:
+    return f"{seconds / 3600:.0f} h" if seconds >= 3600 else f"{seconds / 60:.0f} min"
+
+
 def _check(id_: str, ok: bool | None, text: str, refs: tuple[str, ...] = (), prompt: str | None = None) -> Check:
     return Check(id_, ok, text, refs, text if prompt is None else prompt)
 
@@ -91,11 +97,16 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
     if not inputs.locked:
         return {TOO_EARLY}, [_check("plan", False, "No plan was locked before the run, so nothing can be judged.")]
     if inputs.checkpoint_s is not None and inputs.t < inputs.checkpoint_s:
-        return {TOO_EARLY}, [
-            _check(
-                "checkpoint", False, "Before the plan's checkpoint: a verdict would be too early.", ("plan:checkpoint",)
+        if inputs.running:
+            text = "Before the plan's checkpoint: a verdict would be too early."
+            prompt = text
+        else:  # a finished run will never get there: say so rather than "wait"
+            text = (
+                f"The run ended at {_hours(inputs.t)}, before the plan's checkpoint ({_hours(inputs.checkpoint_s)}): "
+                "it can't be judged against this plan."
             )
-        ]
+            prompt = "The run ended before the plan's checkpoint: it can't be judged against this plan."
+        return {TOO_EARLY}, [_check("checkpoint", False, text, ("plan:checkpoint",), prompt=prompt)]
     metric = inputs.metric or "the plan's metric"
     checks = [_check("checkpoint", True, "Past the plan's checkpoint.", ("plan:checkpoint",))]
     if inputs.retrospective:
@@ -170,6 +181,15 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
                 f"Rival explanation '{name}': {'resolved' if resolved else 'open'}.",
             )
         )
+    if not inputs.registered:
+        checks.append(
+            _check(
+                "registered",
+                False,
+                f"{metric} never changed by the smallest effect in any vessel compared: Argus may not be seeing it, "
+                "so no difference can't count as evidence of no effect.",
+            )
+        )
     verdicts = {}
     words = {
         "clear": "a clear effect in the predicted direction",
@@ -196,6 +216,8 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
     if not inputs.measured or inputs.controls == 0 or inputs.treatments < MIN_REPLICATES or inputs.noise is None:
         return {INCONCLUSIVE}, checks
     if any(state == "open" for state in inputs.rivals.values()):
+        return {INCONCLUSIVE}, checks
+    if not inputs.registered:
         return {INCONCLUSIVE}, checks
     clear = sum(v == "clear" for v in verdicts.values())
     opposed = sum(v == "opposed" for v in verdicts.values())

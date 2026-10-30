@@ -2,6 +2,7 @@
 came from; the run keeps that provenance (D-70, D-71)."""
 
 import json
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -72,3 +73,43 @@ def test_a_manifest_keeps_its_tiles_and_provenance(tmp_path):
     manifest = load_manifest(write_manifest(tmp_path / "plate é"))
     assert [t.label for t in manifest.tiles] == ["A1", "B1"] and manifest.tiles[1].box == (40, 0, 80, 40)
     assert manifest.provenance().model_dump() == PROVENANCE | {"assembled": True, "retrospective": True}
+
+
+def rewrite(path: str, **changes) -> str:
+    file = Path(path)
+    file.write_text(json.dumps(json.loads(file.read_text(encoding="utf-8")) | changes), encoding="utf-8")
+    return path
+
+
+def tiles_with(**changes) -> list[dict]:
+    return [
+        {"label": "A1", "condition": "rye", "run": "sc1", "dish": 1, "box": [0, 0, 40, 40], "seeds": 25},
+        {"label": "B1", "condition": "millet", "run": "pg1", "dish": 4, "box": [40, 0, 80, 40], "seeds": 25} | changes,
+    ]
+
+
+def test_frames_out_of_order_are_refused_naming_the_first_out_of_place(tmp_path):
+    path = rewrite(write_manifest(tmp_path / "p"), frames=["frame_001.jpg", "frame_000.jpg", "frame_002.jpg"])
+    with pytest.raises(ManifestError, match="frame_000.jpg"):
+        load_manifest(path)
+
+
+def test_a_frame_listed_twice_is_refused(tmp_path):
+    path = rewrite(write_manifest(tmp_path / "p"), frames=["frame_000.jpg", "frame_001.jpg", "frame_001.jpg"])
+    with pytest.raises(ManifestError, match="frame_001.jpg"):
+        load_manifest(path)
+
+
+def test_labels_must_have_one_value_per_frame(tmp_path):
+    path = rewrite(write_manifest(tmp_path / "p"), tiles=tiles_with(labels={"germinated": [0, 1]}))
+    with pytest.raises(ManifestError, match="B1.*germinated"):
+        load_manifest(path)
+
+
+def test_a_box_outside_the_frame_or_inside_out_is_refused(tmp_path):
+    outside = rewrite(write_manifest(tmp_path / "a"), tiles=tiles_with(box=[40, 0, 90, 40]))
+    with pytest.raises(ManifestError, match="B1"):
+        load_manifest(outside)
+    inside_out = rewrite(write_manifest(tmp_path / "b"), tiles=tiles_with(box=[80, 0, 40, 40]))
+    with pytest.raises(ManifestError, match="B1"):
+        load_manifest(inside_out)

@@ -555,3 +555,39 @@ def test_dishes_from_one_source_run_add_no_rival(db, exp, tmp_path):
     run = create_run(db, exp.id, RunMode.IMPORTED, published_source(tmp_path, ONE_RUN))
     fill(db, run)
     assert "run-to-run differences" not in rival_states(db, run, ["lighting change"])
+
+
+@pytest.mark.anyio
+async def test_readings_that_never_moved_give_no_not_supported_even_with_rivals_resolved(db, exp, tmp_path):
+    """The Genze state: every count 0 ± 0 (SAM saw no roots); resolving every rival must not make it a finding."""
+    save_plan_draft(db, exp.id, plan(rivals=[], min_effect=2.0))
+    lock_plan(db, exp.id)
+    run = create_run(db, exp.id, RunMode.IMPORTED, published_source(tmp_path, ONE_RUN))
+    drafts = [
+        VesselDraft(label=label, role=role, condition=Condition(factor="t", value=value), roi=[(0, 0), (9, 0), (9, 9)])
+        for label, role, value in (
+            ("A", Role.CONTROL, "room"),
+            ("B", Role.CONTROL, "room"),
+            ("C", Role.TREATMENT, "warm"),
+            ("D", Role.TREATMENT, "warm"),
+        )
+    ]
+    vessels = add_vessels(db, run.id, drafts)
+    rows = [
+        MeasurementDraft(
+            vessel_id=v.id,
+            frame_id=None,
+            t=t,
+            metric="delta_e",
+            value=0.0,
+            uncertainty=0.0,
+            unit="dE00",
+            method_version="delta_e/1",
+        )
+        for v in vessels
+        for t in (0.0, 100.0, 200.0, 300.0, 600.0)
+    ]
+    add_measurements(db, run.id, rows)
+    verdict = await judge(db, run, answers())
+    assert verdict.allowed == [VerdictLevel.INCONCLUSIVE]
+    assert next(c for c in verdict.checks if c["id"] == "registered")["ok"] is False

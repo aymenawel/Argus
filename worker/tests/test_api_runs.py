@@ -261,3 +261,41 @@ def test_a_published_plates_labels_are_kept_for_the_agreement(client, experiment
     assert result["source"] == "Test plates" and [v["label"] for v in result["vessels"]] == ["A1", "B1"]
     assert all(v["frames"] == 0 for v in result["vessels"])  # nothing measured: no calibration in this plate
     assert client.get(f"/api/runs/{view['run']['id']}/agreement", params={"metric": "area"}).json() is None
+
+
+def test_a_published_plate_that_ends_before_the_plans_checkpoint_is_refused(client, experiment, tmp_path):
+    from tests.test_images_source import write_manifest
+
+    eid = experiment["id"]
+    plan = {
+        "hypothesis": "h",
+        "prediction": "p",
+        "threshold": "t",
+        "rivals": [],
+        "metric": "area",
+        "direction": "higher",
+        "min_effect": 1.0,
+        "checkpoint_s": 7200.0,
+        "treatment": None,
+    }
+    assert client.put(f"/api/experiments/{eid}/plan", json=plan).status_code == 200
+    assert client.post(f"/api/experiments/{eid}/plan/lock").status_code == 200
+    manifest = write_manifest(tmp_path / "plate")  # three frames 30 min apart: it ends at 1 h
+    body = {"mode": "imported", "manifest": manifest, "roles": {"rye": "control", "millet": "treatment"}}
+    answer = client.post(f"/api/experiments/{eid}/runs", json=body)
+    assert answer.status_code == 422, answer.text
+    assert "1 h" in answer.json()["detail"] and "2 h" in answer.json()["detail"]
+    assert client.get(f"/api/experiments/{eid}/runs").json() == []  # refused before a run existed
+
+
+def test_a_plate_whose_dish_rims_give_no_scale_says_why(client, experiment, tmp_path):
+    from tests.test_images_source import write_manifest
+
+    manifest = write_manifest(tmp_path / "plate", dish_diameter_mm=85.0)  # textured tiles, no rims anywhere
+    body = {"mode": "imported", "manifest": manifest, "roles": {"rye": "control", "millet": "treatment"}}
+    view = wait_until_done(
+        client, client.post(f"/api/experiments/{experiment['id']}/runs", json=body).json()["run"]["id"]
+    )
+    events = client.get(f"/api/runs/{view['run']['id']}/timeline").json()["events"]
+    message = next(e for e in events if e["kind"] == "no_calibration")["detail"]["message"]
+    assert "dish rim" in message and "0 of 2" in message and "not measured until" in message

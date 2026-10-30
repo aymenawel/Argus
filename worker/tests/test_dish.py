@@ -73,3 +73,16 @@ def test_calibrate_uses_the_dish_when_there_is_no_card_or_ruler():
     draft = cal.to_draft(0.0, {})
     assert draft.card == "dish" and draft.mm_per_px == pytest.approx(85 / DIAMETER_PX, rel=0.01)
     assert calibrate(image, rois=rois) is None  # no diameter, no millimetres
+
+
+def test_a_refused_dish_scale_says_why():
+    from argus.calibration.dish import dish_scale_or_reason
+
+    image, rois = plate(blank=(0, 2, 4))
+    assert dish_scale_or_reason(image, rois, 85.0) == "a dish rim was found in only 3 of 6 regions"
+    image, rois = plate(tilted=2)
+    assert "region 3 is seen at a slant" in dish_scale_or_reason(image, rois, 85.0)
+    image, rois = plate()
+    image[0:TILE, TILE : 2 * TILE] = 30
+    cv2.circle(image, (TILE + TILE // 2, TILE // 2), 220, (210, 210, 210), 3)
+    assert "the dishes disagree" in dish_scale_or_reason(image, rois, 85.0)

@@ -110,3 +110,14 @@ def test_the_recipe_detail_serves_own_recipes_and_templates(client, own_experime
     assert detail["main_measurement"] == "germinated" and {"id": "germinated", "unit": "count"} in detail["metrics"]
     template = client.post("/api/experiments", json={"title": "Dye", "recipe_id": "colour-reaction"}).json()
     assert client.get(f"/api/experiments/{template['id']}/recipe/detail").json()["id"] == "colour-reaction"
+
+
+def test_the_recipe_freezes_once_a_run_has_started(client, db, own_experiment):
+    from argus.domain import RunMode, RunSource, SourceKind
+    from argus.storage.repos import create_run
+
+    create_run(db, own_experiment, RunMode.LIVE, RunSource(kind=SourceKind.WEBCAM, camera_index=0))
+    recipe = client.get(f"/api/experiments/{own_experiment}/recipe").json()
+    edited = client.put(f"/api/experiments/{own_experiment}/recipe", json=recipe | {"analysis_step_s": 900})
+    assert edited.status_code == 409 and "run" in edited.json()["detail"]
+    assert client.get(f"/api/experiments/{own_experiment}/recipe").json()["analysis_step_s"] == 1800

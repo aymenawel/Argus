@@ -22,7 +22,7 @@ from pathlib import Path
 
 import cv2
 
-from argus.calibration.run import RulerInput, RunCalibration, calibrate, card_moved
+from argus.calibration.run import RulerInput, RunCalibration, calibrate, card_moved, missing_scale
 from argus.capture.images import ImageSequenceSource
 from argus.capture.quality import REBASELINED, QualityGate
 from argus.capture.video import VideoFileSource, VideoFrame
@@ -135,6 +135,10 @@ def _scan(
                 dish_diameter_mm=request.dish_diameter_mm,
                 rois=[v.roi for v in epochs[-1][1]],
             )
+            if cal is None and ctx.calibration_problem is None:
+                ctx.calibration_problem = missing_scale(
+                    frame.image, dish_diameter_mm=request.dish_diameter_mm, rois=[v.roi for v in epochs[-1][1]]
+                )
             if cal is not None:
                 calibrations.append((frame.t, cal))
                 add_calibration(ctx.db, ctx.run.id, cal.to_draft(frame.t, {}))

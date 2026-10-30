@@ -165,3 +165,42 @@ async def test_real_drafts_validate_without_edits(words):
     values = [c["value"].lower() for c in draft.setup_hints["conditions"] if len(c["value"]) > 2]
     named_after = [c.name for c in draft.recipe.concepts if any(v in c.name.lower() for v in values)]
     assert not named_after, f"concepts named after a condition: {named_after}"
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "heat sugar on a hot plate",
+        "a Bunsen burner under a beaker",
+        "bacterial colonies from a hospital swab",
+        "a pressurised bottle rocket",
+        "E. coli on agar",
+        "salmonella growth",
+        "sodium hydroxide drops on fat",
+        "mould growing on bread",
+        "a flammable solvent evaporating",
+        "fireworks in slow motion",
+        "boiling water poured on ice",
+    ],
+)
+def test_every_hazard_category_gets_the_warning(words):
+    assert safety_screen(words, []) != [], words
+
+
+@pytest.mark.parametrize(
+    "words",
+    ["dough rising in jars with extra sugar", "seeds germinating in petri dishes", "food colouring in warm water"],
+)
+def test_ordinary_kitchen_and_bench_work_gets_none(words):
+    assert safety_screen(words, []) == [], words
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("concept", ["growth", "the change", "colour change", "germination", "rate of rising"])
+async def test_a_process_named_as_a_concept_is_retried(concept):
+    measurement = {"id": "g", "method": "area", "from": concept, "touching": None, "min_length_mm": None}
+    bad = answer(concepts=[concept], measurements=[measurement], main_measurement="g", metric="g")
+    reasoner = FakeReasoner([bad, answer()])
+    draft, calls = await draft_recipe(WORDS_GERMINATION, reasoner=reasoner, templates=TEMPLATES)
+    assert "a process, not a thing a camera can outline" in reasoner.tasks[1].variable[-1]
+    assert len(calls) == 2 and [c.name for c in draft.recipe.concepts] == ["seed", "root"]

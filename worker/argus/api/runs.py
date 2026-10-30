@@ -184,6 +184,14 @@ def register_run_routes(app: FastAPI, *, db: Database, settings: Settings, jobs:
         )
         setup = await asyncio.to_thread(repos.get_setup, db, experiment_id)
         if manifest is not None:
+            plan = await asyncio.to_thread(repos.first_locked_plan, db, experiment_id)
+            ends = (len(manifest.frames) - 1) * manifest.interval_s
+            if plan is not None and plan.checkpoint_s is not None and plan.checkpoint_s > ends:
+                detail = (
+                    f"the recording ends at {ends / 3600:.0f} h, before the plan's checkpoint "
+                    f"({plan.checkpoint_s / 3600:.0f} h): it could never be judged against this plan"
+                )
+                raise HTTPException(status_code=422, detail=detail)
             try:
                 drafts = vessels_from_tiles(manifest, body.roles, setup.factor or "condition")
             except ValueError as error:

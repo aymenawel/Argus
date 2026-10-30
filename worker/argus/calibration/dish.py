@@ -76,27 +76,39 @@ def _rim(gray: np.ndarray) -> tuple[float, float, float, float] | None:
 def dish_scale(
     image_bgr: np.ndarray, rois: Sequence[Sequence[tuple[float, float]]], diameter_mm: float
 ) -> DishScale | None:
-    """Millimetres per pixel from the dishes' rims, or None when it can't be trusted: a dish in no more than half
-    the regions, a rim seen at a slant, or dishes whose sizes disagree."""
+    """Millimetres per pixel from the dishes' rims, or None when it can't be trusted (dish_scale_or_reason says
+    why)."""
+    result = dish_scale_or_reason(image_bgr, rois, diameter_mm)
+    return result if isinstance(result, DishScale) else None
+
+
+def dish_scale_or_reason(
+    image_bgr: np.ndarray, rois: Sequence[Sequence[tuple[float, float]]], diameter_mm: float
+) -> DishScale | str:
+    """The scale, or why there is none: a dish in no more than half the regions, a rim seen at a slant, or dishes
+    whose sizes disagree."""
     if not rois or diameter_mm <= 0:
-        return None
+        return "no vessel regions or no dish diameter to measure against"
     gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY) if image_bgr.ndim == 3 else image_bgr
-    dishes: list[tuple[float, float, float, float]] = []
-    for roi in rois:
+    dishes: list[tuple[int, tuple[float, float, float, float]]] = []  # region number, rim
+    for number, roi in enumerate(rois, start=1):
         x0, y0, x1, y1 = _box(roi, gray.shape[:2])
         if x1 - x0 < 32 or y1 - y0 < 32:
             continue
         rim = _rim(gray[y0:y1, x0:x1])
         if rim is not None:
             cx, cy, major, minor = rim
-            dishes.append((cx + x0, cy + y0, major, minor))
+            dishes.append((number, (cx + x0, cy + y0, major, minor)))
     if 2 * len(dishes) <= len(rois):
-        return None
-    if any(minor / major < MIN_AXIS_RATIO for _, _, major, minor in dishes):
-        return None
-    scales = [diameter_mm / major for _, _, major, _ in dishes]
+        return f"a dish rim was found in only {len(dishes)} of {len(rois)} regions"
+    slanted = next(((n, minor / major) for n, (_, _, major, minor) in dishes if minor / major < MIN_AXIS_RATIO), None)
+    if slanted is not None:
+        return f"region {slanted[0]} is seen at a slant (rim axis ratio {slanted[1]:.2f}, under {MIN_AXIS_RATIO})"
+    scales = [diameter_mm / major for _, (_, _, major, _) in dishes]
     middle = statistics.median(scales)
     if any(abs(s - middle) / middle > AGREEMENT for s in scales):
-        return None
+        low, high = 1 / max(scales), 1 / min(scales)
+        return f"the dishes disagree on the scale ({low:.1f} to {high:.1f} px/mm): they may not be the same size"
     spread = statistics.stdev(scales) / middle if len(scales) > 1 else 0.0
-    return DishScale(middle, math.hypot(spread, NOMINAL_ALLOWANCE, EDGE_ALLOWANCE), dishes)
+    rims = [rim for _, rim in dishes]
+    return DishScale(middle, math.hypot(spread, NOMINAL_ALLOWANCE, EDGE_ALLOWANCE), rims)

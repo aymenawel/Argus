@@ -21,23 +21,49 @@ from argus.recipes.model import Concept, Recipe
 from argus.recipes.toolbox import BY_METHOD, recipe_spec_schema, toolbox_text
 
 SAFETY_WARNING = "Argus won't automate any hardware for this experiment. Take care: it mentions {what}."
+# Word stems for flame, strong heat, pressure, hazardous chemicals and pathogens (CLAUDE.md rule 8); each matches its
+# inflections ("burner", "pressurised", "bacterial"). A false alarm costs one warning line; a miss costs the warning.
 HAZARDS = (
-    "flame",
-    "fire",
-    "candle",
-    "burn",
-    "boil",
-    "pressure",
-    "bleach",
-    "acid",
-    "ammonia",
-    "bacteria",
-    "pathogen",
-    "mould spores",
-    "mold spores",
-    "blood",
+    r"flam\w*",
+    r"fire\w*",
+    r"candle\w*",
+    r"burn\w*",
+    r"bunsen",
+    r"torch\w*",
+    r"boil\w*",
+    r"heat\w*",
+    r"hot ?plates?",
+    r"ovens?",
+    r"stoves?",
+    r"molten",
+    r"solder\w*",
+    r"pressur\w*",
+    r"explo\w*",
+    r"bottle rockets?",
+    r"dry ice",
+    r"liquid nitrogen",
+    r"bleach\w*",
+    r"acids?",
+    r"ammonia",
+    r"sodium hydroxide",
+    r"caustic",
+    r"lye",
+    r"peroxide",
+    r"chlorine",
+    r"solvents?",
+    r"acetone",
+    r"mercury",
+    r"bacteri\w*",
+    r"pathogen\w*",
+    r"e\. ?coli",
+    r"salmonella",
+    r"staph\w*",
+    r"virus\w*",
+    r"mou?ld\w*",
+    r"swabs?",
+    r"blood",
 )
-HAZARD = re.compile(r"\b(" + "|".join(re.escape(h) for h in HAZARDS) + r")(s|es|ing|ed|t)?\b", re.IGNORECASE)
+HAZARD = re.compile(r"\b(" + "|".join(HAZARDS) + r")(?!\w)", re.IGNORECASE)
 FOOD_ACIDS = re.compile(r"\b(ascorbic|citric|acetic|lactic)\s+acids?\b", re.IGNORECASE)  # vitamin C, lemon, vinegar
 
 

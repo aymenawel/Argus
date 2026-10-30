@@ -113,3 +113,20 @@ def test_before_the_checkpoint_only_the_checkpoint_is_judged():
 )
 def test_choosing_the_final_verdict(allowed, draft, critique, final):
     assert choose_verdict(allowed, draft, critique) is final
+
+
+def test_a_metric_that_never_changed_cannot_support_no_effect():
+    """Every reading 0 ± 0 (a count Argus never saw rise): "small" would read as evidence of no effect."""
+    zero = {"C": diff(0.0, "C", 0.0), "D": diff(0.0, "D", 0.0)}
+    allowed, checks = ceiling(inputs(effects=zero, noise=0.0, min_effect=2.0, registered=False))
+    assert allowed == {INCONCLUSIVE}
+    flag = next(c for c in checks if c.id == "registered")
+    assert flag.ok is False and "never changed" in flag.text
+
+
+def test_a_finished_run_that_ended_before_its_checkpoint_says_so():
+    allowed, checks = ceiling(inputs(t=169200.0, checkpoint_s=172800.0, running=False))
+    assert allowed == {TOO_EARLY}
+    assert "ended" in checks[0].text and "47 h" in checks[0].text and "48 h" in checks[0].text
+    _, live = ceiling(inputs(t=200.0, running=True))
+    assert "Before the plan's checkpoint" in live[0].text
