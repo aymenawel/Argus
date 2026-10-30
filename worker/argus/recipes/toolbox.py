@@ -32,6 +32,13 @@ TOOLBOX: tuple[Tool, ...] = (
         "how many objects of the concept touch another concept at least min_length_mm long "
         "(seeds with a root, crystals on a thread)",
     ),
+    Tool(
+        "grown_count",
+        "count",
+        "count",
+        "how many objects of the concept grew at least min_length_mm longer since Argus first saw them (seeds whose "
+        "sprout shows as part of the seed's outline: SAM rarely finds thin roots on their own)",
+    ),
     Tool("lab_mean", "colour", "Lab", "the object's mean colour as L*, a* and b*"),
     Tool("delta_e", "colour", "dE00", "how far the object's colour has moved from its first reading (CIEDE2000)"),
 )

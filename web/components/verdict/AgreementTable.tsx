@@ -56,7 +56,7 @@ export function AgreementTable({ runId, metric, refresh }: Props) {
                 <th scope="row">{v.label}</th>
                 <td className="num">{diff(v.mean_abs_diff)}</td>
                 <td className="num">{share(v.exact_share)}</td>
-                <td className="num">{when(v.t50_argus)}</td>
+                <td className="num">{v.frames ? when(v.t50_argus) : "—"}</td>
                 <td className="num">{when(v.t50_labels)}</td>
                 <td className="num">{v.frames}</td>
               </tr>

@@ -88,3 +88,17 @@ test("a refusal's reasons read as sentences", () => {
   );
   assert.equal(detailOf({ detail: [{ msg: "field required" }] }, "x"), "field required");
 });
+
+test("a grown count reads as the objects that grew, and keeps its own minimum", () => {
+  const grown: RecipeSpec = {
+    ...GERMINATION,
+    measurements: [
+      { id: "germinated", family: "count", method: "grown_count", from: "seed", unit: "count", min_length_mm: 2 },
+    ],
+  };
+  assert.equal(recipeInWords(grown).measure, "seeds that grew 2 mm (count)");
+  const tool: Tool = { method: "grown_count", family: "count", unit: "count", words: "grew" };
+  const switched = withMethod(GERMINATION.measurements[0], tool, GERMINATION);
+  assert.equal(switched.touching, null);
+  assert.equal(switched.min_length_mm, 2);
+});

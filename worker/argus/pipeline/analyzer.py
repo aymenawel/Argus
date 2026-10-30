@@ -22,7 +22,7 @@ from argus.calibration.detect import detect_card
 from argus.calibration.run import RunCalibration
 from argus.config import Settings
 from argus.domain import Detection, EventKind, MeasurementDraft, ModelCallDraft, Run, Vessel, new_id
-from argus.measure.engine import ColourBaseline, VesselMeasurements, measure_vessel
+from argus.measure.engine import ColourBaseline, FirstSeen, VesselMeasurements, measure_vessel
 from argus.measure.uncertainty import format_measurement
 from argus.pipeline.notes import NoteWriter
 from argus.reason import Reasoner
@@ -100,6 +100,7 @@ class RunContext:
     matcher: TrackMatcher = field(default_factory=TrackMatcher)
     last_masks: dict[str, dict[str, np.ndarray]] = field(default_factory=dict)
     baselines: dict[str, dict[str, ColourBaseline]] = field(default_factory=dict)
+    first_seen: dict[str, dict[str, list[FirstSeen]]] = field(default_factory=dict)  # vessel -> grown_count -> seen
     retry_delays_s: tuple[float, ...] = (1.0, 4.0)
     cap_reported: bool = False
     calibration_reported: bool = False
@@ -433,12 +434,20 @@ async def analyze_frame(
     # Measurement: geometry only where this vessel's concept was segmented on this frame (a vessel missing from
     # `keyed` is a gap, not a zero); colour on the newest masks there are.
     drafts: list[MeasurementDraft] = []
+    # grown_count compares each object with its first sighting, so it needs SAM's mask per object, not the union.
+    per_object = {m.source for m in ctx.recipe.measurements if m.method == "grown_count"}
     for vessel in (v for v in ctx.vessels if v.id not in blocked):
         segmented_here = set(keyed.get(vessel.id, {}))
         geometry_recipe = ctx.recipe.model_copy(update={"measurements": due_measurements(ctx.recipe, segmented_here)})
         vessel_masks = ctx.last_masks.get(vessel.id, {})
         baselines = ctx.baselines.setdefault(vessel.id, {})
         common = dict(t=t, frame_id=frame_id, current_reference=current_reference, baselines=baselines)
+        objects = {
+            concept: [patch.to_canvas(*shape) for _, patch in patches]
+            for concept, patches in keyed.get(vessel.id, {}).items()
+            if concept in per_object
+        }
+        seen = ctx.first_seen.setdefault(vessel.id, {})
         geometry = await asyncio.to_thread(
             measure_vessel,
             geometry_recipe,
@@ -447,8 +456,11 @@ async def analyze_frame(
             image_bgr,
             cal,
             families=GEOMETRY,
+            objects=objects,
+            first_seen=seen,
             **common,
         )
+        seen.update(geometry.first_seen)
         colour = VesselMeasurements([], {})  # while the colour reference settles, colour waits
         if measure_colour:
             colour = await asyncio.to_thread(

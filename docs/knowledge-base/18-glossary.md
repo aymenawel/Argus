@@ -30,6 +30,7 @@ Use these words consistently in code, UI and docs.
 | **Own recipe** | A recipe Argus drafted from the researcher's words for one experiment (id `own`), editable until the plan locks, then frozen with it (D-73) |
 | **Toolbox** | The measurements Argus can make (area, height, skeleton length, component count, touching count, Lab mean, ΔE); a drafted recipe may use only these |
 | **Touching count** | How many objects of one concept touch another at least a set length long (seeds with a root ≥ 2 mm) |
+| **Grown count** | How many objects grew at least a set length longer than when Argus first saw them (seeds whose sprout shows in their outline, D-75) |
 | **Published data** | Frames someone else recorded and published, re-analysed by Argus with their provenance (dataset, DOI, licence, credit) shown on every view |
 | **Manifest** | The file naming a published image sequence: its frames, interval, tiles, labels and provenance |
 | **Virtual plate** | Published per-dish images tiled by Argus into one frame per time point, one vessel per tile (D-72) |

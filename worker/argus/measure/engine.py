@@ -5,8 +5,8 @@ and the mask boundary. (The noise floor over a still period is a derived number,
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
@@ -50,9 +50,18 @@ def baseline_key(measurement_id: str, corrected: bool) -> str:
 
 
 @dataclass(frozen=True)
+class FirstSeen:
+    """An object as Argus first saw it in a vessel: its outline (in the vessel's measuring view) and its length."""
+
+    mask: np.ndarray
+    length_mm: float
+
+
+@dataclass(frozen=True)
 class VesselMeasurements:
     drafts: list[MeasurementDraft]
     lab: dict[str, ColourBaseline]  # measurement id -> the colour reading used (the next ΔE baseline)
+    first_seen: dict[str, list[FirstSeen]] = field(default_factory=dict)  # grown_count id -> objects seen so far
 
 
 class _Region:
@@ -109,6 +118,10 @@ def _length_boundary_px(mask: np.ndarray) -> float:
     return total
 
 
+def _big_enough(mask: np.ndarray, mm_per_px: float) -> bool:
+    return np.count_nonzero(mask) * mm_per_px**2 >= MIN_COUNT_AREA_MM2
+
+
 def _objects(view: np.ndarray, mm_per_px: float) -> list[np.ndarray]:
     """The separate objects in a concept's mask, as component_count sees them (specks below its size filter out)."""
     count, labels, stats, _ = cv2.connectedComponentsWithStats(np.asarray(view, np.uint8), connectivity=8)
@@ -145,15 +158,20 @@ def measure_vessel(
     baselines: Mapping[str, ColourBaseline],
     current_reference: ColourReference | None,
     families: frozenset[str] = ALL_FAMILIES,
+    objects: Mapping[str, Sequence[np.ndarray]] | None = None,
+    first_seen: Mapping[str, Sequence[FirstSeen]] | None = None,
 ) -> VesselMeasurements:
     """`masks` maps a concept to its frame-sized union inside this vessel; a missing concept is an empty mask.
-    Size and count metrics of an empty mask are 0; colour metrics of an empty mask are absent."""
+    Size and count metrics of an empty mask are 0; colour metrics of an empty mask are absent. `objects` holds
+    SAM's mask per object (frame-sized) where known, and `first_seen` the objects grown_count has seen before; a
+    grown_count with no object found is absent (a gap: nothing was seen to count)."""
     height, width = image_bgr.shape[:2]
     empty = np.zeros((height, width), bool)
     region: _Region | None = None
     views: dict[str, np.ndarray] = {}
     drafts: list[MeasurementDraft] = []
     lab: dict[str, ColourBaseline] = {}
+    seen: dict[str, list[FirstSeen]] = {}
 
     def draft(metric: str, value: float, uncertainty: float, unit: str, method_version: str) -> None:
         drafts.append(
@@ -178,7 +196,8 @@ def measure_vessel(
             continue
         mask = np.asarray(masks.get(spec.source, empty), bool)
         if spec.family in ("size", "count"):
-            if spec.method not in ("area", "height", "skeleton_length", "component_count", "touching_count"):
+            counted = ("component_count", "touching_count", "grown_count")
+            if spec.method not in ("area", "height", "skeleton_length", *counted):
                 continue  # rule-based counts and thresholds are evaluated in phase 4
             region = region or _Region(vessel, image_bgr, cal)
             for concept in (spec.source, spec.touching):
@@ -194,6 +213,28 @@ def measure_vessel(
             elif spec.method == "skeleton_length":
                 metric = skeleton_length_mm(view, mmpp)
                 sized(spec, metric, _length_boundary_px(view) * mmpp if present else 0.0, power=1)
+            elif spec.method == "grown_count" and spec.min_length_mm is not None:
+                given = objects.get(spec.source) if objects else None
+                found = (
+                    [o for o in (region.view(np.asarray(m, bool)) for m in given) if _big_enough(o, mmpp)]
+                    if given is not None
+                    else _objects(view, mmpp)
+                )
+                if not found:
+                    continue  # nothing seen: no count, not a count of zero
+                library = list((first_seen or {}).get(spec.id, ()))
+                grown = 0
+                for obj in found:
+                    length = skeleton_length_mm(obj, mmpp).value
+                    overlap, earlier = max(
+                        ((np.count_nonzero(obj & f.mask), f) for f in library), key=lambda o: o[0], default=(0, None)
+                    )
+                    if earlier is None or overlap == 0:
+                        library.append(FirstSeen(obj, length))  # first sighting: its own baseline
+                    elif length - earlier.length_mm >= spec.min_length_mm:
+                        grown += 1
+                seen[spec.id] = library
+                draft(spec.id, float(grown), 0.0, "count", "grown_count/1")  # an exact count of what was seen
             elif spec.method == "touching_count" and spec.touching is not None and spec.min_length_mm is not None:
                 touched = views[spec.touching]
                 n = touching_count(_objects(view, mmpp), touched, mmpp, min_length_mm=spec.min_length_mm)
@@ -217,4 +258,4 @@ def measure_vessel(
                 base = baselines[key]
                 value = float(deltaE_ciede2000(np.array(colour.lab), np.array(base.lab)))
                 draft(spec.id, value, math.hypot(colour.se, base.se), "dE00", f"delta_e{kind}/1")
-    return VesselMeasurements(drafts, lab)
+    return VesselMeasurements(drafts, lab, seen)

@@ -19,7 +19,7 @@
 - [ ] **Q-16 Animation tools:** recommended Motion (MIT) for UI motion plus CSS/SVG for pulses and outlines; HyperFrames (Apache-2.0) for demo-video motion graphics; skip GSAP in the app, Lottie, Rive, React Spring. Awaiting Aymen's pick
 - [ ] **Q-17 Frontend dependencies not in `11`:** Tailwind CSS v4, Radix UI primitives, lucide-react icons, d3-scale/d3-shape, openapi-typescript (dev). Awaiting approval
 - [ ] **Q-14 Germination start:** must start by **Oct 29** at the latest to have ~60–72 h of footage by Nov 1. Claude's suggested tweaks before starting are in `20-demo-experiment-germination.md`
-- [ ] **Q-18 Germination on the Genze plate:** SAM 3.1 segments the seeds but no roots (KB 04), so "seeds with a root" counts 0 there. Options: count seeds whose SAM outline grew by at least 2 mm since they were first seen (video mode's seed masks follow the radicle; needs per-seed baselines); or find roots in code as thin bright lines on the dark paper (OpenCV, no model). Until then the agreement table and the verdict's never-changed check show the gap honestly. Aymen to choose
+- [x] **Q-18 Germination on the Genze plate:** answered Oct 30: count seeds whose SAM outline grew (D-75)
 - [ ] **Q-09 X account** for the Most Viral post (any account works; engagement counts until Nov 8 EOD).
 - [ ] **Q-10 A real user:** can one teacher or lab instructor try Argus (or the replay page) before Nov 4 for an Impact quote?
 

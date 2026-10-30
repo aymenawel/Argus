@@ -11,9 +11,10 @@ export function stepInWords(seconds: number): string {
   return `${trim(seconds / 3600)} h`;
 }
 
-/** touching_count reads as "seeds with a root"; every other measurement by its name. */
+/** touching_count reads as "seeds with a root", grown_count as "seeds that grew 2 mm"; the rest by their names. */
 export function measurementInWords(m: MeasurementSpec): string {
   if (m.method === "touching_count" && m.touching) return `${m.from}s with a ${m.touching}`;
+  if (m.method === "grown_count" && m.min_length_mm != null) return `${m.from}s that grew ${m.min_length_mm} mm`;
   return m.id.replaceAll("_", " ");
 }
 
@@ -39,9 +40,11 @@ export function renameConcept(recipe: RecipeSpec, from: string, to: string): Rec
   };
 }
 
-/** The measurement with another toolbox method: family and unit come with it; only touching_count touches. */
+/** The measurement with another toolbox method: family and unit come with it; only touching_count touches, and
+ * only it and grown_count take a minimum length. */
 export function withMethod(m: MeasurementSpec, tool: Tool, recipe: RecipeSpec): MeasurementSpec {
   const touches = tool.method === "touching_count";
+  const lengthens = touches || tool.method === "grown_count";
   const other = recipe.concepts.find((c) => c.name !== m.from)?.name ?? m.from;
   return {
     ...m,
@@ -49,7 +52,7 @@ export function withMethod(m: MeasurementSpec, tool: Tool, recipe: RecipeSpec): 
     family: tool.family,
     unit: tool.unit,
     touching: touches ? (m.touching ?? other) : null,
-    min_length_mm: touches ? (m.min_length_mm ?? 2) : null,
+    min_length_mm: lengthens ? (m.min_length_mm ?? 2) : null,
   };
 }
 
@@ -57,6 +60,7 @@ const SUFFIX: Record<string, string> = {
   skeleton_length: "length",
   component_count: "count",
   touching_count: "touching",
+  grown_count: "grown",
   lab_mean: "colour",
   delta_e: "colour_change",
 };

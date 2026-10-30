@@ -142,6 +142,17 @@ function MeasurementRow({
             <span className={styles.joiner}>mm</span>
           </>
         )}
+        {m.method === "grown_count" && (
+          <>
+            <span className={styles.joiner}>grown at least</span>
+            <NumberField
+              value={m.min_length_mm ?? 2}
+              label={`How much longer a ${m.from} must grow to count, in mm`}
+              onValue={(n) => onChange({ ...m, min_length_mm: n })}
+            />
+            <span className={styles.joiner}>mm</span>
+          </>
+        )}
         <button
           type="button"
           className={styles.remove}

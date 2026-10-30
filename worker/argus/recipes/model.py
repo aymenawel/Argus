@@ -11,7 +11,7 @@ from argus.analyze.rules import parse_rule
 METHODS_BY_FAMILY = {
     "size": {"area", "height", "skeleton_length"},
     "colour": {"lab_mean", "delta_e"},
-    "count": {"component_count", "event_count", "touching_count"},
+    "count": {"component_count", "event_count", "touching_count", "grown_count"},
     "state": {"threshold"},
 }
 
@@ -57,7 +57,8 @@ class MeasurementSpec(Spec):
     unit: str = Field(min_length=1)
     rule: str | None = None
     touching: str | None = None  # touching_count: the concept an object must touch to count
-    min_length_mm: float | None = Field(None, gt=0)  # touching_count: the touched component's minimum length
+    # touching_count: the touched component's minimum length; grown_count: how much longer an object must grow
+    min_length_mm: float | None = Field(None, gt=0)
 
     @field_validator("method")
     @classmethod
@@ -75,11 +76,15 @@ class MeasurementSpec(Spec):
         return self
 
     @model_validator(mode="after")
-    def touching_count_names_what_it_touches(self) -> MeasurementSpec:
+    def counts_say_what_counts(self) -> MeasurementSpec:
         if self.method == "touching_count" and (self.touching is None or self.min_length_mm is None):
             raise ValueError(f"'{self.id}': touching_count needs `touching` (a concept) and `min_length_mm`")
-        if self.method != "touching_count" and (self.touching is not None or self.min_length_mm is not None):
-            raise ValueError(f"'{self.id}': only touching_count takes `touching` and `min_length_mm`")
+        if self.method == "grown_count" and self.min_length_mm is None:
+            raise ValueError(f"'{self.id}': grown_count needs `min_length_mm` (how much longer an object must grow)")
+        if self.method != "touching_count" and self.touching is not None:
+            raise ValueError(f"'{self.id}': only touching_count takes `touching`")
+        if self.method not in ("touching_count", "grown_count") and self.min_length_mm is not None:
+            raise ValueError(f"'{self.id}': only touching_count and grown_count take `min_length_mm`")
         return self
 
 

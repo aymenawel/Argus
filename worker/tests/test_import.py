@@ -17,7 +17,7 @@ from argus.pipeline.analyzer import RunContext
 from argus.pipeline.imported import ImportRequest, run_import
 from argus.pipeline.jobs import RunJobs
 from argus.pipeline.live import CameraHub
-from argus.recipes.model import EventSpec, Recipe
+from argus.recipes.model import EventSpec, MeasurementSpec, Recipe
 from argus.segment import MaskPatch, SegmentError, SegmentResult, Track, TrackFrame
 from argus.storage.files import RunFiles
 from argus.storage.repos import (
@@ -360,3 +360,20 @@ async def test_an_import_notes_a_rule_crossing_and_closes_with_a_checkpoint(ctx,
     assert status is RunStatus.FINISHED and [n.level for n in notes] == ["event", "checkpoint"]
     assert notes[0].t == crossing and notes[1].t == last  # in time order, the last one closing the run
     assert all(n.check_status == "passed" for n in notes) and ctx.reasoner.calls == 2
+
+
+@pytest.mark.anyio
+async def test_an_import_counts_an_object_whose_outline_grew(ctx, clip):
+    """The bar grows from 10 to 40 mm: grown by 5 mm once it passes 15 mm; the empty vessel B gives no readings."""
+    measurement = {"id": "grown", "family": "count", "method": "grown_count", "from": "root", "unit": "count"}
+    recipe = RECIPE.model_copy(
+        update={
+            "measurements": [*RECIPE.measurements, MeasurementSpec.model_validate(measurement | {"min_length_mm": 5})]
+        }
+    )
+    status = await run_import(replace(ctx, recipe=recipe), request(clip), cancel=asyncio.Event())
+    rows = measurements_for_run(ctx.db, ctx.run.id, metric="grown")
+    a, b = ctx.vessels[0].id, ctx.vessels[1].id
+    values = [m.value for m in rows if m.vessel_id == a]
+    assert status is RunStatus.FINISHED and values[0] == 0.0 and values[-1] == 1.0
+    assert not [m for m in rows if m.vessel_id == b]
