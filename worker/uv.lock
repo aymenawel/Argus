@@ -54,6 +54,7 @@ dependencies = [
     { name = "opencv-python" },
     { name = "requests" },
     { name = "scikit-image" },
+    { name = "scipy" },
     { name = "uncertainties" },
 ]
 
@@ -72,6 +73,7 @@ requires-dist = [
     { name = "opencv-python", specifier = ">=5.0.0.93" },
     { name = "requests", specifier = ">=2.34.2" },
     { name = "scikit-image", specifier = ">=0.26.0" },
+    { name = "scipy", specifier = ">=1.18.1" },
     { name = "uncertainties", specifier = ">=3.2.3" },
 ]
 
