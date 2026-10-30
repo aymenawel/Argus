@@ -22,6 +22,7 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = ["slow: real model calls or real datasets; skipped without their key or data"]
 
 [tool.ruff]
 line-length = 120

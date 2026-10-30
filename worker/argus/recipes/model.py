@@ -11,9 +11,12 @@ from argus.analyze.rules import parse_rule
 METHODS_BY_FAMILY = {
     "size": {"area", "height", "skeleton_length"},
     "colour": {"lab_mean", "delta_e"},
-    "count": {"component_count", "event_count"},
+    "count": {"component_count", "event_count", "touching_count"},
     "state": {"threshold"},
 }
+
+
+MAX_CONCEPT_WORDS = 4  # SAM finds short noun phrases ("seed", "root hair"), not descriptions
 
 
 class Spec(BaseModel):
@@ -31,6 +34,8 @@ class MeasurementSpec(Spec):
     source: str = Field(alias="from")
     unit: str = Field(min_length=1)
     rule: str | None = None
+    touching: str | None = None  # touching_count: the concept an object must touch to count
+    min_length_mm: float | None = Field(None, gt=0)  # touching_count: the touched component's minimum length
 
     @field_validator("method")
     @classmethod
@@ -45,6 +50,14 @@ class MeasurementSpec(Spec):
     def lab_mean_reports_three_values(self) -> MeasurementSpec:
         if self.method == "lab_mean" and self.unit != "Lab":
             raise ValueError('lab_mean reports L*, a* and b*: use unit "Lab"')
+        return self
+
+    @model_validator(mode="after")
+    def touching_count_names_what_it_touches(self) -> MeasurementSpec:
+        if self.method == "touching_count" and (self.touching is None or self.min_length_mm is None):
+            raise ValueError(f"'{self.id}': touching_count needs `touching` (a concept) and `min_length_mm`")
+        if self.method != "touching_count" and (self.touching is not None or self.min_length_mm is not None):
+            raise ValueError(f"'{self.id}': only touching_count takes `touching` and `min_length_mm`")
         return self
 
 
@@ -88,8 +101,14 @@ class Recipe(Spec):
     @classmethod
     def one_concept_each(cls, concepts: list[Concept]) -> list[Concept]:
         for concept in concepts:
-            if "," in concept.name or "+" in concept.name:
-                raise ValueError(f"'{concept.name}' holds several concepts; SAM takes one concept per request")
+            name = concept.name.strip()
+            if any(sep in name for sep in (",", "+", "/")) or " and " in f" {name.lower()} ":
+                raise ValueError(
+                    f"'{concept.name}' names more than one thing; give each thing its own concept (SAM takes one "
+                    "concept per request)"
+                )
+            if len(name.split()) > MAX_CONCEPT_WORDS:
+                raise ValueError(f"'{concept.name}' is too long for SAM: use a short noun phrase (at most 4 words)")
         if len({c.name for c in concepts}) != len(concepts):
             raise ValueError("concept names must be unique")
         return concepts
@@ -101,6 +120,8 @@ class Recipe(Spec):
         for m in measurements:
             if m.source not in names:
                 raise ValueError(f"measurement '{m.id}' reads from unknown concept '{m.source}'")
+            if m.touching is not None and m.touching not in names:
+                raise ValueError(f"measurement '{m.id}' counts objects touching unknown concept '{m.touching}'")
         if len({m.id for m in measurements}) != len(measurements):
             raise ValueError("measurement ids must be unique")
         return measurements

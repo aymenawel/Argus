@@ -1,0 +1,64 @@
+{
+  "$comment": "Output schema for prompts/setup/recipe.md (D-73): a recipe and a plan drafted from the researcher's words. The method and curve enums are filled from worker/argus/recipes/toolbox.py at call time; code derives each measurement's family and unit from its method and validates the whole as a Recipe before anything is shown.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title", "concepts", "measurements", "main_measurement", "analysis_step_s", "curve", "rivals", "plan", "setup_hints", "safety_notes", "question_for_researcher"],
+  "properties": {
+    "title": {"type": "string"},
+    "concepts": {"type": "array", "items": {"type": "string"}, "description": "1-4 short noun phrases SAM can find, one thing each."},
+    "measurements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "method", "from", "touching", "min_length_mm"],
+        "properties": {
+          "id": {"type": "string", "description": "snake_case, e.g. root_length."},
+          "method": {"type": "string", "enum": ["filled in at call time"]},
+          "from": {"type": "string", "description": "One of the concepts."},
+          "touching": {"type": ["string", "null"], "description": "touching_count only: the concept touched."},
+          "min_length_mm": {"type": ["number", "null"], "description": "touching_count only."}
+        }
+      }
+    },
+    "main_measurement": {"type": "string", "description": "One of the measurement ids."},
+    "analysis_step_s": {"type": "number", "description": "Seconds between readings: a suggestion the researcher confirms."},
+    "curve": {"type": "string", "enum": ["filled in at call time"]},
+    "rivals": {"type": "array", "items": {"type": "string"}},
+    "plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hypothesis", "prediction", "threshold", "metric", "direction", "min_effect", "checkpoint_s", "treatment"],
+      "properties": {
+        "hypothesis": {"type": "string"},
+        "prediction": {"type": "string"},
+        "threshold": {"type": "string"},
+        "metric": {"type": "string", "description": "A measurement id (a lab_mean id with _l, _a or _b)."},
+        "direction": {"type": "string", "enum": ["higher", "lower"]},
+        "min_effect": {"type": "number"},
+        "checkpoint_s": {"type": "number"},
+        "treatment": {"type": "string"}
+      }
+    },
+    "setup_hints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["factor", "factor_unit", "conditions"],
+      "properties": {
+        "factor": {"type": "string"},
+        "factor_unit": {"type": "string"},
+        "conditions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["value", "role"],
+            "properties": {"value": {"type": "string"}, "role": {"type": "string", "enum": ["control", "treatment"]}}
+          }
+        }
+      }
+    },
+    "safety_notes": {"type": "array", "items": {"type": "string"}},
+    "question_for_researcher": {"type": "string"}
+  }
+}
