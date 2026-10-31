@@ -109,6 +109,10 @@ class Recipe(Spec):
     rivals: list[str] = []
     default_views: list[str] = []
     watcher: WatcherSpec = WatcherSpec()
+    # What SAM sees of a frame when an import uses image mode (an image sequence, or a video whose video mode failed):
+    # the whole frame, one call shared by every vessel (small objects stand out on the whole plate), or one vessel's
+    # region per call (a faint object filling its dish, D-89).
+    stills_view: Literal["frame", "vessel"] = "frame"
     concepts: list[Concept] = Field(min_length=1)
     measurements: list[MeasurementSpec] = Field(min_length=1)
     events: list[EventSpec] = []

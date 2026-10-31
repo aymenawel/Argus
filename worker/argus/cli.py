@@ -226,7 +226,7 @@ def main(argv: list[str] | None = None) -> int:
     card = sub.add_parser("card", help="export the printable Argus Card sheet (SVG, PDF, PNG preview)")
     card.add_argument("--out", type=Path, required=True, help="folder to write the files into")
     dataset = sub.add_parser("dataset", help="turn a published dataset into a plate Argus can import")
-    dataset.add_argument("name", choices=["genze"], help="the dataset")
+    dataset.add_argument("name", choices=["genze", "swarming"], help="the dataset")
     dataset.add_argument("--zip", type=Path, required=True, help="the dataset's archive, as downloaded")
     dataset.add_argument("--out", type=Path, required=True, help="folder for the plate's frames and manifest.json")
     bundle = sub.add_parser("export-bundle", help="bundle a finished run for the public replay (D-83)")
@@ -252,9 +252,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "export-bundle":
         return export_bundle_command(args.run_id, args.out, args.max_frames)
     if args.command == "dataset":
-        from argus.datasets import genze
+        from argus.datasets import genze, swarming
 
-        manifest = genze.build_plate(args.zip, args.out, dishes=genze.DEFAULT_PLATE, expected_sha256=genze.GENZE_SHA256)
+        if args.name == "swarming":
+            manifest = swarming.build_frames(args.zip, args.out, expected_md5=swarming.ARCHIVE_MD5)
+        else:
+            manifest = genze.build_plate(
+                args.zip, args.out, dishes=genze.DEFAULT_PLATE, expected_sha256=genze.GENZE_SHA256
+            )
         print(f"{len(manifest.tiles)} dishes, {len(manifest.frames)} frames: {args.out / 'manifest.json'}")
         return 0
     from argus.calibration import card_export  # needs a Chromium browser, so only loaded on demand

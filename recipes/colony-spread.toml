@@ -1,0 +1,22 @@
+# A colony spreading over agar in a dish (a bacterial swarm, a mould), seen from above or below: Argus measures the
+# area SAM finds in each dish. A faint colony is only found in its own dish's region (D-89).
+id = "colony-spread"
+version = 1
+title = "Colony spread"
+default_mode = "smart_trigger"
+analysis_step_s = 600.0
+main_measurement = "area"
+curve = "logistic"
+rivals = ["temperature", "agar drying", "inoculum size", "position on the plate", "plate batch"]
+default_views = ["curves", "groups", "crops"]
+stills_view = "vessel"
+
+[[concepts]]
+name = "microbial colony"
+
+[[measurements]]
+id = "area"
+family = "size"
+method = "area"
+from = "microbial colony"
+unit = "mm2"

@@ -41,9 +41,22 @@ def write_recipe(directory, data):
 
 def test_bundled_recipes_load_and_point_to_real_measurements():
     recipes = load_all(REPO_ROOT / "recipes")
-    assert set(recipes) == {"seed-germination", "colour-reaction", "foam-height", "general"}
+    assert set(recipes) == {"seed-germination", "colour-reaction", "foam-height", "general", "colony-spread"}
     for r in recipes.values():
         assert r.main_measurement in {m.id for m in r.measurements}
+
+
+def test_image_sequences_show_sam_the_whole_frame_unless_a_recipe_asks_for_one_vessel_at_a_time():
+    """Small seeds stand out on the whole plate; a faint colony filling its dish is only found in the dish (D-89)."""
+    recipes = load_all(REPO_ROOT / "recipes")
+    assert {r.id: r.stills_view for r in recipes.values()} == {
+        "seed-germination": "frame",
+        "colour-reaction": "frame",
+        "foam-height": "frame",
+        "general": "frame",
+        "colony-spread": "vessel",
+    }
+    assert [c.name for c in recipes["colony-spread"].concepts] == ["microbial colony"]
 
 
 @pytest.mark.parametrize(

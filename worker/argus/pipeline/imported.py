@@ -293,17 +293,25 @@ async def _segment_stills(
     cancel: asyncio.Event,
     full_frames: FullFrames,
 ) -> bool:
-    """Image mode on the whole frame, sample by sample, each call shared by every vessel; False once stopped or
-    capped. SAM sees small objects in the whole frame that it misses in a crop of one vessel (KB 04)."""
+    """Image mode, sample by sample; False once stopped or capped. On the whole frame, each call shared by every
+    vessel: SAM sees small objects there that it misses in a crop of one vessel (KB 04). Or, when the recipe asks, on
+    this vessel's region alone: a faint colony filling its dish is lost in the whole plate (D-89)."""
     for sample in samples:
         if cancel.is_set():
             return False
-        single = await _full_frame(ctx, sample, concept, full_frames)
+        x0 = y0 = 0
+        if ctx.recipe.stills_view == "vessel":
+            x0, y0, x1, y1 = roi_box(vessel, *shape, margin=CROP_MARGIN_PX)
+            image = await asyncio.to_thread(cv2.imread, str(sample.path))
+            crop = image[y0:y1, x0:x1]
+            single = await segment_with_retries(ctx, crop, concept, t=sample.t, frame_ids=[sample.frame_id])
+        else:
+            single = await _full_frame(ctx, sample, concept, full_frames)
         if isinstance(single, Skipped):
             if single.reason == "cap":
                 return False
             continue
-        patches = [track.frames[0].patch for track in single.tracks]
+        patches = [track.frames[0].patch.shifted(x0, y0) for track in single.tracks]
         masks[sample.frame_id].setdefault(vessel.id, {})[concept] = _keep(ctx, vessel, concept, patches, shape)
     return True
 

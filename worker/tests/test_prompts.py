@@ -186,7 +186,7 @@ def test_prompt_version_changes_when_a_prompt_changes(tmp_path, monkeypatch):
 
 
 def test_every_recipe_has_a_short_method_card():
-    for recipe in ("seed-germination", "colour-reaction", "foam-height", "general"):
+    for recipe in ("seed-germination", "colour-reaction", "foam-height", "general", "colony-spread"):
         card = load_prompt(f"recipes/{recipe}/method.md")
         assert 40 < len(card.split()) <= 250
 

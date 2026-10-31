@@ -80,10 +80,11 @@ def dark_patches(image_bgr):
 
 class FakeSegmenter:
     def __init__(self, video_fails=False):
-        self.video_fails, self.modes = video_fails, []
+        self.video_fails, self.modes, self.image_shapes = video_fails, [], []
 
     async def image(self, image_bgr, concept):
         self.modes.append("image")
+        self.image_shapes.append(image_bgr.shape[:2])
         tracks = [Track(f"obj{i}", concept, (TrackFrame(0, p, 0.9),)) for i, p in enumerate(dark_patches(image_bgr))]
         return SegmentResult(tracks, ok_call(images=1))
 
@@ -379,10 +380,8 @@ async def test_an_import_counts_an_object_whose_outline_grew(ctx, clip):
     assert not [m for m in rows if m.vessel_id == b]
 
 
-@pytest.mark.anyio
-async def test_a_published_image_sequence_is_segmented_as_whole_stills(ctx, tmp_path):
-    """Stills 30 min apart aren't video: one image call per frame and concept on the whole frame, shared by every
-    vessel (SAM found small seeds on the whole Genze plate that it missed in one-dish crops)."""
+def write_plate(tmp_path) -> ImportRequest:
+    """Three stills 30 min apart, the bar in vessel A growing 10, 20 and 30 mm, with a one-tile manifest."""
     import json
 
     folder = tmp_path / "plate"
@@ -404,11 +403,34 @@ async def test_a_published_image_sequence_is_segmented_as_whole_stills(ctx, tmp_
         "tiles": [tile],
     }
     (folder / "manifest.json").write_text(json.dumps(body), encoding="utf-8")
-    request = ImportRequest(paths=[], time_scale=1.0, manifest=folder / "manifest.json")
-    status = await run_import(ctx, request, cancel=asyncio.Event())
+    return ImportRequest(paths=[], time_scale=1.0, manifest=folder / "manifest.json")
+
+
+@pytest.mark.anyio
+async def test_a_published_image_sequence_is_segmented_as_whole_stills(ctx, tmp_path):
+    """Stills 30 min apart aren't video: one image call per frame and concept on the whole frame, shared by every
+    vessel (SAM found small seeds on the whole Genze plate that it missed in one-dish crops)."""
+    status = await run_import(ctx, write_plate(tmp_path), cancel=asyncio.Event())
     assert status is RunStatus.FINISHED
     assert ctx.segmenter.modes == ["image"] * 3  # never a video clip, and one call per frame for both vessels
     rows = lengths_of_a(ctx)
     assert len(rows) == 3
     for row, true_mm in zip(rows, (10, 20, 30), strict=True):  # each within its own ± (skeleton ends included)
+        assert abs(row.value - true_mm) <= row.uncertainty, (row.value, row.uncertainty, true_mm)
+
+
+@pytest.mark.anyio
+async def test_a_recipe_can_show_sam_one_vessel_of_each_still_at_a_time(ctx, tmp_path):
+    """A faint colony filling a dish is lost in the whole plate but found in its own dish's region (D-89): one image
+    call per frame and vessel, on that vessel's crop, its masks placed back in the frame."""
+    ctx.recipe = Recipe.model_validate({**RECIPE.model_dump(by_alias=True), "stills_view": "vessel"})
+    status = await run_import(ctx, write_plate(tmp_path), cancel=asyncio.Event())
+    assert status is RunStatus.FINISHED
+    assert ctx.segmenter.modes == ["image"] * 6  # three frames, two vessels
+    first = frames_for_run(ctx.db, ctx.run.id)[0]
+    full = cv2.imread(str(ctx.settings.data_dir / first.path)).shape[:2]
+    assert all(h < full[0] and w < full[1] for h, w in ctx.segmenter.image_shapes)  # crops, not the frame
+    rows = lengths_of_a(ctx)
+    assert len(rows) == 3
+    for row, true_mm in zip(rows, (10, 20, 30), strict=True):
         assert abs(row.value - true_mm) <= row.uncertainty, (row.value, row.uncertainty, true_mm)
