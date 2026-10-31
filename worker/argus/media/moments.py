@@ -67,7 +67,10 @@ def collect_moments(records: RunRecords) -> list[Moment]:
     moments: list[Moment] = []
     for event in records.events:
         message = event.detail.get("message")
-        if event.kind is EventKind.INTERVENTION and message:
+        if event.kind is EventKind.INTERVENTION and event.source == "quality":
+            # The quality check saw a hand or an object by the vessels: a quality flag, not something anyone did.
+            moments.append(Moment(event.t_start, "quality", _citing_note(records, event.id) or "Hand in view"))
+        elif event.kind is EventKind.INTERVENTION and message:
             moments.append(Moment(event.t_start, "intervention", str(message)))
         elif event.kind in QUALITY:
             caption = message or _citing_note(records, event.id) or QUALITY[event.kind]

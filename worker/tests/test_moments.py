@@ -22,6 +22,7 @@ from argus.media.moments import (
 )
 from argus.media.records import load_records
 from argus.recipes.loader import load_all
+from argus.storage import repos
 from tests.records import DRAFT, finished_run
 
 
@@ -138,3 +139,19 @@ def test_title_and_end_cards(records):
     assert end_lines(judged) == ["Verdict: Inconclusive", "A check that failed."]
     open_only = replace(records, verdict=verdict(records, checks[:2]))
     assert end_lines(open_only) == ["Verdict: Inconclusive", "A check still open."]
+
+
+def test_a_hand_in_view_is_a_quality_moment(db, records):
+    """The quality check logs a hand by the vessels as an intervention with flags, not words."""
+    hand = repos.add_event(
+        db,
+        records.run.id,
+        vessel_id=None,
+        t_start=3000.0,
+        kind="intervention",
+        source="quality",
+        detail={"flags": ["occluded"]},
+    )
+    moments = collect_moments(replace(records, events=[*records.events, hand]))
+    assert Moment(3000.0, "quality", "Hand in view") in moments
+    assert not any(x.kind == "intervention" and x.t == 3000.0 for x in moments)

@@ -6,6 +6,7 @@ uv run python -m argus card --out PATH  export the printable Argus Card sheet
 uv run python -m argus export-bundle RUN_ID   bundle a finished run for the public replay (web/public/bundles)
 uv run python -m argus media timelapse RUN_ID make the run's timelapse (data/<experiment>/<run>/media/)
 uv run python -m argus media reel RUN_ID      make the run's 30-60 s highlights reel
+uv run python -m argus validation [--runs ID...]  print the README's validation table from the database
 """
 
 from __future__ import annotations
@@ -198,6 +199,23 @@ def media_command(kind: str, run_id: str, seconds: float) -> int:
     return 0
 
 
+def validation_command(run_ids: list[str] | None) -> int:
+    from argus.analyze.validation import render_table, validation_rows
+    from argus.config import load_settings
+    from argus.recipes.loader import load_all
+    from argus.storage.db import Database
+
+    settings = load_settings()
+    db = Database(settings.data_dir / "argus.sqlite")
+    try:
+        table = render_table(validation_rows(db, load_all(settings.recipes_dir), run_ids))
+    finally:
+        db.close()
+    sys.stdout.reconfigure(encoding="utf-8")  # ±, × and → survive a Windows pipe into the README
+    print(table)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="argus", description="Argus command line")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -219,12 +237,16 @@ def main(argv: list[str] | None = None) -> int:
     media.add_argument("kind", choices=["timelapse", "reel"], help="which video")
     media.add_argument("run_id", help="the run; it must have finished or been stopped")
     media.add_argument("--seconds", type=float, default=20.0, help="length of the timelapse (default 20)")
+    validation = sub.add_parser("validation", help="print the validation table from the database (D-86)")
+    validation.add_argument("--runs", nargs="+", metavar="RUN_ID", help="these runs (default: every finished one)")
     args = parser.parse_args(argv)
 
     if args.command == "dev":
         return run_dev(REPO_ROOT)
     if args.command == "run":
         return post_run(args.file, args.api)
+    if args.command == "validation":
+        return validation_command(args.runs)
     if args.command == "media":
         return media_command(args.kind, args.run_id, args.seconds)
     if args.command == "export-bundle":

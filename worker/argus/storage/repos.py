@@ -455,19 +455,28 @@ def add_calibration(db: Database, run_id: str, draft: CalibrationDraft) -> Calib
     return cal
 
 
+def _calibration(row: sqlite3.Row) -> Calibration:
+    values = dict(row)
+    for key in ("homography", "colour_reference", "camera_properties"):
+        values[key] = json.loads(values[key]) if values[key] is not None else None
+    values["camera_properties"] = values["camera_properties"] or {}
+    return Calibration(**values)
+
+
 def latest_calibration(db: Database, run_id: str, t: float) -> Calibration | None:
     """The calibration in force at time t: the newest one taken at or before t."""
     with db.read() as c:
         row = c.execute(
             "SELECT * FROM calibrations WHERE run_id=? AND t<=? ORDER BY t DESC, rowid DESC LIMIT 1", (run_id, t)
         ).fetchone()
-    if row is None:
-        return None
-    values = dict(row)
-    for key in ("homography", "colour_reference", "camera_properties"):
-        values[key] = json.loads(values[key]) if values[key] is not None else None
-    values["camera_properties"] = values["camera_properties"] or {}
-    return Calibration(**values)
+    return _calibration(row) if row is not None else None
+
+
+def calibrations_for_run(db: Database, run_id: str) -> list[Calibration]:
+    """In time order."""
+    with db.read() as c:
+        rows = c.execute("SELECT * FROM calibrations WHERE run_id=? ORDER BY t, rowid", (run_id,)).fetchall()
+    return [_calibration(r) for r in rows]
 
 
 # ---- Detections ----
@@ -590,6 +599,13 @@ def add_model_call(db: Database, run_id: str | None, t: float | None, draft: Mod
             values,
         )
     return call
+
+
+def model_calls_for_run(db: Database, run_id: str) -> list[ModelCall]:
+    """Every logged call of a run, failed ones included, in the order they were made."""
+    with db.read() as c:
+        rows = c.execute("SELECT * FROM model_calls WHERE run_id=? ORDER BY rowid", (run_id,)).fetchall()
+    return [ModelCall(**dict(r)) for r in rows]
 
 
 def run_has_readings(db: Database, run_id: str) -> bool:
