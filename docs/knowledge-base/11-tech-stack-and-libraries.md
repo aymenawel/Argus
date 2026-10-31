@@ -40,6 +40,7 @@
 | Dashboard | Next.js + TypeScript, Server-Sent Events | USE | Same pattern as FoodLine DC |
 | Video (timelapse, reel, clips) | **ffmpeg binary called with `subprocess`**; ffmpeg 9.0.2 already on PATH (`winget install Gyan.FFmpeg` on a new machine). `imageio-ffmpeg` not needed (D-45) | USE | See ffmpeg-python below |
 | Alerts | ntfy via `requests.post` | USE (Should) | One HTTP call; free apps; topic name acts as a password |
+| Public replay hosting | **Vercel CLI 64.5.0** (Oct 16, 2026), run as `npx --yes vercel@64.5.0`, never in `package.json`; `web/scripts/deploy-replay.sh` uploads `web/` (source + `public/bundles`, `.vercelignore` keeps secrets and build folders out) and Vercel builds it with `--build-env NEXT_PUBLIC_ARGUS_REPLAY=1`. Project `argus-replay`, GitHub link disconnected, Node pinned to 24.x in `package.json` | USE (D-83) | Bundles reach Vercel only in that upload, never in git. `vercel build` + `deploy --prebuilt` fails from Windows: the output links functions with Windows symlinks Vercel's Linux can't follow, and copies count as separate functions (Hobby allows 12). Hobby takes at most 100 MB per CLI deploy ([limits](https://vercel.com/docs/limits)); the script refuses bundles over 70 MB |
 | Smart plug | Shelly local HTTP RPC (our own ~15 lines) **or** `python-kasa` 0.12.0 (GPL-3.0+) | BUILD / OPTIONAL | See `10-hardware-and-control.md` |
 
 ## Changed or dropped after verification

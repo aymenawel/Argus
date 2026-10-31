@@ -1,0 +1,9 @@
+# What `vercel deploy` uploads from web/ for the public replay (D-83): the app's source and public/bundles.
+# Never secrets, dependencies or build folders.
+.env*
+.vercel
+.next
+.next-replay
+node_modules
+*.tsbuildinfo
+tests
