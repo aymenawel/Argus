@@ -18,6 +18,19 @@ Argus includes or adapts material from the projects below. Each keeps its own li
 
 `prompts/system/scientific-rules.md` and `prompts/deep/verdict-critique.md` are condensed adaptations of the hypothesis-generation and scientific-critical-thinking skills from K-Dense-AI/scientific-agent-skills (MIT). The what-if-oracle skill (CC BY-NC-SA 4.0) was deliberately not copied or adapted.
 
+## Inter typeface in `worker/argus/media/fonts/` (copied unchanged)
+
+`Inter[opsz,wght].ttf` and its licence `OFL.txt`, from Google Fonts' repository (`ofl/inter`), draw the text on the
+timelapse and highlights reel. Copyright 2020 The Inter Project Authors (https://github.com/rsms/inter), licensed under
+the SIL Open Font License, Version 1.1; the full licence is in `worker/argus/media/fonts/OFL.txt`. The web app loads the
+same typeface through `next/font/google`.
+
+## Libraries used directly with notable licences
+
+| Library | Used for | License |
+| --- | --- | --- |
+| Pillow 13 | Drawing the video overlays (D-84) | MIT-CMU (HPND) |
+
 ## Published data re-analysed in the demo (not in this repository)
 
 | Dataset | Credit | License | Used as |

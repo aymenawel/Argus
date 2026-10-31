@@ -18,6 +18,7 @@
 | `requests` | 2.34.2 | Used for the multipart voice upload (and ntfy later) |
 | `ax-platform` | 1.3.1 (torch 2.14.1+cpu, botorch 0.18.1) | Installs on Windows + 3.12 in ~45 s. Default strategy Center → Sobol → BoTorch ("MBM"); `attach_trial` + `complete_trial` on finished vessels skips the random start (verified: 6 attached trials → next batch came from MBM). `configure_optimization(objective=..., outcome_constraints=["sprouted_pct >= 80"])` works |
 | ffmpeg | 9.0.2 (gyan.dev build, on PATH) | `imageio-ffmpeg` dropped; worker checks for ffmpeg at startup |
+| `pillow` | 13.0.0 (direct dependency since Oct 30, D-84) | Draws the timelapse and reel overlays at 2× and box-downsamples them (`reduce(2)` in premultiplied alpha); `set_variation_by_axes` drives Inter's `opsz` (14–32) and `wght` axes. Inter's TTF and OFL are committed in `worker/argus/media/fonts/` |
 | `pytest`, `ruff` (dev only) | 9.2.0, 0.17.3 | Tests and lint/format, as asked in the build brief. Config in `worker/pyproject.toml` (line length 120) |
 
 ## Core stack
