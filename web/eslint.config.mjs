@@ -9,6 +9,8 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    ".next-replay/**", // `npm run replay` builds here (D-83)
+    ".vercel/**", // the replay's prebuilt deploy output
     "out/**",
     "build/**",
     "next-env.d.ts",
