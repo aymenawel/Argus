@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from argus.domain import ModelCallDraft
-from argus.segment.sam import SegmentError, segment
+from argus.segment.sam import SegmenterOff, SegmentError, segment
 from argus.segment.types import Clip, MaskPatch, Track, TrackFrame
 
 
@@ -17,4 +17,4 @@ class SegmentResult:
     call: ModelCallDraft
 
 
-__all__ = ["Clip", "MaskPatch", "SegmentError", "SegmentResult", "Track", "TrackFrame", "segment"]
+__all__ = ["Clip", "MaskPatch", "SegmenterOff", "SegmentError", "SegmentResult", "Track", "TrackFrame", "segment"]

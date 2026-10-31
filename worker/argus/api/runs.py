@@ -34,7 +34,7 @@ from argus.measure.uncertainty import format_measurement
 from argus.pipeline.imported import ImportRequest
 from argus.pipeline.jobs import RunJobs
 from argus.pipeline.live import CameraHub
-from argus.segment import SegmentError
+from argus.segment import SegmenterOff, SegmentError
 from argus.segment.outline import outline_polygons
 from argus.storage import repos
 from argus.storage.db import Database
@@ -161,6 +161,8 @@ def register_run_routes(app: FastAPI, *, db: Database, settings: Settings, jobs:
         experiment = await asyncio.to_thread(repos.get_experiment, db, experiment_id)
         if experiment is None:
             raise HTTPException(status_code=404, detail="experiment not found")
+        if (off := jobs.segmentation_off()) is not None:  # a run is mostly segmentation: start none that can't
+            raise HTTPException(status_code=503, detail=off)
         for path in body.paths:
             if not Path(path).is_file():
                 raise HTTPException(status_code=422, detail=f"file not found: {path}")
@@ -305,6 +307,8 @@ def register_run_routes(app: FastAPI, *, db: Database, settings: Settings, jobs:
         image = await asyncio.to_thread(frame_from, hub, body)
         try:
             result = await jobs.segmenter.image(image, body.concept)
+        except SegmenterOff as off:
+            raise HTTPException(status_code=503, detail=str(off)) from off
         except SegmentError as error:
             await asyncio.to_thread(
                 repos.add_model_call, db, None, None, error.call.model_copy(update={"function": "vessel_detect"})

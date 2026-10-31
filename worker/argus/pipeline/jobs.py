@@ -76,6 +76,11 @@ class RunJobs:
             reasoner=self.reasoner,
         )
 
+    def segmentation_off(self) -> str | None:
+        """Why nothing can be segmented now (no MODEL_API_KEY), or None. A test's fake segmenter is always on."""
+        unavailable = getattr(self.segmenter, "unavailable", None)
+        return unavailable() if unavailable is not None else None
+
     def start_import(self, run: Run, vessels: Sequence[Vessel], request: ImportRequest) -> None:
         ctx = self._context(run, vessels)
         cancel = asyncio.Event()

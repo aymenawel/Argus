@@ -20,12 +20,21 @@ from tests.test_import import FakeSegmenter
 
 
 @contextmanager
-def api_client(db, tmp_path, *, reasoner=None, env=None, media_makers=None) -> Iterator[TestClient]:
-    """`media_makers` replaces the video makers (kind → function), so the media routes can be tested quickly."""
+def api_client(db, tmp_path, *, reasoner=None, env=None, media_makers=None, segmenter=None) -> Iterator[TestClient]:
+    """`media_makers` replaces the video makers (kind → function), so the media routes can be tested quickly;
+    `segmenter` builds the segmenter from the settings (the fake one by default)."""
     settings = load_settings({"ARGUS_DATA_DIR": str(tmp_path / "data"), **(env or {})})
     broker, recipes = EventBroker(), load_all(REPO_ROOT / "recipes")
     hub = CameraHub(opener=fake_opener)
-    jobs = RunJobs(db, broker, settings, recipes, hub, segmenter=FakeSegmenter(), reasoner=reasoner)
+    jobs = RunJobs(
+        db,
+        broker,
+        settings,
+        recipes,
+        hub,
+        segmenter=segmenter(settings) if segmenter else FakeSegmenter(),
+        reasoner=reasoner,
+    )
     media = MediaJobs(db, settings, recipes, makers=media_makers) if media_makers is not None else None
     with TestClient(create_app(settings, db, broker, recipes, jobs=jobs, hub=hub, media=media)) as client:
         yield client

@@ -29,7 +29,7 @@ from argus.reason import Reasoner
 from argus.recipes.model import MeasurementSpec, Recipe
 from argus.segment import Clip, MaskPatch, SegmentError, SegmentResult, segment
 from argus.segment.outline import outline_polygons
-from argus.segment.sam import sam_client
+from argus.segment.sam import SEGMENTER_OFF, SegmenterOff, sam_client
 from argus.segment.tracking import TrackMatcher, assign_to_vessels
 from argus.storage.db import Database
 from argus.storage.files import RunFiles
@@ -68,8 +68,14 @@ class SamSegmenter:
         self.settings = settings
         self._client: Any = None  # only argus.segment.sam touches the SDK
 
+    def unavailable(self) -> str | None:
+        """Why SAM can't be asked at all (no key), or None."""
+        return SEGMENTER_OFF if self.settings.model_api_key is None else None
+
     @property
     def client(self) -> Any:
+        if (reason := self.unavailable()) is not None:
+            raise SegmenterOff(reason)
         if self._client is None:
             self._client = sam_client(self.settings)
         return self._client

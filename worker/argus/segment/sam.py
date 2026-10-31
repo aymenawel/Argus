@@ -40,6 +40,13 @@ class SegmentError(RuntimeError):
         self.call = call
 
 
+class SegmenterOff(RuntimeError):
+    """Segmentation can't run at all (no MODEL_API_KEY): nothing was asked of SAM, so there is no call to log."""
+
+
+SEGMENTER_OFF = "segmentation is off: MODEL_API_KEY is not set (SAM 3.1 runs through the Meta Model API)"
+
+
 def _check_concept(concept: str) -> None:
     if not concept.strip() or "," in concept or "+" in concept:
         raise ValueError(f"SAM takes exactly one concept per request, got {concept!r}")

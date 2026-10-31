@@ -24,7 +24,7 @@ from argus.reason import ReasonError
 from argus.reason.prompts import describe_task
 from argus.recipes.model import Recipe
 from argus.recipes.resolve import recipe_for
-from argus.segment import SegmentError
+from argus.segment import SegmenterOff, SegmentError
 from argus.segment.outline import outline_polygons
 from argus.segment.tracking import assign_to_vessels
 from argus.storage import repos
@@ -117,6 +117,8 @@ def register_setup_routes(
         for concept in recipe.concepts if vessels else ():
             try:
                 result = await jobs.segmenter.image(image, concept.name)
+            except SegmenterOff as off:
+                raise HTTPException(status_code=503, detail=str(off)) from off
             except SegmentError as error:
                 logged = error.call.model_copy(update={"function": "preview"})
                 await asyncio.to_thread(repos.add_model_call, db, None, None, logged)
