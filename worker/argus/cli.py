@@ -4,6 +4,7 @@ uv run python -m argus dev              start the worker API and the web app tog
 uv run python -m argus run FILE.json    start a run described in a JSON file (the worker must be running)
 uv run python -m argus card --out PATH  export the printable Argus Card sheet
 uv run python -m argus export-bundle RUN_ID   bundle a finished run for the public replay (web/public/bundles)
+uv run python -m argus media timelapse RUN_ID make the run's timelapse (data/<experiment>/<run>/media/)
 """
 
 from __future__ import annotations
@@ -171,6 +172,27 @@ def export_bundle_command(run_id: str, out: Path, max_frames: int) -> int:
     return 0
 
 
+def media_command(kind: str, run_id: str, seconds: float) -> int:
+    from argus.config import load_settings
+    from argus.media import MediaError, MediaRefused
+    from argus.media.make import make_timelapse
+    from argus.recipes.loader import load_all
+    from argus.storage.db import Database
+
+    settings = load_settings()
+    db = Database(settings.data_dir / "argus.sqlite")
+    started = time.monotonic()
+    try:
+        out = make_timelapse(db, settings, load_all(settings.recipes_dir), run_id, seconds=seconds)
+    except (MediaRefused, MediaError) as error:
+        print(f"No {kind}: {error}", file=sys.stderr)
+        return 1
+    finally:
+        db.close()
+    print(f"{out}  ({out.stat().st_size / 1_000_000:.1f} MB, made in {time.monotonic() - started:.0f} s)")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="argus", description="Argus command line")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -188,12 +210,18 @@ def main(argv: list[str] | None = None) -> int:
     bundle.add_argument("run_id", help="the run to bundle; it must have finished or been stopped")
     bundle.add_argument("--out", type=Path, default=REPO_ROOT / "web" / "public" / "bundles", help="bundles folder")
     bundle.add_argument("--max-frames", type=int, default=400, help="thin to about this many frames (default 400)")
+    media = sub.add_parser("media", help="make a finished run's timelapse (D-84, D-85)")
+    media.add_argument("kind", choices=["timelapse"], help="which video")
+    media.add_argument("run_id", help="the run; it must have finished or been stopped")
+    media.add_argument("--seconds", type=float, default=20.0, help="length of the timelapse (default 20)")
     args = parser.parse_args(argv)
 
     if args.command == "dev":
         return run_dev(REPO_ROOT)
     if args.command == "run":
         return post_run(args.file, args.api)
+    if args.command == "media":
+        return media_command(args.kind, args.run_id, args.seconds)
     if args.command == "export-bundle":
         return export_bundle_command(args.run_id, args.out, args.max_frames)
     if args.command == "dataset":

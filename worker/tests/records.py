@@ -65,6 +65,7 @@ def finished_run(
     provenance: Provenance | None = None,
     status: RunStatus = RunStatus.FINISHED,
     size: tuple[int, int] = (640, 480),
+    readings: bool = True,
 ) -> Run:
     """A colour-change run of two glasses: A (control) stays flat, B (warm water) darkens along a logistic. Frames are
     grey JPEGs under data_dir; the dye goes in at frame 2 and B's change is detected at frame 4."""
@@ -90,7 +91,7 @@ def finished_run(
     files = RunFiles(data_dir, experiment.id, run.id)
     image = np.full((size[1], size[0], 3), 128, np.uint8)
     middle = (frames - 1) * t_step / 2
-    readings = []
+    keep_readings, readings = readings, []
     for i in range(frames):
         t = i * t_step
         frame_id = new_id("frm")
@@ -112,7 +113,8 @@ def finished_run(
                     method_version="delta_e/1",
                 )
             )
-    repos.add_measurements(db, run.id, readings)
+    if keep_readings:
+        repos.add_measurements(db, run.id, readings)
     dye = repos.add_event(
         db,
         run.id,
