@@ -211,7 +211,9 @@ class Drawer:
         return self._finish(base, layer)
 
     def _finish(self, base: Image.Image, layer: Image.Image) -> Image.Image:
-        small = layer.resize((W, H), Image.Resampling.LANCZOS)
+        # A box filter over each 2×2 block (exact for supersampling, and fast), in premultiplied alpha so the
+        # see-through pixels around a stroke don't darken its edge.
+        small = layer.convert("RGBa").reduce(X2).convert("RGBA")
         return Image.alpha_composite(base.convert("RGBA"), small).convert("RGB")
 
     # ---- the parts ----

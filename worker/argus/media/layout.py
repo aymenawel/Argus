@@ -139,6 +139,11 @@ DASHES: list[tuple[int, int] | None] = [None, (7, 4), (2, 4)]
 MARKERS = ["circle", "square", "diamond"]
 
 
+def condition_value(value: float | str) -> str:
+    """A condition's value as the web prints a JSON number: 40.0 reads "40", 2.5 reads "2.5"."""
+    return f"{value:g}" if isinstance(value, float) else str(value)
+
+
 def group_key(vessel: dict) -> str:
     condition = vessel.get("condition")
     return f"{vessel['role']}:{condition['value'] if condition else ''}"
@@ -155,7 +160,7 @@ def condition_groups(vessels: Sequence[dict]) -> dict[str, Group]:
         name = "Control" if control else "Treatment"
         condition = vessel.get("condition")
         groups[key] = Group(
-            label=f"{name}: {condition['value']}" if condition else name,
+            label=f"{name}: {condition_value(condition['value'])}" if condition else name,
             control=control,
             dash=None if control else DASHES[treatments % len(DASHES)],
             marker="circle" if control else MARKERS[treatments % len(MARKERS)],

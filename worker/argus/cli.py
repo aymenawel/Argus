@@ -5,6 +5,7 @@ uv run python -m argus run FILE.json    start a run described in a JSON file (th
 uv run python -m argus card --out PATH  export the printable Argus Card sheet
 uv run python -m argus export-bundle RUN_ID   bundle a finished run for the public replay (web/public/bundles)
 uv run python -m argus media timelapse RUN_ID make the run's timelapse (data/<experiment>/<run>/media/)
+uv run python -m argus media reel RUN_ID      make the run's 30-60 s highlights reel
 """
 
 from __future__ import annotations
@@ -175,7 +176,7 @@ def export_bundle_command(run_id: str, out: Path, max_frames: int) -> int:
 def media_command(kind: str, run_id: str, seconds: float) -> int:
     from argus.config import load_settings
     from argus.media import MediaError, MediaRefused
-    from argus.media.make import make_timelapse
+    from argus.media.make import make_reel, make_timelapse
     from argus.recipes.loader import load_all
     from argus.storage.db import Database
 
@@ -183,7 +184,11 @@ def media_command(kind: str, run_id: str, seconds: float) -> int:
     db = Database(settings.data_dir / "argus.sqlite")
     started = time.monotonic()
     try:
-        out = make_timelapse(db, settings, load_all(settings.recipes_dir), run_id, seconds=seconds)
+        recipes = load_all(settings.recipes_dir)
+        if kind == "reel":
+            out = make_reel(db, settings, recipes, run_id)
+        else:
+            out = make_timelapse(db, settings, recipes, run_id, seconds=seconds)
     except (MediaRefused, MediaError) as error:
         print(f"No {kind}: {error}", file=sys.stderr)
         return 1
@@ -210,8 +215,8 @@ def main(argv: list[str] | None = None) -> int:
     bundle.add_argument("run_id", help="the run to bundle; it must have finished or been stopped")
     bundle.add_argument("--out", type=Path, default=REPO_ROOT / "web" / "public" / "bundles", help="bundles folder")
     bundle.add_argument("--max-frames", type=int, default=400, help="thin to about this many frames (default 400)")
-    media = sub.add_parser("media", help="make a finished run's timelapse (D-84, D-85)")
-    media.add_argument("kind", choices=["timelapse"], help="which video")
+    media = sub.add_parser("media", help="make a finished run's timelapse or highlights reel (D-84, D-85)")
+    media.add_argument("kind", choices=["timelapse", "reel"], help="which video")
     media.add_argument("run_id", help="the run; it must have finished or been stopped")
     media.add_argument("--seconds", type=float, default=20.0, help="length of the timelapse (default 20)")
     args = parser.parse_args(argv)

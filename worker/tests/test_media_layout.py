@@ -7,7 +7,7 @@ import pytest
 
 from argus.config import REPO_ROOT
 from argus.domain import Note
-from argus.media.layout import PALETTE, axis_time, caption_at, clock_text, schedule, segments
+from argus.media.layout import PALETTE, axis_time, caption_at, clock_text, condition_groups, schedule, segments
 
 
 def note(t: float, author: str, body: dict) -> Note:
@@ -104,3 +104,12 @@ def test_the_palette_matches_the_web_tokens():
 )
 def test_axis_times_share_one_unit(t, span, text):
     assert axis_time(t, span) == text
+
+
+def test_condition_labels_read_like_the_results_legend():
+    vessels = [
+        {"role": "treatment", "condition": {"factor": "temperature", "value": 40.0, "unit": "°C"}},
+        {"role": "control", "condition": None},
+        {"role": "treatment", "condition": {"factor": "salt", "value": 2.5, "unit": "g/L"}},
+    ]
+    assert [g.label for g in condition_groups(vessels).values()] == ["Control", "Treatment: 40", "Treatment: 2.5"]
