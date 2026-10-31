@@ -155,3 +155,15 @@ def test_a_hand_in_view_is_a_quality_moment(db, records):
     moments = collect_moments(replace(records, events=[*records.events, hand]))
     assert Moment(3000.0, "quality", "Hand in view") in moments
     assert not any(x.kind == "intervention" and x.t == 3000.0 for x in moments)
+
+
+def test_a_run_with_no_time_span_still_plays_thirty_seconds():
+    """One frame, or every frame at the same t: the chapter is a still held long enough (review, Important 1)."""
+    chapters = plan_chapters([m("intervention", 0)], 0, 0, pace=1.0)
+    assert TITLE_S + END_S + sum(c.seconds for c in chapters) == pytest.approx(MIN_S)
+
+
+def test_a_moment_after_the_last_frame_is_held_at_the_end():
+    chapters = plan_chapters([m("intervention", 1800 + 5 * 600)], 0, 1800, pace=600)
+    assert all(c.seconds > 0 and c.t_from <= c.t_to <= 1800 for c in chapters)
+    assert TITLE_S + END_S + sum(c.seconds for c in chapters) == pytest.approx(MIN_S)

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import statistics
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Literal
 
 from argus.domain import EventKind
@@ -128,7 +128,8 @@ def _merge(moments: Sequence[Moment], t0: float, t1: float, pace: float) -> list
 def plan_chapters(moments: Sequence[Moment], t0: float, t1: float, pace: float) -> list[Chapter]:
     if not moments:
         return [Chapter(t0, t1, MIN_S - TITLE_S - END_S, [])]
-    kept = sorted(moments, key=lambda x: x.t)
+    # A moment logged after the last frame (or before the first) is shown at the frame nearest it.
+    kept = sorted((replace(x, t=min(max(x.t, t0), t1)) for x in moments), key=lambda x: x.t)
     chapters = _merge(kept, t0, t1, pace)
     while TITLE_S + END_S + sum(c.seconds for c in chapters) > MAX_S and len(kept) > 1:
         # The lowest-ranked moment goes first; among equals, the latest (earlier moments rank higher).
@@ -136,9 +137,11 @@ def plan_chapters(moments: Sequence[Moment], t0: float, t1: float, pace: float) 
         kept.pop(drop)
         chapters = _merge(kept, t0, t1, pace)
     playing = sum(c.seconds for c in chapters)
-    if TITLE_S + END_S + playing < MIN_S and playing > 0:
-        stretch = (MIN_S - TITLE_S - END_S) / playing
-        chapters = [Chapter(c.t_from, c.t_to, c.seconds * stretch, c.moments) for c in chapters]
+    room = MIN_S - TITLE_S - END_S
+    if playing == 0:  # one frame, or every frame at the same t: each chapter is a still, held for its share
+        chapters = [Chapter(c.t_from, c.t_to, room / len(chapters), c.moments) for c in chapters]
+    elif TITLE_S + END_S + playing < MIN_S:
+        chapters = [Chapter(c.t_from, c.t_to, c.seconds * room / playing, c.moments) for c in chapters]
     return chapters
 
 

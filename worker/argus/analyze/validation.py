@@ -83,10 +83,11 @@ def counting(db: Database, recipe: Recipe, run: Run) -> list[str]:
             continue
         rows = repos.measurements_for_run(db, run.id, metric=metric)
         unit = rows[0].unit if rows else ""
-        frames = sum(v.frames for v in result.vessels)
+        pairs = sum(v.frames for v in result.vessels)  # each vessel's readings that have a label at their time
+        vessels = sum(v.frames > 0 for v in result.vessels)
         found.append(
-            f"{metric}: mean absolute error {result.mean_abs_diff:.2f} {unit}, "
-            f"exact on {result.exact_share:.0%} of {frames} frames"
+            f"{metric}: mean absolute error {result.mean_abs_diff:.2f} {unit}, exact on {result.exact_share:.0%} "
+            f"of {pairs} paired readings across {vessels} {'vessel' if vessels == 1 else 'vessels'}"
         )
     return found
 

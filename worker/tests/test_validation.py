@@ -86,7 +86,7 @@ def test_counting_against_labels(db, recipes, run):
     repos.add_reference_values(db, run.id, labels)
     # A reads 1.2 and 0.8 in turn against labels of 1.0: off by 0.2 each time, within half a unit of every label.
     assert results(db, recipes, run, "Counting against labels") == [
-        "delta_e: mean absolute error 0.20 dE00, exact on 100% of 12 frames"
+        "delta_e: mean absolute error 0.20 dE00, exact on 100% of 12 paired readings across 1 vessel"
     ]
 
 

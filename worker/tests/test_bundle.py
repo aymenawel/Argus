@@ -10,7 +10,7 @@ import pytest
 
 from argus.config import REPO_ROOT, load_settings
 from argus.domain import RunStatus
-from argus.export.bundle import BundleRefused, export_bundle
+from argus.export.bundle import BundleRefused, export_bundle, public_run_view
 from argus.export.paths import bundle_file
 from argus.export.thinning import thin_frames
 from argus.recipes.loader import load_all
@@ -87,7 +87,9 @@ def test_each_recorded_response_equals_the_live_response(db, tmp_path, settings,
             live = client.get(path, params=params)
             body = live.json()
             if path == f"/api/experiments/{run.experiment_id}/runs":
-                body = [r for r in body if r["run"]["id"] == run.id]
+                body = [public_run_view(r) for r in body if r["run"]["id"] == run.id]
+            elif path == f"/api/runs/{run.id}":
+                body = public_run_view(body)
             recorded = json.loads(file.read_text(encoding="utf-8"))
             if live.status_code == 200:
                 assert recorded == body, path
@@ -206,3 +208,15 @@ def test_media_states_are_recorded_and_made_videos_copied(db, tmp_path, settings
     assert json.loads((bundle / "manifest.json").read_text("utf-8"))["media"] == ["timelapse.mp4"]
     recorded = json.loads((bundle / "api" / "runs" / run.id / "media.json").read_text("utf-8"))
     assert recorded["timelapse"]["state"] == "ready" and recorded["reel"] == {"state": "none"}
+
+
+def test_local_paths_never_reach_the_public_bundle(db, tmp_path, settings, recipes):
+    """A run's source names files on this laptop, under the user's own folder: the replay keeps only their names."""
+    clip = r"C:\Users\someone\Videos\dye run.mp4"
+    run = finished_run(db, tmp_path / "data", paths=[clip, "/home/someone/clips/b.mp4"])
+    bundle = export(db, settings, recipes, run, tmp_path)
+    for file in (bundle / "api").rglob("*.json"):
+        text = file.read_text(encoding="utf-8")
+        assert "someone" not in text, file
+    view = json.loads((bundle / "api" / "runs" / f"{run.id}.json").read_text("utf-8"))
+    assert view["run"]["source"]["paths"] == ["dye run.mp4", "b.mp4"]

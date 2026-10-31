@@ -66,13 +66,14 @@ def finished_run(
     status: RunStatus = RunStatus.FINISHED,
     size: tuple[int, int] = (640, 480),
     readings: bool = True,
+    paths: list[str] | None = None,
 ) -> Run:
     """A colour-change run of two glasses: A (control) stays flat, B (warm water) darkens along a logistic. Frames are
     grey JPEGs under data_dir; the dye goes in at frame 2 and B's change is detected at frame 4."""
     experiment = repos.create_experiment(db, "Dye in warm and room water", "colour-reaction", 1)
     kind = SourceKind.IMAGES if provenance else SourceKind.VIDEO
     run = repos.create_run(
-        db, experiment.id, RunMode.IMPORTED, RunSource(kind=kind, paths=["run.mp4"], provenance=provenance)
+        db, experiment.id, RunMode.IMPORTED, RunSource(kind=kind, paths=paths or ["run.mp4"], provenance=provenance)
     )
     square = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]
     control, treatment = repos.add_vessels(

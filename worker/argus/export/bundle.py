@@ -14,7 +14,7 @@ import re
 import shutil
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 import cv2
@@ -54,6 +54,18 @@ class NoModels:
             raise RuntimeError("the bundle exporter never calls a model")
 
         return refuse
+
+
+def public_run_view(view: dict) -> dict:
+    """A run's view as the public replay shows it: its source files by name only, never this laptop's folders (the
+    user's own name is often one of them). The UI never reads them; the names say what was imported."""
+    source = view["run"]["source"]
+    public = {
+        **source,
+        "paths": [PureWindowsPath(p).name for p in source.get("paths") or []],
+        "manifest": PureWindowsPath(source["manifest"]).name if source.get("manifest") else None,
+    }
+    return {**view, "run": {**view["run"], "source": public}}
 
 
 def source_label(run: Run) -> str:
@@ -139,9 +151,11 @@ def _build(
     experiment_path, run_path = f"/api/experiments/{run.experiment_id}", f"/api/runs/{run.id}"
     writer.record(experiment_path)
     detail = writer.record(f"{experiment_path}/recipe/detail")
-    writer.record(f"{experiment_path}/runs", keep=lambda runs: [r for r in runs if r["run"]["id"] == run.id])
+    writer.record(
+        f"{experiment_path}/runs", keep=lambda runs: [public_run_view(r) for r in runs if r["run"]["id"] == run.id]
+    )
     writer.record(f"{experiment_path}/plan")
-    writer.record(run_path)
+    writer.record(run_path, keep=public_run_view)
     timeline = writer.record(f"{run_path}/timeline")
     notes = writer.record(f"{run_path}/notes")
     verdict = writer.record(f"{run_path}/verdict")

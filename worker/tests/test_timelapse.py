@@ -104,3 +104,9 @@ def test_a_reel_of_a_finished_run(db, tmp_path, settings, recipes):
     probe = ffprobe(out)
     assert (probe.width, probe.height) == (1920, 1080) and 30 - 0.2 <= probe.duration <= 60 + 0.2
     assert logged_functions(db) == []
+
+
+def test_a_reel_of_a_one_frame_run_is_still_thirty_seconds(db, tmp_path, settings, recipes):
+    run = finished_run(db, tmp_path / "data", frames=1)
+    probe = ffprobe(make_reel(db, settings, recipes, run.id, fps=2))
+    assert 30 - 0.2 <= probe.duration <= 60 + 0.2

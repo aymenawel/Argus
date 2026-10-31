@@ -51,8 +51,9 @@ cd worker && uv sync && cd ../web && npm ci && cd ..
 cd worker && uv run python -m argus dev
 ```
 
-The worker runs on http://localhost:8000 and the app on http://localhost:3000. Without a key, Argus still watches
-and measures, and code writes the next run's reasons; notes, verdicts and recipe drafts are off.
+The worker runs on http://localhost:8000 and the app on http://localhost:3000. Measuring needs `MODEL_API_KEY`:
+SAM 3.1 runs through the Meta Model API. The public replay needs no key, and neither does making videos or bundles of
+runs already recorded, or printing the validation table.
 
 ### Videos, the replay and the validation table
 
@@ -66,7 +67,7 @@ uv run python -m argus validation --runs RUN_ID # the table below
 ```
 
 The Videos card on Results makes the same videos. `web/scripts/deploy-replay.sh` deploys the replay to Vercel.
-Videos and bundles are made from stored records only: no model is called and nothing is recomputed.
+Videos and bundles are made from stored records only, with the same fitted curves Results shows; no model is called.
 
 ## Validation
 
@@ -78,7 +79,7 @@ pasted unedited. A check with nothing stored behind it says "not measured yet".
 | Scale | Rye vs pearl millet (Genze plate, speed) (run_9334d302e075) | dish rims at the dataset's stated 85 mm diameter · 0.145 ± 0.007 mm/px |
 | Noise floor | Rye vs pearl millet (Genze plate, speed) (run_9334d302e075) | germinated_count: 0 count (still period) |
 | Noise floor | Rye vs pearl millet (Genze plate, speed) (run_9334d302e075) | seed_area: 4.1 mm2 (still period) |
-| Counting against labels | Rye vs pearl millet (Genze plate, speed) (run_9334d302e075) | germinated_count: mean absolute error 1.50 count, exact on 35% of 564 frames |
+| Counting against labels | Rye vs pearl millet (Genze plate, speed) (run_9334d302e075) | germinated_count: mean absolute error 1.50 count, exact on 35% of 564 paired readings across 6 vessels |
 | Events caught | Rye vs pearl millet (Genze plate, speed) (run_9334d302e075) | not measured yet |
 | Claim checker | Rye vs pearl millet (Genze plate, speed) (run_9334d302e075) | 1 accepted first try, 2 after a retry, 1 written by code; 4 answers rejected: quantity in words ×7 |
 | Models | Rye vs pearl millet (Genze plate, speed) (run_9334d302e075) | SAM 95 of 95 calls succeeded · spend $0.71 |
