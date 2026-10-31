@@ -151,6 +151,7 @@ def _build(
         writer.record(f"{run_path}/fits", f"metric={metric['id']}")
         writer.record(f"{run_path}/agreement", f"metric={metric['id']}")
     writer.record(f"{run_path}/next-run")
+    writer.record(f"{run_path}/media")  # the Videos card: in the replay it offers the copies below for download
 
     thinning = thin_frames(
         [(f["id"], f["t"]) for f in timeline["frames"]], _cited_t(timeline, notes, verdict), max_frames

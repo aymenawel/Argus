@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from argus.api.app import create_app
 from argus.api.events import EventBroker
 from argus.config import REPO_ROOT, load_settings
+from argus.media.jobs import MediaJobs
 from argus.pipeline.jobs import RunJobs
 from argus.pipeline.live import CameraHub
 from argus.recipes.loader import load_all
@@ -19,12 +20,14 @@ from tests.test_import import FakeSegmenter
 
 
 @contextmanager
-def api_client(db, tmp_path, *, reasoner=None, env=None) -> Iterator[TestClient]:
+def api_client(db, tmp_path, *, reasoner=None, env=None, media_makers=None) -> Iterator[TestClient]:
+    """`media_makers` replaces the video makers (kind → function), so the media routes can be tested quickly."""
     settings = load_settings({"ARGUS_DATA_DIR": str(tmp_path / "data"), **(env or {})})
     broker, recipes = EventBroker(), load_all(REPO_ROOT / "recipes")
     hub = CameraHub(opener=fake_opener)
     jobs = RunJobs(db, broker, settings, recipes, hub, segmenter=FakeSegmenter(), reasoner=reasoner)
-    with TestClient(create_app(settings, db, broker, recipes, jobs=jobs, hub=hub)) as client:
+    media = MediaJobs(db, settings, recipes, makers=media_makers) if media_makers is not None else None
+    with TestClient(create_app(settings, db, broker, recipes, jobs=jobs, hub=hub, media=media)) as client:
         yield client
 
 

@@ -15,6 +15,7 @@ from argus.export.paths import bundle_file
 from argus.export.thinning import thin_frames
 from argus.recipes.loader import load_all
 from argus.storage import repos
+from argus.storage.files import RunFiles
 from tests.api_client import api_client, logged_functions
 from tests.records import PROVENANCE, finished_run
 
@@ -193,3 +194,15 @@ def test_a_thinned_manifest_says_so(db, tmp_path, settings, recipes):
         "scale": 1.0,
     }
     assert len(manifest["frame_map"]) == 1000
+
+
+def test_media_states_are_recorded_and_made_videos_copied(db, tmp_path, settings, recipes):
+    run = finished_run(db, tmp_path / "data")
+    made = RunFiles(settings.data_dir, run.experiment_id, run.id).media_path("timelapse")
+    made.parent.mkdir(parents=True)
+    made.write_bytes(b"\x00" * 4096)
+    bundle = export(db, settings, recipes, run, tmp_path)
+    assert (bundle / "timelapse.mp4").read_bytes() == made.read_bytes() and not (bundle / "reel.mp4").exists()
+    assert json.loads((bundle / "manifest.json").read_text("utf-8"))["media"] == ["timelapse.mp4"]
+    recorded = json.loads((bundle / "api" / "runs" / run.id / "media.json").read_text("utf-8"))
+    assert recorded["timelapse"]["state"] == "ready" and recorded["reel"] == {"state": "none"}

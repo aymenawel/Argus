@@ -466,3 +466,15 @@ export type RunCreate = {
 export type FrameRequest = { camera_index?: number; path?: string; video_s?: number };
 
 export type VesselProposal = { roi: [number, number][]; confidence: number | null };
+
+// ---- Videos (spec §10) ----
+
+export type MediaKind = "timelapse" | "reel";
+
+export type MediaState =
+  | { state: "none" }
+  | { state: "running"; progress: number }
+  | { state: "ready"; size_bytes: number; made_at: string }
+  | { state: "failed"; reason: string };
+
+export type MediaView = Record<MediaKind, MediaState>;

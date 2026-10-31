@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from argus.api.cameras import register_camera_routes
 from argus.api.events import EventBroker, event_stream
+from argus.api.media import register_media_routes
 from argus.api.next_run import register_next_run_routes
 from argus.api.notes import register_note_routes
 from argus.api.preferences import register_preference_routes
@@ -22,6 +23,7 @@ from argus.api.runs import register_run_routes
 from argus.api.setup import register_setup_routes
 from argus.config import Settings, load_settings
 from argus.domain import Experiment, PlanDraft
+from argus.media.jobs import MediaJobs
 from argus.pipeline.jobs import RunJobs
 from argus.pipeline.live import CameraHub
 from argus.preferences import active_provider
@@ -107,6 +109,7 @@ def create_app(
     *,
     jobs: RunJobs | None = None,
     hub: CameraHub | None = None,
+    media: MediaJobs | None = None,
     close_db_on_shutdown: bool = False,
 ) -> FastAPI:
     hub = hub or CameraHub()
@@ -245,6 +248,7 @@ def create_app(
     register_results_routes(app, db=db, recipes=recipes)
     register_next_run_routes(app, db=db, settings=settings, jobs=jobs, recipes=recipes)
     register_camera_routes(app, hub=hub)
+    register_media_routes(app, db=db, media=media or MediaJobs(db, settings, recipes))
     return app
 
 

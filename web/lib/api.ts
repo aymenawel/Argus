@@ -4,6 +4,8 @@ import type {
   Experiment,
   FitsView,
   FrameRequest,
+  MediaKind,
+  MediaView,
   NextRun,
   Note,
   NotesView,
@@ -225,6 +227,24 @@ export function getNextRun(runId: string): Promise<NextRun | null> {
 /** A new suggestion: code's numbers, explained by Muse Wonder (409 while the run is still going). */
 export function suggestNextRun(runId: string): Promise<NextRun> {
   return request(`${runPath(runId)}/next-run`, send("POST"));
+}
+
+// ---- Videos ----
+
+/** Each video's state: none, being made (with progress), ready (size and time) or failed (why). */
+export function getMedia(runId: string): Promise<MediaView> {
+  return request(`${runPath(runId)}/media`);
+}
+
+/** Starts making it in the background; a 409 says why not (the run is still going, one is being made). */
+export function makeMedia(runId: string, kind: MediaKind): Promise<MediaView[MediaKind]> {
+  return request(`${runPath(runId)}/media/${kind}`, send("POST"));
+}
+
+/** The video file: from the worker, or from the run's bundle in the public replay. */
+export function mediaUrl(runId: string, kind: MediaKind): string {
+  if (isReplay()) return `/bundles/${encodeURIComponent(runId)}/${kind}.mp4`;
+  return `${apiBase()}${runPath(runId)}/media/${kind}.mp4`;
 }
 
 // ---- Preferences ----

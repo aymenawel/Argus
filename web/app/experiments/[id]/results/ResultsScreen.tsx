@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { CurveChart } from "@/components/results/CurveChart";
 import { FitTable } from "@/components/results/FitTable";
 import { NextRunCard } from "@/components/results/NextRunCard";
+import { VideosCard } from "@/components/results/VideosCard";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Panel } from "@/components/ui/Panel";
@@ -286,6 +287,10 @@ export function ResultsScreen({ experimentId }: { experimentId?: string } = {}) 
 
       <Panel title="Next run" className={styles.panel}>
         <NextRunCard runId={view.run.id} running={view.running} />
+      </Panel>
+
+      <Panel title="Videos" className={styles.panel}>
+        <VideosCard runId={view.run.id} />
       </Panel>
     </>
   );

@@ -1,0 +1,71 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Name and what it is, then its state, then what can be done; stacked on phones. */
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 12px 14px;
+  border-radius: var(--r-tile);
+  background: var(--raised);
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+}
+
+.about {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.status {
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.download {
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.download:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.error {
+  grid-column: 1 / -1;
+  color: var(--neg);
+  font-size: var(--fs-sm);
+}
+
+.none {
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
