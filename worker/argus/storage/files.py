@@ -1,4 +1,4 @@
-"""Where a run's files live: data/<experiment>/<run>/{frames,masks,crops}/ (spec §5)."""
+"""Where a run's files live: data/<experiment>/<run>/{frames,masks,crops,media}/ (spec §5)."""
 
 from __future__ import annotations
 
@@ -27,3 +27,7 @@ class RunFiles:
 
     def crop_path(self, label: str, concept: str) -> Path:
         return self._in("crops", f"{_slug(label)}-{_slug(concept.lower())}.mp4")
+
+    def media_path(self, kind: str) -> Path:
+        """The run's timelapse or reel. Its folder is made by whoever writes it, so looking never creates one."""
+        return self.root / "media" / f"{kind}.mp4"

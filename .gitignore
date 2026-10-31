@@ -30,3 +30,8 @@ Thumbs.db
 
 # Design tool working files
 .taste-skill/
+
+# Public replay (D-83): bundles hold third-party frames and reach Vercel only in the prebuilt output
+web/public/bundles/
+web/.vercel/
+web/.next-replay/

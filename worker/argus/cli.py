@@ -3,6 +3,7 @@
 uv run python -m argus dev              start the worker API and the web app together
 uv run python -m argus run FILE.json    start a run described in a JSON file (the worker must be running)
 uv run python -m argus card --out PATH  export the printable Argus Card sheet
+uv run python -m argus export-bundle RUN_ID   bundle a finished run for the public replay (web/public/bundles)
 """
 
 from __future__ import annotations
@@ -131,6 +132,45 @@ def post_run(path: Path, api: str) -> int:
     return 0
 
 
+def git_commit(repo: Path) -> str | None:
+    try:
+        result = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=repo, capture_output=True, text=True)
+    except OSError:
+        return None
+    return result.stdout.strip() or None if result.returncode == 0 else None
+
+
+def export_bundle_command(run_id: str, out: Path, max_frames: int) -> int:
+    from argus.config import load_settings
+    from argus.export.bundle import BundleRefused, export_bundle
+    from argus.recipes.loader import load_all
+    from argus.storage.db import Database
+
+    settings = load_settings()
+    db = Database(settings.data_dir / "argus.sqlite")
+    try:
+        folder = export_bundle(
+            db,
+            settings,
+            load_all(settings.recipes_dir),
+            run_id,
+            out,
+            commit=git_commit(REPO_ROOT),
+            max_frames=max_frames,
+        )
+    except BundleRefused as refused:
+        print(f"Not bundled: {refused}", file=sys.stderr)
+        return 1
+    finally:
+        db.close()
+    size = sum(f.stat().st_size for f in folder.rglob("*") if f.is_file())
+    manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
+    print(f"{folder} · {size / 1_000_000:.1f} MB · {manifest['frames']['shown']} frames")
+    if manifest["frames"]["note"]:
+        print(manifest["frames"]["note"])
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="argus", description="Argus command line")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -144,12 +184,18 @@ def main(argv: list[str] | None = None) -> int:
     dataset.add_argument("name", choices=["genze"], help="the dataset")
     dataset.add_argument("--zip", type=Path, required=True, help="the dataset's archive, as downloaded")
     dataset.add_argument("--out", type=Path, required=True, help="folder for the plate's frames and manifest.json")
+    bundle = sub.add_parser("export-bundle", help="bundle a finished run for the public replay (D-83)")
+    bundle.add_argument("run_id", help="the run to bundle; it must have finished or been stopped")
+    bundle.add_argument("--out", type=Path, default=REPO_ROOT / "web" / "public" / "bundles", help="bundles folder")
+    bundle.add_argument("--max-frames", type=int, default=400, help="thin to about this many frames (default 400)")
     args = parser.parse_args(argv)
 
     if args.command == "dev":
         return run_dev(REPO_ROOT)
     if args.command == "run":
         return post_run(args.file, args.api)
+    if args.command == "export-bundle":
+        return export_bundle_command(args.run_id, args.out, args.max_frames)
     if args.command == "dataset":
         from argus.datasets import genze
 

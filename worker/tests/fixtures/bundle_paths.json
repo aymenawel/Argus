@@ -1,0 +1,16 @@
+[
+  { "path": "/api/runs/run_1", "query": "", "file": "api/runs/run_1.json" },
+  { "path": "/api/runs/run_1/fits", "query": "metric=delta_e", "file": "api/runs/run_1/fits__metric=delta_e.json" },
+  { "path": "/api/experiments/exp_1/recipe/detail", "query": "", "file": "api/experiments/exp_1/recipe/detail.json" },
+  {
+    "path": "/api/runs/run_1/frames/frm_9/detections",
+    "query": "",
+    "file": "api/runs/run_1/frames/frm_9/detections.json"
+  },
+  {
+    "path": "/api/runs/run_1/agreement",
+    "query": "metric=sprouted",
+    "file": "api/runs/run_1/agreement__metric=sprouted.json"
+  },
+  { "path": "/api/runs/run_1/x", "query": "b=2&a=1", "file": "api/runs/run_1/x__a=1&b=2.json" }
+]
