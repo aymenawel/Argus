@@ -9,8 +9,8 @@
 **What counts as a real change.** A difference in area or spreading rate between conditions that holds over several readings and is larger than the spread between dishes of the same condition. With one dish per condition, say that the difference may be dish-to-dish variation.
 
 **Rival explanations and their checks.**
-- Temperature: dishes nearer a heat source spread faster; compare dishes placed side by side.
-- Agar drying: drier agar slows swarming; dishes poured at different times differ.
+- Temperature: dishes nearer a heat source spread faster.
+- Agar drying: drier agar slows swarming.
 - Inoculum size: a bigger starting drop starts a bigger colony; compare the first readings.
 - Position on the plate: light and warmth differ across a scanner or incubator shelf.
 - Plate batch: agar from one pour varies; replicate dishes per condition matter more than any single dish.
