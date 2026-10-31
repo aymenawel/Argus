@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { playhead, usePlayhead } from "@/lib/playhead";
+import { useReadOnly } from "@/lib/replay";
 import type { RunSnapshot } from "@/lib/run-source";
 import { NoteCard } from "./NoteCard";
 import { NoteComposer } from "./NoteComposer";
@@ -9,6 +10,7 @@ import styles from "./Feed.module.css";
 
 // The run's notes, newest first, up to the playhead's moment like everything else on the Run view (spec §9.3).
 export function Feed({ snapshot }: { snapshot: RunSnapshot }) {
+  const readOnly = useReadOnly();
   const t = usePlayhead((p) => p.t);
   const follow = usePlayhead((p) => p.follow);
   const span = snapshot.frames.at(-1)?.t ?? 0;
@@ -22,7 +24,7 @@ export function Feed({ snapshot }: { snapshot: RunSnapshot }) {
 
   return (
     <div className={styles.feed}>
-      <NoteComposer runId={snapshot.view.run.id} span={span} live={snapshot.view.running} />
+      {!readOnly && <NoteComposer runId={snapshot.view.run.id} span={span} live={snapshot.view.running} />}
       {later > 0 && (
         <button type="button" className={styles.later} onClick={() => playhead.followLive()}>
           {later} later {later === 1 ? "note" : "notes"} · show all
@@ -46,7 +48,9 @@ export function Feed({ snapshot }: { snapshot: RunSnapshot }) {
         <p className={styles.empty}>
           {later > 0
             ? "No notes before this moment."
-            : "No notes yet. Argus notes what happens and sums up the run at checkpoints; add your own above."}
+            : readOnly
+              ? "No notes on this run."
+              : "No notes yet. Argus notes what happens and sums up the run at checkpoints; add your own above."}
         </p>
       )}
       {snapshot.rejected > 0 && (

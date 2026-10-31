@@ -103,6 +103,8 @@ def test_frames_are_shrunk_never_enlarged(db, tmp_path, settings, recipes):
         f.id: cv2.imread(str(bundle / "frames" / f"{f.id}.jpg")).shape[:2] for f in repos.frames_for_run(db, run.id)
     }
     assert sizes[big.id] == (960, 1280)
+    # Outlines and regions are in the original frame's pixels: the replay scales the shown frame back by this.
+    assert json.loads((bundle / "manifest.json").read_text("utf-8"))["frames"]["scale"] == 1.25
     assert all(shape == (480, 640) for frame_id, shape in sizes.items() if frame_id != big.id)
 
 
@@ -171,7 +173,7 @@ def test_manifest_labels_published_data_with_its_credit(db, tmp_path, settings, 
         PROVENANCE.licence,
         PROVENANCE.url,
     )
-    assert manifest["frames"] == {"total": 12, "shown": 12, "note": None} and manifest["media"] == []
+    assert manifest["frames"] == {"total": 12, "shown": 12, "note": None, "scale": 1.0} and manifest["media"] == []
     imported = finished_run(db, tmp_path / "data")
     manifest = json.loads((export(db, settings, recipes, imported, tmp_path) / "manifest.json").read_text("utf-8"))
     assert manifest["source_label"] == "imported recording" and manifest["credit"] is None
@@ -188,5 +190,6 @@ def test_a_thinned_manifest_says_so(db, tmp_path, settings, recipes):
         "total": 1000,
         "shown": shown,
         "note": f"1 frame in {round(1000 / shown)} shown; measurements use all 1,000 frames",
+        "scale": 1.0,
     }
     assert len(manifest["frame_map"]) == 1000

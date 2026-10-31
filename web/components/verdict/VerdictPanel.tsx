@@ -5,6 +5,7 @@ import { VerdictChip } from "@/components/ui/VerdictChip";
 import { AgreementTable } from "./AgreementTable";
 import { Button } from "@/components/ui/Button";
 import { ApiError, askVerdict, getPlans, getReviews, postReview } from "@/lib/api";
+import { useReadOnly } from "@/lib/replay";
 import type { RunSnapshot } from "@/lib/run-source";
 import type { Check, Plan, Review, Verdict, VerdictLevel } from "@/lib/types";
 import styles from "./VerdictPanel.module.css";
@@ -57,6 +58,7 @@ type Props = { snapshot: RunSnapshot };
 export function VerdictPanel({ snapshot }: Props) {
   const { run, running } = snapshot.view;
   const verdict = snapshot.verdict;
+  const readOnly = useReadOnly();
   const [plans, setPlans] = useState<Plan[] | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [asking, setAsking] = useState(false);
@@ -115,20 +117,29 @@ export function VerdictPanel({ snapshot }: Props) {
             retrospective={verdict.body.retrospective ?? false}
           />
         ) : (
-          <p className={styles.none}>No verdict yet.</p>
+          <p className={styles.none}>{readOnly ? "No verdict was asked for this run." : "No verdict yet."}</p>
         )}
-        <Button variant={verdict ? "secondary" : "primary"} disabled={blocked !== null || asking} onClick={ask}>
-          {asking ? "Judging… (about a minute)" : verdict ? "Ask again" : "Get a verdict"}
-        </Button>
+        {!readOnly && (
+          <Button variant={verdict ? "secondary" : "primary"} disabled={blocked !== null || asking} onClick={ask}>
+            {asking ? "Judging… (about a minute)" : verdict ? "Ask again" : "Get a verdict"}
+          </Button>
+        )}
       </div>
-      {blocked && plans !== null && <p className={styles.hint}>{blocked}</p>}
+      {blocked && plans !== null && !readOnly && <p className={styles.hint}>{blocked}</p>}
       {error && (
         <p className={styles.error} role="alert">
           {error}
         </p>
       )}
 
-      {verdict && <Body verdict={verdict} resolved={resolved} onResolve={setResolving} />}
+      {verdict && (
+        <Body
+          verdict={verdict}
+          resolved={resolved}
+          onResolve={readOnly ? undefined : setResolving}
+          readOnly={readOnly}
+        />
+      )}
 
       {run.source.provenance && plan?.metric && (
         <AgreementTable runId={run.id} metric={plan.metric} refresh={`${running}-${verdict?.id}`} />
@@ -171,11 +182,17 @@ export function VerdictPanel({ snapshot }: Props) {
         </form>
       )}
 
-      {verdict && (
+      {verdict && (decided || !readOnly) && (
         <div className={styles.review}>
           {decided ? (
             <p className={styles.decided}>
-              {decided.action === "confirm" ? "You confirmed this verdict." : "You dismissed this verdict."}
+              {decided.action === "confirm"
+                ? readOnly
+                  ? "The researcher confirmed this verdict."
+                  : "You confirmed this verdict."
+                : readOnly
+                  ? "The researcher dismissed this verdict."
+                  : "You dismissed this verdict."}
             </p>
           ) : (
             <>
@@ -234,10 +251,12 @@ function Body({
   verdict,
   resolved,
   onResolve,
+  readOnly,
 }: {
   verdict: Verdict;
   resolved: Set<string>;
-  onResolve: (rival: string) => void;
+  onResolve?: (rival: string) => void; // absent in the replay: nothing can be marked
+  readOnly: boolean;
 }) {
   const b = verdict.body;
   const findings = b.findings ?? [];
@@ -255,10 +274,14 @@ function Body({
               <li key={r.name}>
                 <span className={styles.rivalName}>{r.name}</span>
                 <span className={styles.rivalStatus}>
-                  {resolved.has(r.name) ? "Resolved by you" : (RIVAL[r.status] ?? r.status)}
+                  {resolved.has(r.name)
+                    ? readOnly
+                      ? "Resolved by the researcher"
+                      : "Resolved by you"
+                    : (RIVAL[r.status] ?? r.status)}
                 </span>
                 {r.reason && <span className={styles.rivalReason}>{r.reason}</span>}
-                {r.status === "open" && !resolved.has(r.name) && (
+                {r.status === "open" && !resolved.has(r.name) && onResolve && (
                   <button type="button" className={styles.link} onClick={() => onResolve(r.name)}>
                     Mark resolved
                   </button>
@@ -266,7 +289,7 @@ function Body({
               </li>
             ))}
           </ul>
-          {b.rivals.some((r) => resolved.has(r.name)) && (
+          {!readOnly && b.rivals.some((r) => resolved.has(r.name)) && (
             <p className={styles.hint}>A rival you resolved counts from the next verdict: ask again.</p>
           )}
         </section>

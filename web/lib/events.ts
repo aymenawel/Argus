@@ -1,4 +1,5 @@
 import { apiBase } from "./api";
+import { isReplay } from "./replay.ts";
 
 // Server-sent event types the UI listens for. EventSource only delivers named events to listeners
 // registered by name, so each new type the worker publishes is added here.
@@ -22,6 +23,7 @@ export const EVENT_TYPES = [
  * or too much was missed) it sends `resync`, and the listener should reload what it shows.
  */
 export function subscribe(onEvent: (type: string, data: unknown) => void): () => void {
+  if (isReplay()) return () => {}; // a replay is a finished run: nothing new will happen
   const source = new EventSource(`${apiBase()}/api/events`);
   const handle = (event: MessageEvent<string>) => {
     let data: unknown;

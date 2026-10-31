@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { Mark } from "@/components/brand/Mark";
+import { isReplay } from "@/lib/replay";
 import styles from "./Rail.module.css";
 
 type NavItem = { href: string; label: string; icon: ReactNode };
@@ -70,6 +71,15 @@ const SETTINGS: NavItem = {
   ),
 };
 
+// The public replay (D-83) offers only its runs and the source code.
+const REPLAY: NavItem = { href: "/replay", label: "Replays", icon: MAIN[0].icon };
+const SOURCE = "https://github.com/aymenawel/Argus";
+const SOURCE_ICON = svg(
+  <>
+    <path d="M9 7l-5 5 5 5M15 7l5 5-5 5" />
+  </>,
+);
+
 function isActive(href: string, pathname: string) {
   if (href === "/") return pathname === "/" || pathname.startsWith("/experiments");
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -96,11 +106,24 @@ function RailNav({ pathname }: { pathname: string | null }) {
       <span className={styles.mark}>
         <Mark />
       </span>
-      {MAIN.map((item) => (
+      {(isReplay() ? [REPLAY] : MAIN).map((item) => (
         <RailLink key={item.href} item={item} pathname={pathname} />
       ))}
       <div className={styles.bottom}>
-        <RailLink item={SETTINGS} pathname={pathname} />
+        {isReplay() ? (
+          <a
+            href={SOURCE}
+            className={styles.item}
+            aria-label="Source on GitHub"
+            title="Source on GitHub"
+            target="_blank"
+            rel="noreferrer"
+          >
+            {SOURCE_ICON}
+          </a>
+        ) : (
+          <RailLink item={SETTINGS} pathname={pathname} />
+        )}
       </div>
     </nav>
   );

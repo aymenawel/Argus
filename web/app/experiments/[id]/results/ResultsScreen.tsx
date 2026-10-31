@@ -14,7 +14,7 @@ import { AgreementTable } from "@/components/verdict/AgreementTable";
 import { VerdictChecks, judgedPlan } from "@/components/verdict/VerdictPanel";
 import {
   ApiError,
-  apiBase,
+  errorText,
   getExperiment,
   getExperimentRecipeDetail,
   getFits,
@@ -22,6 +22,8 @@ import {
   getRuns,
   getVerdict,
 } from "@/lib/api";
+import { homeLink, runHref } from "@/lib/links";
+import { useReadOnly } from "@/lib/replay";
 import type { Experiment, FitsView, Plan, RecipeDetail, RunView, Verdict } from "@/lib/types";
 import styles from "./page.module.css";
 
@@ -54,8 +56,12 @@ function finding(fits: FitsView): string {
 
 // One run's results in one place (phase 4): each vessel's readings with its fitted curve, the half-way times and
 // rates with ±, and the verdict. Every number is the worker's; the page only draws and rounds.
-export function ResultsScreen() {
-  const { id } = useParams<{ id: string }>();
+/** `experimentId` is given by the replay's routes, whose URL names the run instead. */
+export function ResultsScreen({ experimentId }: { experimentId?: string } = {}) {
+  const params = useParams<{ id: string }>();
+  const id = experimentId ?? params.id;
+  const readOnly = useReadOnly();
+  const home = homeLink();
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [attempt, setAttempt] = useState(0);
   const [runId, setRunId] = useState<string | null>(null);
@@ -112,9 +118,9 @@ export function ResultsScreen() {
   const title = load.state === "ready" || load.state === "empty" ? load.experiment.title : "Results";
   const crumb = (
     <>
-      <Link href="/">Experiments</Link>
+      <Link href={home.href}>{home.label}</Link>
       <span className={styles.faint}>/</span>
-      <Link href={`/experiments/${id}/run`}>{title}</Link>
+      <Link href={runId ? runHref(id, runId) : `/experiments/${id}/run`}>{title}</Link>
       <span className={styles.faint}>/</span>
       <span>Results</span>
     </>
@@ -135,11 +141,7 @@ export function ResultsScreen() {
         <PageHeader crumb={crumb} title={title} />
         <Panel className={styles.panel}>
           <div className={styles.message} role="alert">
-            <p className={styles.messageTitle}>
-              {load.error.status === 0
-                ? `Couldn't reach the Argus worker at ${apiBase()}.`
-                : `The Argus worker answered ${load.error.status}: ${load.error.detail}`}
-            </p>
+            <p className={styles.messageTitle}>{errorText(load.error)}</p>
             <Button
               onClick={() => {
                 setLoad({ state: "loading" });
@@ -254,6 +256,8 @@ export function ResultsScreen() {
       <Panel title="Verdict" className={styles.panel}>
         {verdict === undefined ? (
           <p className={styles.none}>Reading the verdict…</p>
+        ) : verdict === null && readOnly ? (
+          <p className={styles.none}>No verdict was asked for this run.</p>
         ) : verdict === null ? (
           <p className={styles.none}>
             No verdict on this run yet.{" "}

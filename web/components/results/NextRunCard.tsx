@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { ApiError, getNextRun, suggestNextRun } from "@/lib/api";
+import { useReadOnly } from "@/lib/replay";
 import type { NextRun } from "@/lib/types";
 import styles from "./NextRunCard.module.css";
 
@@ -13,6 +14,7 @@ const hours = (h: number) => `${h >= 10 ? h.toFixed(0) : h.toFixed(1)} h`;
 // The next run (D-80): replicates and run length computed in code from this run, the reasons written by Muse Wonder
 // through the claim checker (or by code). A suggestion, never a measurement: Argus doesn't start runs.
 export function NextRunCard({ runId, running }: Props) {
+  const readOnly = useReadOnly();
   const [loaded, setLoaded] = useState<{ runId: string; next: NextRun | null } | null>(null);
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +39,7 @@ export function NextRunCard({ runId, running }: Props) {
       .finally(() => setAsking(false));
   };
 
-  const button = (
+  const button = readOnly ? null : (
     <Button variant={next ? "secondary" : "primary"} disabled={running || asking} onClick={ask}>
       {asking ? "Suggesting… (about a minute)" : next ? "Suggest again" : "Suggest the next run"}
     </Button>
@@ -47,9 +49,11 @@ export function NextRunCard({ runId, running }: Props) {
     return (
       <div className={styles.card}>
         <p className={styles.none}>
-          {running
-            ? "The run is still going: the next run is suggested once it has ended."
-            : "No suggestion yet. Argus works out the replicates and run length from this run's spread and curves."}
+          {readOnly
+            ? "No next run was suggested for this run."
+            : running
+              ? "The run is still going: the next run is suggested once it has ended."
+              : "No suggestion yet. Argus works out the replicates and run length from this run's spread and curves."}
         </p>
         <div className={styles.actions}>{button}</div>
         {error && (

@@ -26,6 +26,7 @@ import type {
   Verdict,
   VesselProposal,
 } from "./types";
+import { activeBundle, bundleFile, isReplay, mapFramePath, replayFrameUrl } from "./replay.ts";
 
 // An empty NEXT_PUBLIC_ARGUS_API counts as unset, as it does for the worker's settings.
 export function apiBase(): string {
@@ -61,7 +62,43 @@ export function detailOf(body: unknown, fallback: string): string {
   return fallback;
 }
 
+/** What a screen says when a load failed: the worker's state live, the missing file in the replay. */
+export function errorText(error: ApiError): string {
+  if (isReplay()) return `The replay couldn't load: ${error.detail}.`;
+  return error.status === 0
+    ? `Couldn't reach the Argus worker at ${apiBase()}.`
+    : `The Argus worker answered ${error.status}: ${error.detail}`;
+}
+
+// In the public replay (D-83) a GET reads the answer the worker recorded into the run's bundle; nothing writes.
+async function replayRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  if ((init?.method ?? "GET") !== "GET") throw new ApiError(405, "This is a read-only replay");
+  const manifest = activeBundle();
+  if (manifest === null) throw new ApiError(404, "no replayed run is open");
+  const [route, query = ""] = path.split("?");
+  let file: string;
+  try {
+    file = bundleFile(mapFramePath(route, manifest), query);
+  } catch {
+    throw new ApiError(404, `${path} can't be in a replay`);
+  }
+  const url = `/bundles/${manifest.run_id}/${file}`;
+  let response: Response;
+  try {
+    response = await fetch(url, { cache: "no-store" });
+  } catch {
+    throw new ApiError(0, `${url} (the replay's files didn't load)`);
+  }
+  if (!response.ok) throw new ApiError(404, `${url} is missing from the replay`);
+  const body: unknown = await response.json().catch(() => null);
+  if (body && typeof body === "object" && "argus_recorded_error" in body) {
+    throw new ApiError(Number(body.argus_recorded_error), detailOf(body, "recorded error"));
+  }
+  return body as T;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  if (isReplay()) return replayRequest(path, init);
   let response: Response;
   try {
     response = await fetch(`${apiBase()}${path}`, {
@@ -132,6 +169,8 @@ export function stopRun(runId: string): Promise<RunView> {
 }
 
 export function frameUrl(runId: string, frameId: string, width?: number): string {
+  const manifest = isReplay() ? activeBundle() : null;
+  if (manifest !== null && manifest.run_id === runId) return replayFrameUrl(manifest, frameId); // one size in a bundle
   const path = `/api/runs/${encodeURIComponent(runId)}/frames/${encodeURIComponent(frameId)}.jpg`;
   return `${apiBase()}${path}${width ? `?w=${width}` : ""}`;
 }

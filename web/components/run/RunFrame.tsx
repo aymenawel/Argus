@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { playhead, usePlayhead } from "@/lib/playhead";
+import { activeBundle, originalSize } from "@/lib/replay";
 import { byVessel, regionAt } from "@/lib/run-data";
 import type { RunSnapshot, RunSource } from "@/lib/run-source";
 import { atOrBefore, formatRunTime } from "@/lib/scale";
@@ -58,6 +59,7 @@ export function RunFrame({ snapshot, source, mainMetric }: Props) {
   const shown = outlines && frame && outlines.frameId === frame.id ? outlines.items : [];
   const scaleNote = run.time_scale !== 1 ? ` · ×${run.time_scale}` : "";
   const provenance = run.source.provenance ?? null;
+  const thinned = activeBundle()?.frames.note ?? null; // a replay of a long run shows fewer frames than it measured
   const sourceNote =
     run.mode === "live"
       ? `Camera ${run.source.camera_index ?? 0}`
@@ -75,7 +77,7 @@ export function RunFrame({ snapshot, source, mainMetric }: Props) {
             className={styles.image}
             src={source.frameUrl(frame.id)}
             alt={`Frame at ${formatRunTime(frame.t, span)}`}
-            onLoad={(e) => setSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+            onLoad={(e) => setSize(originalSize(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight))}
           />
         ) : (
           <p className={styles.empty}>No analyzed frame yet</p>
@@ -144,6 +146,7 @@ export function RunFrame({ snapshot, source, mainMetric }: Props) {
         </div>
       </div>
       {provenance && <Credit provenance={provenance} />}
+      {thinned && <p className={styles.credit}>{thinned}</p>}
     </>
   );
 }

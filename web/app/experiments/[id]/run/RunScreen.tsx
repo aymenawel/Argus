@@ -12,9 +12,11 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Panel } from "@/components/ui/Panel";
-import { ApiError, apiBase, getExperiment, getExperimentRecipeDetail, getRuns, stopRun } from "@/lib/api";
+import { ApiError, errorText, getExperiment, getExperimentRecipeDetail, getRuns, stopRun } from "@/lib/api";
+import { homeLink, resultsHref } from "@/lib/links";
 import { playhead } from "@/lib/playhead";
 import { runNotice } from "@/lib/run-data";
+import { useReadOnly } from "@/lib/replay";
 import { LiveSource, type RunSnapshot } from "@/lib/run-source";
 import { formatRunTime } from "@/lib/scale";
 import type { Experiment } from "@/lib/types";
@@ -45,8 +47,12 @@ function finding(snapshot: RunSnapshot): string {
   return `Stopped at ${formatRunTime(last)} · ${count}`;
 }
 
-export function RunScreen() {
-  const { id } = useParams<{ id: string }>();
+/** `experimentId` is given by the replay's routes, whose URL names the run instead. */
+export function RunScreen({ experimentId }: { experimentId?: string } = {}) {
+  const params = useParams<{ id: string }>();
+  const id = experimentId ?? params.id;
+  const readOnly = useReadOnly();
+  const home = homeLink();
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [snapshot, setSnapshot] = useState<RunSnapshot | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -98,7 +104,7 @@ export function RunScreen() {
   const title = load.state === "ready" || load.state === "empty" ? load.experiment.title : "Run";
   const crumb = (
     <>
-      <Link href="/">Experiments</Link>
+      <Link href={home.href}>{home.label}</Link>
       <span className={styles.faint}>/</span>
       <span>{title}</span>
       {load.state === "ready" && (
@@ -116,11 +122,7 @@ export function RunScreen() {
         <PageHeader crumb={crumb} title={title} />
         <Panel className={styles.panel}>
           <div className={styles.message} role="alert">
-            <p className={styles.messageTitle}>
-              {load.error.status === 0
-                ? `Couldn't reach the Argus worker at ${apiBase()}.`
-                : `The Argus worker answered ${load.error.status}: ${load.error.detail}`}
-            </p>
+            <p className={styles.messageTitle}>{errorText(load.error)}</p>
             <Button
               onClick={() => {
                 setLoad({ state: "loading" });
@@ -169,10 +171,10 @@ export function RunScreen() {
             <>
               <Badge source={view.run.mode} provenance={view.run.source.provenance} />
               <span className={`${styles.spend} num`}>Spend ${view.spend_usd.toFixed(2)}</span>
-              <Link className={styles.resultsLink} href={`/experiments/${id}/results`}>
+              <Link className={styles.resultsLink} href={resultsHref(id, view.run.id)}>
                 Results
               </Link>
-              {view.running && (
+              {view.running && !readOnly && (
                 <Button
                   variant="primary"
                   disabled={stopping}

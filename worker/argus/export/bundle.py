@@ -102,19 +102,21 @@ def _cited_t(timeline: dict, notes: Any, verdict: Any) -> list[float]:
     return cited
 
 
-def _write_frame(source: Path, out: Path) -> None:
+def _write_frame(source: Path, out: Path) -> float:
+    """Write the frame at most LONG_SIDE_PX on its long side; returns how much it shrank (original / written)."""
     image = cv2.imdecode(np.frombuffer(source.read_bytes(), np.uint8), cv2.IMREAD_COLOR)
     if image is None:
         raise BundleRefused(f"a frame can't be read: {source}")
     height, width = image.shape[:2]
     scale = LONG_SIDE_PX / max(height, width)
-    if scale < 1:
+    if scale < 1:  # never enlarged
         image = cv2.resize(image, (round(width * scale), round(height * scale)), interpolation=cv2.INTER_AREA)
     ok, encoded = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
     if not ok:
         raise BundleRefused(f"a frame can't be encoded: {source}")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(encoded.tobytes())
+    return max(height, width) / max(image.shape[:2])
 
 
 def _thinning_note(thinning: Thinning) -> str | None:
@@ -154,9 +156,10 @@ def _build(
         [(f["id"], f["t"]) for f in timeline["frames"]], _cited_t(timeline, notes, verdict), max_frames
     )
     paths = {f.id: f.path for f in repos.frames_for_run(db, run.id)}
+    scales = []
     for frame_id in thinning.kept:
         writer.record(f"{run_path}/frames/{frame_id}/detections")
-        _write_frame(settings.data_dir / paths[frame_id], folder / "frames" / f"{frame_id}.jpg")
+        scales.append(_write_frame(settings.data_dir / paths[frame_id], folder / "frames" / f"{frame_id}.jpg"))
 
     files = RunFiles(settings.data_dir, run.experiment_id, run.id)
     media = []
@@ -179,7 +182,14 @@ def _build(
         "recorded": run.started_at.isoformat(),
         "exported_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "commit": commit,
-        "frames": {"total": len(thinning.frame_map), "shown": len(thinning.kept), "note": _thinning_note(thinning)},
+        "frames": {
+            "total": len(thinning.frame_map),
+            "shown": len(thinning.kept),
+            "note": _thinning_note(thinning),
+            # Regions and outlines are in the original frames' pixels: the replay multiplies a shown frame's size by
+            # this. One run's frames come from one source, so the first frame's factor holds for all of them.
+            "scale": round(scales[0], 6) if scales else 1.0,
+        },
         "frame_map": thinning.frame_map,
         "media": media,
         "verdict": verdict.get("verdict") if isinstance(verdict, dict) else None,

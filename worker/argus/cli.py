@@ -165,7 +165,7 @@ def export_bundle_command(run_id: str, out: Path, max_frames: int) -> int:
         db.close()
     size = sum(f.stat().st_size for f in folder.rglob("*") if f.is_file())
     manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
-    print(f"{folder} · {size / 1_000_000:.1f} MB · {manifest['frames']['shown']} frames")
+    print(f"{folder}  ({size / 1_000_000:.1f} MB, {manifest['frames']['shown']} frames)")
     if manifest["frames"]["note"]:
         print(manifest["frames"]["note"])
     return 0
