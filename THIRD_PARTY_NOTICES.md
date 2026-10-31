@@ -47,7 +47,7 @@ The command checks the archive's SHA-256 against the published file before using
 
 | Dataset | Credit | License | Used as |
 | --- | --- | --- | --- |
-| Engineered E. coli swarming for binary and analog input recording, time-lapse image datasets, v1.0 ([Zenodo](https://zenodo.org/records/19615229), doi:10.5281/zenodo.19615229) | Shaw M., Garg S., Kirby J., Schmidgall S., Liguori F., Doshi A., Tu T., Danino T. (2026) | CC BY 4.0 | Run 24-05-08 (pLac-gfp against pLac-fliA on 1, 0.1 and 0 mM IPTG): its 145 scans scaled to half size and levels stretched by Argus, the same stretch on every scan, so SAM can find the faint swarms (D-89) |
+| Engineered E. coli swarming for binary and analog input recording, time-lapse image datasets, v1.0 ([Zenodo](https://zenodo.org/records/19615229), doi:10.5281/zenodo.19615229) | Shaw M., Garg S., Kirby J., Schmidgall S., Liguori F., Doshi A., Tu T., Danino T. (2026) | CC BY 4.0 | Run 24-05-08 (pLac-gfp against pLac-fliA on 1, 0.1 and 0 mM IPTG): its 145 scans scaled to half size and levels stretched by Argus, the same stretch on every scan, so SAM can find the faint swarms (D-89). Analysed locally only: this run is not in the public replay |
 
 To rebuild those frames, download `24-05-08_tmlps_pLac-gfp-fliA_1-0,1-0mMi.zip` (4.2 GB, no login) from the Zenodo record into `data/datasets/swarming/`, then run from `worker/`:
 
