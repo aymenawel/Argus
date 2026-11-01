@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from typing import Any, Literal
 
 import cv2
@@ -26,10 +26,11 @@ from openai import AsyncOpenAI, Timeout
 
 from argus.config import Settings
 from argus.domain import ModelCallDraft
-from argus.segment.types import Clip, MaskPatch, Track, TrackFrame
+from argus.segment.types import Clip, MaskPatch, ObjectPrompt, Track, TrackFrame
 
 METADATA = {"mask_encoding": "one_bit", "include_confidence": "true"}
 JPEG_QUALITY = 90
+MAX_PROMPTS = 16  # SAM traces at most 16 prompted objects per request
 
 
 class SegmentError(RuntimeError):
@@ -50,6 +51,22 @@ SEGMENTER_OFF = "segmentation is off: MODEL_API_KEY is not set (SAM 3.1 runs thr
 def _check_concept(concept: str) -> None:
     if not concept.strip() or "," in concept or "+" in concept:
         raise ValueError(f"SAM takes exactly one concept per request, got {concept!r}")
+
+
+def prompt_tokens(prompts: Sequence[ObjectPrompt], width: int, height: int) -> str:
+    """Box prompts in SAM's token grammar, one object per prompt on frame 0 (KB 04): its box with inclusive corners,
+    then its point when it has one. Every token names the image's size."""
+    if not 0 < len(prompts) <= MAX_PROMPTS:
+        raise ValueError(f"SAM takes 1 to {MAX_PROMPTS} prompted objects per request, got {len(prompts)}")
+    size = f"w={width};h={height}"
+    objects = []
+    for number, prompt in enumerate(prompts, start=1):
+        x1, y1, x2, y2 = prompt.box
+        token = f"{number}<|box;x1={x1};y1={y1};x2={x2};y2={y2};{size}|>"
+        if prompt.point is not None:
+            token += f"<|point;x={prompt.point[0]};y={prompt.point[1]};{size}|>"
+        objects.append(token)
+    return "<0f>" + ",".join(objects)
 
 
 def _jpeg_url(image_bgr: np.ndarray) -> str:
@@ -123,11 +140,15 @@ async def segment(
     settings: Settings,
     roi: tuple[float, float, float, float] | None = None,
     client: Any = None,
+    prompts: Sequence[ObjectPrompt] = (),
 ) -> Any:
-    """Segment every instance of one concept. Returns a SegmentResult; raises SegmentError on failure."""
+    """Segment every instance of one concept, or, with `prompts`, the objects at those boxes (named `concept`).
+    Returns a SegmentResult; raises SegmentError on failure."""
     from argus.segment import SegmentResult  # the result type lives with the public entry point
 
     _check_concept(concept)
+    if prompts and (mode != "image" or roi is not None):
+        raise ValueError("box prompts are for a whole image in image mode, in its own pixels")
     dx = dy = 0
     if mode == "image":
         if not isinstance(media, np.ndarray):
@@ -138,7 +159,9 @@ async def segment(
             x0, y0 = max(int(roi[0]), 0), max(int(roi[1]), 0)
             x1, y1 = min(int(round(roi[2])), width), min(int(round(roi[3])), height)
             image, dx, dy = image[y0:y1, x0:x1], x0, y0
-        content = [{"type": "input_text", "text": concept}, {"type": "input_image", "image_url": _jpeg_url(image)}]
+        # The API takes a phrase or object prompts, never both: pointed, the text part holds only the tokens.
+        text = prompt_tokens(prompts, image.shape[1], image.shape[0]) if prompts else concept
+        content = [{"type": "input_text", "text": text}, {"type": "input_image", "image_url": _jpeg_url(image)}]
         metadata = METADATA
         billed = {"images": 1, "frames": 0}
         cost = settings.sam_image_usd

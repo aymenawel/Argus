@@ -15,8 +15,8 @@ from skimage import data
 
 from argus.config import Settings
 from argus.pipeline.analyzer import SamSegmenter
-from argus.segment import Clip, SegmentError, segment
-from argus.segment.sam import sam_client
+from argus.segment import Clip, MaskPatch, ObjectPrompt, SegmentError, segment
+from argus.segment.sam import prompt_tokens, sam_client
 
 FIXTURES = Path(__file__).parent / "fixtures" / "sam"
 SETTINGS = Settings(model_api_key=SecretStr("test-key"))
@@ -177,3 +177,55 @@ async def test_the_segmenter_keeps_one_client_and_closes_it():
     assert segmenter.client is client and client.max_retries == 0
     await segmenter.aclose()
     assert client.is_closed()
+
+
+def test_prompt_tokens_put_one_box_on_each_object():
+    prompts = [ObjectPrompt((10, 20, 49, 79)), ObjectPrompt((0, 0, 9, 9))]
+    assert prompt_tokens(prompts, 384, 303) == (
+        "<0f>1<|box;x1=10;y1=20;x2=49;y2=79;w=384;h=303|>,2<|box;x1=0;y1=0;x2=9;y2=9;w=384;h=303|>"
+    )
+
+
+def test_a_point_follows_its_box():
+    """A box and its object's strongest point, one object, no comma between them (KB 04, probed Nov 1)."""
+    prompts = [ObjectPrompt((10, 20, 49, 79), point=(30, 50))]
+    assert prompt_tokens(prompts, 384, 303) == (
+        "<0f>1<|box;x1=10;y1=20;x2=49;y2=79;w=384;h=303|><|point;x=30;y=50;w=384;h=303|>"
+    )
+
+
+@pytest.mark.parametrize("count", [0, 17])
+def test_prompt_tokens_refuse_none_or_more_than_sixteen(count):
+    with pytest.raises(ValueError):
+        prompt_tokens([ObjectPrompt((0, 0, 1, 1))] * count, 10, 10)
+
+
+@pytest.mark.anyio
+async def test_a_pointed_request_sends_tokens_not_the_concept():
+    """Box prompts replace the concept in the text part (the API takes one or the other); tracks still name it."""
+    fake = FakeClient(recorded("image_pointed"))
+    prompts = [ObjectPrompt((0, 0, 295, 75))]  # the box the fixture was recorded with
+    result = await segment(COINS, "coin", mode="image", settings=SETTINGS, client=fake, prompts=prompts)
+    content = fake.responses.kwargs["input"][0]["content"]
+    assert content[0] == {"type": "input_text", "text": prompt_tokens(prompts, 384, 303)}
+    assert len(result.tracks) == 1 and result.tracks[0].concept == "coin"
+    assert (result.call.status, result.call.images, result.call.cost_usd) == ("ok", 1, 0.0025)
+
+
+@pytest.mark.anyio
+async def test_prompts_are_image_mode_only(clip):
+    prompts = [ObjectPrompt((0, 0, 1, 1))]
+    with pytest.raises(ValueError):
+        await segment(
+            Clip(clip, 60, 10, 10), "coin", mode="video", settings=SETTINGS, client=FakeClient(), prompts=prompts
+        )
+    with pytest.raises(ValueError):  # boxes are in the image's own pixels, so no region crops it
+        await segment(
+            COINS, "coin", mode="image", roi=(0, 0, 10, 10), settings=SETTINGS, client=FakeClient(), prompts=prompts
+        )
+
+
+def test_a_shifted_patch_keeps_its_source():
+    patch = MaskPatch(1, 2, np.ones((2, 2), bool), source="change-map")
+    moved = patch.shifted(3, 4)
+    assert (moved.left, moved.top, moved.source) == (4, 6, "change-map")

@@ -14,7 +14,7 @@ from argus.config import Settings
 from argus.domain import ModelCallDraft, Role, RunMode, RunSource, SourceKind, VesselDraft
 from argus.pipeline.analyzer import RunContext, Skipped, analyze_frame, correction_paused, segment_with_retries
 from argus.recipes.model import Concept, Recipe
-from argus.segment import Clip, MaskPatch, SegmentError, SegmentResult, Track, TrackFrame
+from argus.segment import Clip, MaskPatch, ObjectPrompt, SegmentError, SegmentResult, Track, TrackFrame
 from argus.storage.files import RunFiles
 from argus.storage.repos import (
     add_vessels,
@@ -502,3 +502,22 @@ async def test_losing_one_concept_keeps_the_other(ctx, scene):
     assert [m.t for m in rows if m.metric == "length"] == [0.0]
     [miss] = misses(ctx)
     assert miss.detail["concept"] == "root"
+
+
+@pytest.mark.anyio
+async def test_prompts_go_to_the_pointed_segmenter_and_are_logged(ctx, scene):
+    """A request with box prompts is SAM pointed at them (D-92): one logged call, priced like an image."""
+    image, _ = scene
+    asked = []
+
+    class Pointed(FakeSegmenter):
+        async def pointed(self, image_bgr, concept, prompts):
+            asked.append((concept, list(prompts)))
+            return SegmentResult([], call())
+
+    ctx.segmenter = Pointed()
+    prompts = [ObjectPrompt((0, 0, 9, 9))]
+    result = await segment_with_retries(ctx, image, "root", t=0.0, prompts=prompts)
+    assert isinstance(result, SegmentResult)
+    assert asked == [("root", prompts)] and ctx.segmenter.calls == 0  # never asked by name
+    assert calls(ctx) == ["ok"]

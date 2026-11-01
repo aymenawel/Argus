@@ -15,6 +15,7 @@ class MaskPatch:
     left: int
     top: int
     mask: np.ndarray
+    source: str | None = None  # who drew it when it isn't SAM by name: "sam-3.1/pointed" or "change-map" (D-93)
 
     @property
     def area_px(self) -> int:
@@ -26,7 +27,7 @@ class MaskPatch:
         return (float(self.left), float(self.top), float(self.left + width), float(self.top + height))
 
     def shifted(self, dx: int, dy: int) -> MaskPatch:
-        return MaskPatch(self.left + dx, self.top + dy, self.mask)
+        return MaskPatch(self.left + dx, self.top + dy, self.mask, self.source)
 
     def to_canvas(self, height: int, width: int) -> np.ndarray:
         """The mask on a full height x width canvas; parts outside the canvas are dropped."""
@@ -37,6 +38,14 @@ class MaskPatch:
         if x1 > x0 and y1 > y0:
             canvas[y0:y1, x0:x1] = self.mask[y0 - self.top : y1 - self.top, x0 - self.left : x1 - self.left]
         return canvas
+
+
+@dataclass(frozen=True)
+class ObjectPrompt:
+    """One object for SAM to trace from where it is, not what it is called (D-92): a box and, optionally, a point."""
+
+    box: tuple[int, int, int, int]  # x0, y0, x1, y1 in the image's pixels, x1 and y1 inclusive
+    point: tuple[int, int] | None = None  # x, y inside the object
 
 
 @dataclass(frozen=True)

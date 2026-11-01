@@ -28,7 +28,7 @@ from argus.measure.uncertainty import format_measurement
 from argus.pipeline.notes import NoteWriter
 from argus.reason import Reasoner
 from argus.recipes.model import MeasurementSpec, Recipe
-from argus.segment import Clip, MaskPatch, SegmentError, SegmentResult, segment
+from argus.segment import Clip, MaskPatch, ObjectPrompt, SegmentError, SegmentResult, segment
 from argus.segment.outline import outline_polygons
 from argus.segment.sam import SEGMENTER_OFF, SegmenterOff, sam_client
 from argus.segment.tracking import TrackMatcher, assign_to_vessels
@@ -62,6 +62,8 @@ class Segmenter(Protocol):
 
     async def video(self, clip: Clip, concept: str) -> SegmentResult: ...
 
+    async def pointed(self, image_bgr: np.ndarray, concept: str, prompts: Sequence[ObjectPrompt]) -> SegmentResult: ...
+
 
 class SamSegmenter:
     """The worker's SAM 3.1 access: one client for every run, closed when the worker stops."""
@@ -87,6 +89,11 @@ class SamSegmenter:
 
     async def video(self, clip: Clip, concept: str) -> SegmentResult:
         return await segment(clip, concept, mode="video", settings=self.settings, client=self.client)
+
+    async def pointed(self, image_bgr: np.ndarray, concept: str, prompts: Sequence[ObjectPrompt]) -> SegmentResult:
+        return await segment(
+            image_bgr, concept, mode="image", settings=self.settings, client=self.client, prompts=prompts
+        )
 
     async def aclose(self) -> None:
         if self._client is not None:
@@ -200,10 +207,16 @@ def _cancelled_call(settings: Settings, media: np.ndarray | Clip, cost: float, s
 
 
 async def segment_with_retries(
-    ctx: RunContext, media: np.ndarray | Clip, concept: str, *, t: float, frame_ids: Sequence[str] = ()
+    ctx: RunContext,
+    media: np.ndarray | Clip,
+    concept: str,
+    *,
+    t: float,
+    frame_ids: Sequence[str] = (),
+    prompts: Sequence[ObjectPrompt] = (),
 ) -> SegmentResult | Skipped:
     """Every attempt is logged. Skipped("cap") when the spend cap refuses the call, Skipped("failed") when every
-    attempt failed (with a segment_failed event)."""
+    attempt failed (with a segment_failed event). With `prompts`, SAM is pointed at boxes in the image (D-92)."""
     attempts = 1 + len(ctx.retry_delays_s)
     error = ""
     expected, cap = _expected_cost(ctx.settings, media), ctx.settings.run_spend_cap_usd
@@ -226,7 +239,9 @@ async def segment_with_retries(
             started = time.perf_counter()
             try:
                 try:
-                    if isinstance(media, np.ndarray):
+                    if prompts and isinstance(media, np.ndarray):
+                        result = await ctx.segmenter.pointed(media, concept, prompts)
+                    elif isinstance(media, np.ndarray):
                         result = await ctx.segmenter.image(media, concept)
                     else:
                         result = await ctx.segmenter.video(media, concept)
