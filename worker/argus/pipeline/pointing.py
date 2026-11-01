@@ -3,10 +3,10 @@
 SAM traces almost anything it is pointed at but recognises few lab words, so a faint colony it can't find by name is
 often found once a box says where it is. For a concept marked `appears` (not there at the start), each vessel keeps a
 start reference: the median of its first kept crops. When SAM's answer by name is empty, the change since the start
-gives regions; SAM is asked again with a box on each and its strongest point. Each region keeps SAM's outline when
-that outline keeps to it; otherwise (SAM found nothing there, traced far more such as the whole dish, or
-couldn't be asked: the spend cap, a failure) the region itself is the outline, drawn by code. Every patch says who
-drew it (D-93). Without a change, nothing is asked: the empty answer stands, a gap after a first sighting (D-90).
+gives regions; SAM is asked again with a box on each and its strongest point. SAM's outlines that keep to their
+region are kept; when none does (SAM found nothing, traced far more such as the whole dish, or couldn't be asked: the
+spend cap, a failure), the regions themselves are the outline, drawn by code. Every patch says who drew it (D-93).
+Without a change, nothing is asked: the empty answer stands, a gap after a first sighting (D-90).
 """
 
 from __future__ import annotations
@@ -115,8 +115,8 @@ async def point_again(
     t: float,
     frame_id: str,
 ) -> list[MaskPatch]:
-    """After an empty answer by name, each region of change outlined by SAM when SAM's outline keeps to it, else by
-    code, in frame pixels; [] when nothing changed (and SAM isn't asked)."""
+    """After an empty answer by name: SAM's outlines of the regions of change it kept to, or, when it kept to none,
+    every region outlined by code; in frame pixels. [] when nothing changed (and SAM isn't asked)."""
     crop, _, (x0, y0) = vessel_crop(vessel, image_bgr)
     if crop.shape != reference.lab.shape:
         return []
@@ -141,7 +141,7 @@ async def point_again(
             if patch.area_px > MAX_GROWTH * int(regions[number - 1].mask.sum()):
                 continue  # SAM traced far more than the change it was pointed at
             by_sam.setdefault(number, []).append(replace(patch.shifted(x0, y0), source=POINTED))
-    patches: list[MaskPatch] = []
-    for number, region in enumerate(regions, start=1):
-        patches += by_sam.get(number) or [_drawn_by_code(region, x0, y0)]
-    return patches
+    if by_sam:  # SAM kept to some of the change: its outlines only. Beside a swarm SAM traced, the changes it wouldn't
+        # keep to were mostly the dish's rim or bands of agar (45 of 66 code patches on the swarming re-import).
+        return [patch for number in sorted(by_sam) for patch in by_sam[number]]
+    return [_drawn_by_code(r, x0, y0) for r in regions]

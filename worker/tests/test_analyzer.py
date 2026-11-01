@@ -82,6 +82,16 @@ class FakeSegmenter:
         if step == "whole":  # SAM outlined the whole crop: the dish, not what changed in it
             whole = MaskPatch(0, 0, np.ones(image_bgr.shape[:2], bool))
             return SegmentResult([Track("obj1", concept, (TrackFrame(0, whole, 0.9),))], call())
+        if step == "bloat-second":  # the first object traced well, the second far past the change it was shown
+            grey = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+            x1, y1, x2, y2 = prompts[0].box
+            good = MaskPatch(x1, y1, grey[y1 : y2 + 1, x1 : x2 + 1] < 60)
+            bloated = MaskPatch(0, 0, np.ones((grey.shape[0], grey.shape[1] // 2), bool))
+            tracks = [
+                Track("obj1", concept, (TrackFrame(0, good, 0.9),)),
+                Track("obj2", concept, (TrackFrame(0, bloated, 0.9),)),
+            ]
+            return SegmentResult(tracks, call())
         if step == "spill":  # SAM traced far past the box it was given: most of the crop, under the vessel guard
             h, w = image_bgr.shape[:2]
             spill = MaskPatch(0, 0, np.ones((h, int(w * 0.5)), bool))
@@ -683,6 +693,24 @@ async def test_a_code_outline_alone_is_not_a_sighting(ctx, scene):
     await analyze_frame(ctx, 240.0, plain(image, mask), segment=True)
     reading = last_length_of_a(ctx)
     assert (reading.t, reading.value) == (240.0, 0.0) and misses(ctx) == []
+
+
+@pytest.mark.anyio
+async def test_beside_an_outline_sam_kept_a_change_it_would_not_keep_to_is_left_out(ctx, scene):
+    """Code outlines only a vessel where SAM kept nothing: beside a swarm SAM traced, the changes it wouldn't keep to
+    were mostly the rim or bands of agar (D-92, 45 of 66 code patches on the swarming re-import)."""
+    image, mask = scene
+    appearing(ctx)
+    ctx.segmenter.script(["ok"] * 3 + ["empty"])
+    ctx.segmenter.pointed_steps = ["bloat-second"]
+    await start(ctx, image, mask)
+    grown = image.copy()
+    x0, y0 = (int(min(c)) for c in zip(*ctx.vessels[0].roi, strict=True))
+    grown[y0 + 10 : y0 + 22, x0 + 10 : x0 + 25] = 30  # a second change, away from the root
+    out = await analyze_frame(ctx, 180.0, grown, segment=True)
+    [(_, prompts)] = ctx.segmenter.pointed_asks
+    assert len(prompts) == 2
+    assert drawn_by(ctx, out.frame_id) == ["sam-3.1/pointed"]
 
 
 @pytest.mark.anyio

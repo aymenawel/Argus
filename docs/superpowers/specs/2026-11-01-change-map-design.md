@@ -35,8 +35,9 @@ are there from the start (seeds, glasses, foam).
      more of the vessel is dropped when the change regions cover less than 50% of it (SAM outlined the dish), and so
      is one more than twice the size of the region it was pointed at (amended Nov 1 after the re-import: from a box
      around a swarm in a square region, SAM sometimes outlined the whole dish).
-  4. Each region without a SAM mask kept for it is its own outline (**code outline**), measured in mm² like any
-     mask.
+  4. If SAM kept no mask at all, the change regions themselves are the outline (**code outline**), measured in mm²
+     like any mask. (For a few hours on Nov 1 this was per region; the second re-import showed the regions SAM
+     wouldn't keep to beside a swarm it traced were mostly the rim or agar bands, so it is per vessel again.)
   5. With no region, nothing is asked: the empty answer stands, a gap after a first sighting (D-90) or a zero before.
 
   The reference resets when the vessel's region changes (a camera move); until 3 new crops are in, nothing is
