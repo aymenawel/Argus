@@ -21,6 +21,10 @@ every page says so. The germination plate is published data (Genze et al. 2020, 
 - **Watch.** A cheap local watcher reads every frame and wakes the expensive steps only when something changed.
 - **Measure.** SAM 3.1 outlines each vessel's contents; code turns outlines and colours into readings in real units
   (mm, mm², ΔE00, counts), each with its ± from the scale card or the dish rim. The model never computes a number.
+- **Never a false zero.** When SAM finds nothing where it found the object before, Argus records a gap, not a zero.
+  For something that grows into view, such as a faint bacterial swarm, Argus compares the dish with its start and
+  points SAM at what changed; if SAM still finds nothing, code outlines the change, labelled as drawn by code. On
+  published swarming scans this took the dishes found from 15–97 to 113–124 of 145 pictures.
 - **Notes.** Muse Spark writes what happened, but every number in a note is a reference to a stored reading, and a
   claim checker rejects any note with a number of its own or a claim beyond what the data allows.
 - **Judge.** Code decides which verdicts the data allows (supported, not supported, inconclusive, too early) from the
@@ -34,7 +38,7 @@ Observations, measurements, AI notes and the researcher's reviews are separate r
 
 | Model | Used for |
 | --- | --- |
-| **SAM 3.1** (`sam-3.1`) | Segmentation: finding and outlining vessels and what is in them, frame by frame |
+| **SAM 3.1** (`sam-3.1`) | Segmentation: finding and outlining vessels and what is in them, frame by frame, by name or, when it finds nothing by name, with boxes on what changed since the start |
 | **Muse Spark 1.3** (`muse-spark-1.3`) | Routine notes at events and checkpoints; drafting a recipe and plan from the researcher's own words |
 | **Muse Wonder 1.0** (`muse-wonder-1.0`) | The verdict, its critique, and the reasons for the next run |
 | **Muse Spark Open** on Baseten (`meta-models/muse-spark-open-1026`) | The routine tier on open weights, switchable in Settings; falls back to Muse Spark 1.3 |
