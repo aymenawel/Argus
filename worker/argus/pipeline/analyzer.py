@@ -20,6 +20,7 @@ from argus.api.events import EventBroker
 from argus.calibration.colour import ColourReference, PatchReading, neutral_drift, read_patches
 from argus.calibration.detect import detect_card
 from argus.calibration.run import RunCalibration
+from argus.claims.refs import format_run_time
 from argus.config import Settings
 from argus.domain import Detection, EventKind, MeasurementDraft, ModelCallDraft, Run, Vessel, new_id
 from argus.measure.engine import ColourBaseline, FirstSeen, VesselMeasurements, measure_vessel
@@ -40,6 +41,7 @@ from argus.storage.repos import (
     add_frame,
     add_measurements,
     add_model_call,
+    add_sam_answers,
     close_event,
     mark_frame_analyzed,
     run_spend_usd,
@@ -107,6 +109,9 @@ class RunContext:
     last_masks: dict[str, dict[str, np.ndarray]] = field(default_factory=dict)
     baselines: dict[str, dict[str, ColourBaseline]] = field(default_factory=dict)
     first_seen: dict[str, dict[str, list[FirstSeen]]] = field(default_factory=dict)  # vessel -> grown_count -> seen
+    sighted: dict[str, set[str]] = field(default_factory=dict)  # vessel -> the concepts SAM has found there (D-90)
+    missing: dict[tuple[str, str], str] = field(default_factory=dict)  # (vessel, concept) -> its open missed event
+    last_found_t: dict[tuple[str, str], float] = field(default_factory=dict)  # (vessel, concept) -> when last found
     retry_delays_s: tuple[float, ...] = (1.0, 4.0)
     cap_reported: bool = False
     calibration_reported: bool = False
@@ -116,6 +121,7 @@ class RunContext:
     semaphore: asyncio.Semaphore = field(init=False)
     rules: RuleEvaluator = field(init=False)  # the recipe's rule events, fired once per vessel
     spend_lock: asyncio.Lock = field(init=False, default_factory=asyncio.Lock)
+    miss_lock: asyncio.Lock = field(init=False, default_factory=asyncio.Lock)  # frames at once open one miss
     reserved_usd: float = 0.0  # expected cost of the calls in flight, not yet logged
     limit_reported: set[str] = field(default_factory=set)  # concepts that hit SAM's object limit
     calibration_problem: str | None = None  # why the first frame without millimetres had none, when known
@@ -351,20 +357,64 @@ async def _colour_reference(
             ctx.uncorrected_event = await ctx.event(t, EventKind.QUALITY, "quality", detail, frame_ids=[frame_id])
         return None, True
     if ctx.uncorrected_event is not None:
-        event = await asyncio.to_thread(close_event, ctx.db, ctx.uncorrected_event, t)
+        await _close(ctx, ctx.uncorrected_event, t)
         ctx.uncorrected_event = None
-        ctx.publish(
-            "event",
-            {
-                "t": event.t_start,
-                "t_end": t,
-                "id": event.id,
-                "kind": str(event.kind),
-                "vessel_id": None,
-                "detail": event.detail,
-            },
-        )
     return current, True
+
+
+async def _close(ctx: RunContext, event_id: str, t: float) -> None:
+    """Close an open event at t and tell the page."""
+    event = await asyncio.to_thread(close_event, ctx.db, event_id, t)
+    ctx.publish(
+        "event",
+        {
+            "t": event.t_start,
+            "t_end": t,
+            "id": event.id,
+            "kind": str(event.kind),
+            "vessel_id": event.vessel_id,
+            "detail": event.detail,
+        },
+    )
+
+
+async def _track_misses(
+    ctx: RunContext, t: float, frame_id: str, keyed: dict[str, dict[str, list[tuple[str, MaskPatch]]]]
+) -> None:
+    """Keep what SAM answered as evidence, and turn an empty answer after a first sighting into a miss (D-90): it is
+    dropped from `keyed`, so it is a gap, not a zero, with one missed event per stretch, closed when the object is
+    found again. Empty answers before the first sighting stay zeros, and so do those of a concept that can really
+    vanish (foam)."""
+    answers = {
+        (vessel_id, concept): len(p) for vessel_id, by_concept in keyed.items() for concept, p in by_concept.items()
+    }
+    if not answers:
+        return
+    vanish = {c.name for c in ctx.recipe.concepts if c.can_vanish}
+    labels = {v.id: v.label for v in ctx.vessels}
+    async with ctx.miss_lock:
+        await asyncio.to_thread(add_sam_answers, ctx.db, ctx.run.id, frame_id, answers)
+        for (vessel_id, concept), found in answers.items():
+            key = (vessel_id, concept)
+            if found:
+                ctx.sighted.setdefault(vessel_id, set()).add(concept)
+                ctx.last_found_t[key] = t
+                if (event_id := ctx.missing.pop(key, None)) is not None:
+                    await _close(ctx, event_id, t)
+            elif concept in ctx.sighted.get(vessel_id, ()) and concept not in vanish:
+                del keyed[vessel_id][concept]
+                if key not in ctx.missing:
+                    seen = ctx.last_found_t[key]
+                    name = labels.get(vessel_id, vessel_id)
+                    detail = {
+                        "concept": concept,
+                        "last_seen_t": seen,
+                        "message": f"SAM found no {concept} in {name} after finding it at {format_run_time(seen)}: "
+                        "no reading until it is found again",
+                    }
+                    ctx.missing[key] = await ctx.event(
+                        t, EventKind.MISSED, "pipeline", detail, vessel_id=vessel_id, frame_ids=[frame_id]
+                    )
 
 
 async def analyze_frame(
@@ -431,6 +481,7 @@ async def analyze_frame(
     # the hand, so nothing of that vessel is kept from this frame. A gap, not a reading.
     blocked = {flag.split(":", 1)[1] for flag in quality_flags if flag.startswith("occluded:")}
     keyed = {vessel_id: by_concept for vessel_id, by_concept in keyed.items() if vessel_id not in blocked}
+    await _track_misses(ctx, t, frame_id, keyed)
     if keyed:
         await asyncio.to_thread(_store_detections, ctx, frame_id, keyed, confidence, backend)
     for vessel_id, by_concept in keyed.items():

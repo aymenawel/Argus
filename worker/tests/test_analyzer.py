@@ -13,7 +13,7 @@ from argus.calibration.run import calibrate
 from argus.config import Settings
 from argus.domain import ModelCallDraft, Role, RunMode, RunSource, SourceKind, VesselDraft
 from argus.pipeline.analyzer import RunContext, Skipped, analyze_frame, correction_paused, segment_with_retries
-from argus.recipes.model import Recipe
+from argus.recipes.model import Concept, Recipe
 from argus.segment import Clip, MaskPatch, SegmentError, SegmentResult, Track, TrackFrame
 from argus.storage.files import RunFiles
 from argus.storage.repos import (
@@ -23,6 +23,7 @@ from argus.storage.repos import (
     events_for_run,
     frames_for_run,
     measurements_for_run,
+    sam_answers_for_run,
 )
 from tests.helpers import scene_with_bar_on_card_plane
 
@@ -398,3 +399,106 @@ async def test_uncorrected_change_is_measured_from_the_start(ctx, scene):
     a = ctx.vessels[0].id
     [late] = [m for m in measurements_for_run(ctx.db, ctx.run.id, metric="change") if m.t == 240.0 and m.vessel_id == a]
     assert late.method_version == "delta_e_uncorrected/1" and late.value < 1.0
+
+
+def bar(mask):
+    """The scene's bar as SAM's mask patch, for injected (video-mode) masks."""
+    ys, xs = np.nonzero(mask)
+    return MaskPatch(int(xs.min()), int(ys.min()), mask[ys.min() : ys.max() + 1, xs.min() : xs.max() + 1])
+
+
+def misses(ctx):
+    return [e for e in events_for_run(ctx.db, ctx.run.id) if e.kind == "missed"]
+
+
+@pytest.mark.anyio
+async def test_after_a_first_sighting_nothing_found_is_a_miss_not_a_zero(ctx, scene):
+    """Once SAM has found the root in A, a frame where it finds nothing is a gap with a missed event, not a zero;
+    B, never seen, reads zero throughout (D-90)."""
+    image, mask = scene
+    a, b = (v.id for v in ctx.vessels)
+    found = {a: {"root": [("A:root:1", bar(mask))]}, b: {"root": []}}
+    lost = {a: {"root": []}, b: {"root": []}}
+    for t, masks in ((0.0, found), (60.0, lost), (120.0, lost), (180.0, found)):
+        await analyze_frame(ctx, t, image, segment=False, masks=masks)
+    lengths = measurements_for_run(ctx.db, ctx.run.id, metric="length")
+    assert [m.t for m in lengths if m.vessel_id == a] == [0.0, 180.0]
+    assert [m.value for m in lengths if m.vessel_id == b] == [0.0] * 4
+    [miss] = misses(ctx)
+    assert (miss.vessel_id, miss.t_start, miss.t_end, miss.source) == (a, 60.0, 180.0, "pipeline")
+    assert miss.detail["concept"] == "root" and miss.detail["last_seen_t"] == 0.0
+    assert miss.detail["message"].startswith("SAM found no root in A after finding it at ")
+    answers = sam_answers_for_run(ctx.db, ctx.run.id)
+    assert [x.found for x in answers if x.vessel_id == a] == [1, 0, 0, 1]
+    assert [x.found for x in answers if x.vessel_id == b] == [0, 0, 0, 0]
+    published = [e.data for e in ctx.broker.since(0) if e.type == "event" and e.data["kind"] == "missed"]
+    assert [e.get("t_end") for e in published] == [None, 180.0]
+
+
+@pytest.mark.anyio
+async def test_a_miss_still_open_at_the_end_stays_open(ctx, scene):
+    image, mask = scene
+    a = ctx.vessels[0].id
+    for t, patches in ((0.0, [("A:root:1", bar(mask))]), (60.0, [])):
+        await analyze_frame(ctx, t, image, segment=False, masks={a: {"root": patches}})
+    [miss] = misses(ctx)
+    assert miss.t_start == 60.0 and miss.t_end is None  # never found again
+
+
+@pytest.mark.anyio
+async def test_a_concept_that_can_vanish_reads_zero_after_a_sighting(ctx, scene):
+    """Foam can really collapse: its empty answers stay zeros, with no missed event."""
+    image, mask = scene
+    a = ctx.vessels[0].id
+    ctx.recipe = RECIPE.model_copy(update={"concepts": [Concept(name="root", can_vanish=True)]})
+    for t, patches in ((0.0, [("A:root:1", bar(mask))]), (60.0, [])):
+        await analyze_frame(ctx, t, image, segment=False, masks={a: {"root": patches}})
+    lengths = [m for m in measurements_for_run(ctx.db, ctx.run.id, metric="length") if m.vessel_id == a]
+    assert [m.t for m in lengths] == [0.0, 60.0] and lengths[1].value == 0.0
+    assert misses(ctx) == []
+
+
+@pytest.mark.anyio
+async def test_a_hand_in_front_neither_ends_nor_repeats_a_miss(ctx, scene):
+    image, mask = scene
+    a = ctx.vessels[0].id
+    seen = {a: {"root": [("A:root:1", bar(mask))]}}
+    await analyze_frame(ctx, 0.0, image, segment=False, masks=seen)
+    await analyze_frame(ctx, 60.0, image, segment=False, masks={a: {"root": []}})
+    await analyze_frame(ctx, 120.0, image, segment=False, masks=seen, quality_flags=(f"occluded:{a}",))
+    await analyze_frame(ctx, 180.0, image, segment=False, masks=seen)
+    [miss] = misses(ctx)
+    assert (miss.t_start, miss.t_end) == (60.0, 180.0)  # what SAM found behind the hand doesn't end the miss
+    assert [x.t for x in sam_answers_for_run(ctx.db, ctx.run.id) if x.vessel_id == a] == [0.0, 60.0, 180.0]
+
+
+@pytest.mark.anyio
+async def test_two_frames_at_once_open_one_miss(ctx, scene):
+    image, mask = scene
+    a = ctx.vessels[0].id
+    await analyze_frame(ctx, 0.0, image, segment=False, masks={a: {"root": [("A:root:1", bar(mask))]}})
+    await asyncio.gather(*(analyze_frame(ctx, t, image, segment=False, masks={a: {"root": []}}) for t in (60.0, 120.0)))
+    assert len(misses(ctx)) == 1
+
+
+@pytest.mark.anyio
+async def test_losing_one_concept_keeps_the_other(ctx, scene):
+    image, mask = scene
+    a = ctx.vessels[0].id
+    ctx.recipe = RECIPE.model_copy(
+        update={
+            "concepts": [Concept(name="root"), Concept(name="bean")],
+            "measurements": [
+                RECIPE.measurements[0],
+                RECIPE.measurements[0].model_copy(update={"id": "bean_length", "source": "bean"}),
+            ],
+        }
+    )
+    both = {a: {"root": [("A:root:1", bar(mask))], "bean": [("A:bean:1", bar(mask))]}}
+    await analyze_frame(ctx, 0.0, image, segment=False, masks=both)
+    await analyze_frame(ctx, 60.0, image, segment=False, masks={a: {"root": [], "bean": both[a]["bean"]}})
+    rows = [m for m in measurements_for_run(ctx.db, ctx.run.id) if m.vessel_id == a]
+    assert [m.t for m in rows if m.metric == "bean_length"] == [0.0, 60.0]
+    assert [m.t for m in rows if m.metric == "length"] == [0.0]
+    [miss] = misses(ctx)
+    assert miss.detail["concept"] == "root"
