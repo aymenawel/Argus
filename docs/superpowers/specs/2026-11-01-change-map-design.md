@@ -103,3 +103,15 @@ show solid outlines. Recipes Argus drafts from words don't get `appears` yet.
 Rewinding from the last picture (fix 3), aligning pictures after a camera move, video-mode imports, `appears` in
 drafted recipes, negative points (unless the probe shows SAM outlining the dish), dashed code outlines in the
 exported videos (only if time is left), and a check that a code outline persists across pictures.
+
+## Amended after the final review (Nov 1)
+
+- Nothing is pointed at or outlined when the change covers 85% or more of the vessel: the whole vessel changed at once
+  (light, a fogged lid, drying agar).
+- A code outline alone is not a sighting for D-90; SAM's finds, by name or pointed, are.
+- After a camera move, a new start is taken only if the object hasn't been seen in that vessel; otherwise nothing is
+  pointed there again and misses stay gaps.
+- A video import whose clip fails falls back to by-name stills without pointing.
+- Changes, differences, fits and noise floors computed from a code-outlined reading carry ", partly from readings
+  outlined by code, not by SAM".
+

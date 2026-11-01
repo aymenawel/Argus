@@ -543,6 +543,18 @@ def add_sam_answers(
         )
 
 
+def code_outlined_readings(db: Database, run_id: str, metric: str, concept: str, backend: str) -> set[str]:
+    """Ids of a metric's readings taken on an outline of `backend` for that concept: the change since the start,
+    outlined by code rather than SAM (D-93)."""
+    with db.read() as c:
+        rows = c.execute(
+            "SELECT DISTINCT m.id FROM measurements m JOIN detections d ON d.frame_id = m.frame_id "
+            "AND d.vessel_id = m.vessel_id WHERE m.run_id=? AND m.metric=? AND d.concept=? AND d.backend=?",
+            (run_id, metric, concept, backend),
+        ).fetchall()
+    return {r["id"] for r in rows}
+
+
 def sam_answers_for_run(db: Database, run_id: str) -> list[SamAnswer]:
     with db.read() as c:
         rows = c.execute(

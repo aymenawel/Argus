@@ -254,7 +254,7 @@ async def _segment_vessel(
     """Stop is checked before every SAM call; a call already sent finishes and is logged. `stills` (a published image
     sequence, frames far apart) goes straight to image mode on the whole frame."""
     if stills:
-        await _segment_stills(ctx, samples, vessel, concept, shape, masks, cancel, full_frames)
+        await _segment_stills(ctx, samples, vessel, concept, shape, masks, cancel, full_frames, point=True)
         return
     box = roi_box(vessel, *shape, margin=CROP_MARGIN_PX)
     x0, y0, x1, y1 = box
@@ -292,10 +292,14 @@ async def _segment_stills(
     masks: dict[str, dict[str, dict]],
     cancel: asyncio.Event,
     full_frames: FullFrames,
+    *,
+    point: bool = False,
 ) -> bool:
     """Image mode, sample by sample; False once stopped or capped. On the whole frame, each call shared by every
     vessel: SAM sees small objects there that it misses in a crop of one vessel (KB 04). Or, when the recipe asks, on
-    this vessel's region alone: a faint colony filling its dish is lost in the whole plate (D-89)."""
+    this vessel's region alone: a faint colony filling its dish is lost in the whole plate (D-89). `point`: a published
+    image sequence, whose start is its first stills, so an empty answer where the vessel changed is pointed at (D-92);
+    a video's failed clip, whose first samples sit mid-run, isn't."""
     for sample in samples:
         if cancel.is_set():
             return False
@@ -313,7 +317,7 @@ async def _segment_stills(
                 return False
             continue
         patches = [track.frames[0].patch.shifted(x0, y0) for track in single.tracks]
-        if concept in pointing_concepts(ctx.recipe):  # D-92: the start reference, and pointing where it changed
+        if point and concept in pointing_concepts(ctx.recipe):  # D-92: the start, and pointing where it changed
             if image is None:
                 image = await asyncio.to_thread(cv2.imread, str(sample.path))
             reference = observe(ctx, vessel, concept, image)

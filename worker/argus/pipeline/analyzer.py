@@ -123,6 +123,7 @@ class RunContext:
     # (vessel, concept) -> the crops of its start reference while it is taken, with the region they were taken at
     change_crops: dict[tuple[str, str], tuple[tuple, list[np.ndarray]]] = field(default_factory=dict)
     change_refs: dict[tuple[str, str], ChangeReference] = field(default_factory=dict)  # then the reference (D-92)
+    change_off: set[tuple[str, str]] = field(default_factory=set)  # moved after a sighting: no start to take again
     retry_delays_s: tuple[float, ...] = (1.0, 4.0)
     cap_reported: bool = False
     calibration_reported: bool = False
@@ -412,11 +413,14 @@ async def _track_misses(
     if not answers:
         return
     via = {}  # found by pointing SAM at the change, or by code outlining it, not by name (D-93)
+    by_sam = set()  # SAM found it, by name or pointed: a sighting; a code outline alone is not one
     for vessel_id, by_concept in keyed.items():
         for concept, patches in by_concept.items():
             sources = {patch.source for _, patch in patches}
             if CODE in sources or POINTED in sources:
                 via[(vessel_id, concept)] = "code" if CODE in sources else "pointed"
+            if sources - {CODE}:
+                by_sam.add((vessel_id, concept))
     vanish = {c.name for c in ctx.recipe.concepts if c.can_vanish}
     labels = {v.id: v.label for v in ctx.vessels}
     async with ctx.miss_lock:
@@ -424,9 +428,10 @@ async def _track_misses(
         for (vessel_id, concept), found in answers.items():
             key = (vessel_id, concept)
             if found:
-                ctx.sighted.setdefault(vessel_id, set()).add(concept)
-                ctx.last_found_t[key] = t
-                if (event_id := ctx.missing.pop(key, None)) is not None:
+                if key in by_sam:
+                    ctx.sighted.setdefault(vessel_id, set()).add(concept)
+                    ctx.last_found_t[key] = t
+                if (event_id := ctx.missing.pop(key, None)) is not None:  # a reading again, whoever drew it
                     await _close(ctx, event_id, t)
             elif concept in ctx.sighted.get(vessel_id, ()) and concept not in vanish:
                 del keyed[vessel_id][concept]

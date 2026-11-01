@@ -357,5 +357,9 @@ def test_a_code_outlined_reading_says_so_in_its_label(db, two_by_two):
     refs = build_refs(db, run.id, 700.0, recipe=COLOUR, plan=PLAN)
     assert refs.get("m:A:delta_e").label.endswith(CODE_OUTLINED)
     assert not refs.get("m:B:delta_e").label.endswith(CODE_OUTLINED)
+    # what is computed from it says so too: A's change, and each treatment's difference from the controls' mean
+    assert "outlined by code" in refs.get("chg:A:delta_e").label
+    assert "outlined by code" in refs.get("diff:C:delta_e").label
+    assert "outlined by code" not in refs.get("chg:B:delta_e").label
     [quoted] = re.findall(r'"(outlined by code)"', load_prompt("system/scientific-rules.md"))
     assert quoted in CODE_OUTLINED

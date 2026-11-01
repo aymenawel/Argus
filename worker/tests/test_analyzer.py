@@ -15,7 +15,7 @@ from argus.domain import ModelCallDraft, Role, RunMode, RunSource, SourceKind, V
 from argus.pipeline.analyzer import RunContext, Skipped, analyze_frame, correction_paused, segment_with_retries
 from argus.pipeline.pointing import CROP_MARGIN_PX
 from argus.recipes.model import Concept, Recipe
-from argus.rois import roi_box
+from argus.rois import roi_box, roi_mask
 from argus.segment import Clip, MaskPatch, ObjectPrompt, SegmentError, SegmentResult, Track, TrackFrame
 from argus.storage.files import RunFiles
 from argus.storage.repos import (
@@ -637,6 +637,52 @@ async def test_a_sam_outline_far_bigger_than_the_change_is_replaced_by_the_chang
     await start(ctx, image, mask)
     out = await analyze_frame(ctx, 180.0, image, segment=True)
     assert drawn_by(ctx, out.frame_id) == ["change-map"]
+
+
+@pytest.mark.anyio
+async def test_a_vessel_that_changed_all_over_is_neither_pointed_at_nor_outlined(ctx, scene):
+    """Light, a fogged lid or drying agar change the whole vessel at once: not growth, and nothing to point at."""
+    image, mask = scene
+    appearing(ctx)
+    ctx.segmenter.script(["ok"] * 3 + ["empty"])
+    await start(ctx, image, mask)
+    shaded = plain(image, mask).astype(np.int16)
+    shaded[roi_mask(ctx.vessels[0], *image.shape[:2])] -= 40  # inside the vessel only
+    out = await analyze_frame(ctx, 180.0, np.clip(shaded, 0, 255).astype(np.uint8), segment=True)
+    assert ctx.segmenter.pointed_asks == [] and drawn_by(ctx, out.frame_id) == []
+
+
+@pytest.mark.anyio
+async def test_after_a_move_past_a_sighting_the_start_is_not_taken_again(ctx, scene):
+    """A start taken after the object was seen already holds it: the change would be only the growth since the move.
+    So once the vessel has moved past a sighting, SAM isn't pointed there again; a miss stays a gap (D-90)."""
+    image, mask = scene
+    appearing(ctx)
+    ctx.segmenter.script(["ok"] * 3 + ["ok"] * 4 + ["empty"])
+    await start(ctx, image, mask)
+    await analyze_frame(ctx, 180.0, image, segment=True)  # found by name
+    a = ctx.vessels[0]
+    ctx.vessels = [a.model_copy(update={"roi": [(x + 5, y) for x, y in a.roi]}), *ctx.vessels[1:]]
+    for t in (240.0, 300.0, 360.0):
+        await analyze_frame(ctx, t, plain(image, mask), segment=True)
+    await analyze_frame(ctx, 420.0, image, segment=True)
+    assert ctx.segmenter.pointed_asks == []
+
+
+@pytest.mark.anyio
+async def test_a_code_outline_alone_is_not_a_sighting(ctx, scene):
+    """Code outlined a change SAM never confirmed (a bubble, condensation): a later empty answer where nothing has
+    changed is still a zero, not a miss of something SAM never found (D-90)."""
+    image, mask = scene
+    appearing(ctx)
+    ctx.segmenter.script(["ok"] * 3 + ["empty", "empty"])
+    ctx.segmenter.pointed_steps = ["empty"]
+    await start(ctx, image, mask)
+    coded = await analyze_frame(ctx, 180.0, image, segment=True)
+    assert drawn_by(ctx, coded.frame_id) == ["change-map"]
+    await analyze_frame(ctx, 240.0, plain(image, mask), segment=True)
+    reading = last_length_of_a(ctx)
+    assert (reading.t, reading.value) == (240.0, 0.0) and misses(ctx) == []
 
 
 @pytest.mark.anyio

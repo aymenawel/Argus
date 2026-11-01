@@ -212,6 +212,30 @@ async def test_video_mode_failure_falls_back_to_image_mode(ctx, clip):
 
 
 @pytest.mark.anyio
+async def test_a_video_import_falling_back_to_stills_never_points_sam(ctx, clip):
+    """Video imports keep by-name answers only (D-92): a start taken from a failed clip's first samples would sit
+    mid-run."""
+    ctx.recipe = Recipe.model_validate(
+        {**RECIPE.model_dump(by_alias=True), "concepts": [{"name": "root", "appears": True}]}
+    )
+    asked = []
+
+    class Fails(FakeSegmenter):
+        async def image(self, image_bgr, concept):  # never found by name: every answer would be pointed at
+            self.modes.append("image")
+            return SegmentResult([], ok_call(images=1))
+
+        async def pointed(self, image_bgr, concept, prompts):
+            asked.append(len(prompts))
+            return SegmentResult([], ok_call(images=1))
+
+    ctx.segmenter = Fails(video_fails=True)
+    status = await run_import(ctx, ImportRequest(paths=[clip], time_scale=SCALE), cancel=asyncio.Event())
+    assert status is RunStatus.FINISHED and "image" in ctx.segmenter.modes
+    assert asked == []
+
+
+@pytest.mark.anyio
 async def test_cancel_stops_the_run(ctx, clip):
     cancel = asyncio.Event()
     cancel.set()

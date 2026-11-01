@@ -48,7 +48,9 @@ def test_noise_alone_changes_nothing():
 
 
 def test_light_changing_everywhere_is_not_growth():
-    assert change_regions(reference(), raised(agar(4), np.ones((SIZE, SIZE), bool), 20)) == []
+    """Raised by 40 everywhere, the whole vessel would pass the core threshold: only the correction from the pixels
+    outside the vessel keeps it out."""
+    assert change_regions(reference(), raised(agar(4), np.ones((SIZE, SIZE), bool), 40)) == []
 
 
 def test_a_speck_below_the_size_floor_is_dropped():

@@ -17,12 +17,12 @@ from argus.analyze.next_run import pooled_sd
 from argus.analyze.noise import noise_floor, wobble_floor
 from argus.domain import DerivedDraft, Measurement, Plan, Role, RunEvent, Vessel
 from argus.measure.uncertainty import format_measurement
-from argus.recipes.model import MeasurementSpec, Recipe
+from argus.recipes.model import Recipe
 from argus.segment.change import CODE
 from argus.storage.db import Database
 from argus.storage.repos import (
     add_derived,
-    detections_for_frame,
+    code_outlined_readings,
     events_for_run,
     measurements_for_run,
     vessels_for_run,
@@ -31,8 +31,10 @@ from argus.storage.repos import (
 NOTABLE = frozenset(
     {"intervention", "rule", "camera_moved", "segment_failed", "interrupted", "spend", "quality", "missed"}
 )
-# Rule 3 of the scientific rules quotes "outlined by code": a reading taken on the change since the start, not on SAM
+# Rule 3 of the scientific rules quotes "outlined by code": a reading taken on the change since the start, not on SAM,
+# and anything computed from such readings (a change, a difference, a fit, a noise floor).
 CODE_OUTLINED = ", outlined by code from the change since the start, not by SAM"
+CODE_INPUTS = ", partly from readings outlined by code, not by SAM"
 MAX_EVENT_REFS = 20
 STILL_SHARE = 0.10  # without an event, the first tenth of the run so far counts as still
 
@@ -180,17 +182,6 @@ def _measurement_ref(
     )
 
 
-def _code_outlined(db: Database, vessel_id: str, spec: MeasurementSpec, last: Measurement) -> bool:
-    """Whether the reading was taken on an outline code drew, not SAM: on its frame, the vessel's object was the
-    change since the start (D-92)."""
-    if last.frame_id is None:
-        return False
-    return any(
-        d.vessel_id == vessel_id and d.concept == spec.source and d.backend == CODE
-        for d in detections_for_frame(db, last.frame_id)
-    )
-
-
 def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Plan | None) -> RefTable:
     """Every number a call at time t may cite: each vessel's latest reading, its change since its first reading,
     each treatment vessel's difference from the controls' mean, the noise floor per metric, notable events, plan
@@ -202,6 +193,8 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
     pending: list[tuple[str, DerivedDraft, float | None, str | None]] = []  # ref id, row, t, vessel id
 
     for metric in recipe.stored_metrics():
+        coded = code_outlined_readings(db, run_id, metric, recipe.measurement_for(metric).source, CODE)  # D-93
+        first_pending = len(pending)
         latest: dict[str, Measurement] = {}
         lost: set[str] = set()  # vessels whose latest reading came before SAM lost the object: not of now (D-91)
         by_vessel: dict[str, list[Measurement]] = {}
@@ -217,9 +210,7 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
             concept = lost_after(events, vessel.id, recipe.measurement_for(metric), last.t)
             if concept is not None:
                 lost.add(vessel.id)
-            refs[f"m:{vessel.label}:{metric}"] = _measurement_ref(
-                vessel, metric, last, concept, _code_outlined(db, vessel.id, recipe.measurement_for(metric), last)
-            )
+            refs[f"m:{vessel.label}:{metric}"] = _measurement_ref(vessel, metric, last, concept, last.id in coded)
             if len(rows) >= 2:
                 since = "since its first reading" if concept is None else "from its first reading to its last"
                 change = DerivedDraft(
@@ -277,6 +268,10 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
             pending.append((f"noise:{metric}", noise, t, None))
         if plan is not None and plan.quantity in FITTED and plan.metric == metric:
             pending += _fitted(t, recipe.curve, plan.quantity, metric, vessels, by_vessel)
+        for i in range(first_pending, len(pending)):  # computed from a reading code drew: it says so (D-93)
+            ref_id, draft, ref_t, vessel_id = pending[i]
+            if coded.intersection(draft.inputs):
+                pending[i] = (ref_id, draft.model_copy(update={"label": draft.label + CODE_INPUTS}), ref_t, vessel_id)
 
     if pending:
         stored = add_derived(db, run_id, [draft for _, draft, _, _ in pending])

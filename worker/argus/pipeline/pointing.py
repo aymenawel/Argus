@@ -60,14 +60,21 @@ def _roi(vessel: Vessel) -> tuple[tuple[float, float], ...]:
 
 def observe(ctx: RunContext, vessel: Vessel, concept: str, image_bgr: np.ndarray) -> ChangeReference | None:
     """Take this kept frame into the vessel's start reference while it is being taken; once it is, return it. A
-    reference taken where the vessel was before a camera move is dropped, and a new one is taken."""
+    reference taken where the vessel was before a camera move is dropped, and a new one is taken, unless the object
+    was already seen there: a start taken now would hold it, and its change would be only the growth since the move."""
     key = (vessel.id, concept)
+    if key in ctx.change_off:
+        return None
     reference = ctx.change_refs.get(key)
     if reference is not None and reference.roi == _roi(vessel):
         return reference
-    ctx.change_refs.pop(key, None)
     roi, crops = ctx.change_crops.get(key, (_roi(vessel), []))
-    if roi != _roi(vessel):  # moved while the reference was being taken
+    if reference is not None or roi != _roi(vessel):  # the vessel moved
+        ctx.change_refs.pop(key, None)
+        ctx.change_crops.pop(key, None)
+        if concept in ctx.sighted.get(vessel.id, ()):
+            ctx.change_off.add(key)
+            return None
         roi, crops = _roi(vessel), []
     crop, mask, _ = vessel_crop(vessel, image_bgr)
     crops = [*crops, crop.copy()]
@@ -116,13 +123,15 @@ async def point_again(
     regions = await asyncio.to_thread(change_regions, reference, crop)
     if not regions:
         return []
+    inside, changed = int(reference.inside.sum()), sum(int(r.mask.sum()) for r in regions)
+    if changed >= VESSEL_SIZED * inside:
+        return []  # the whole vessel changed at once (light, a fogged lid, drying agar): not growth to point at
     height, width = crop.shape[:2]
     prompts = [_prompt(r, width, height) for r in regions]
     result = await segment_with_retries(ctx, crop, concept, t=t, frame_ids=[frame_id], prompts=prompts)
     by_sam: dict[int, list[MaskPatch]] = {}
     if isinstance(result, SegmentResult):
-        inside = int(reference.inside.sum())
-        mostly_changed = sum(int(r.mask.sum()) for r in regions) >= MOSTLY_CHANGED * inside
+        mostly_changed = changed >= MOSTLY_CHANGED * inside
         for track in result.tracks:
             number, patch = _number(track.key), track.frames[0].patch
             if number is None or not 1 <= number <= len(prompts):
