@@ -22,6 +22,7 @@ from argus.domain import (
     VesselDraft,
 )
 from argus.measure.uncertainty import format_measurement
+from argus.pipeline.verdict import verdict_inputs
 from argus.recipes.loader import load_recipe
 from argus.storage.repos import (
     add_event,
@@ -199,3 +200,74 @@ def test_an_early_run_wide_event_still_leaves_a_noise_floor(db, exp):
     noise = refs.get("noise:delta_e")
     assert noise is not None and 0 < noise.value < 0.1  # the wobble, not the rise or the jump
     assert "wobble" in noise.label
+
+
+def missed(db, run, vessel, *, t):
+    """SAM stopped finding the liquid in this vessel at t (D-90)."""
+    add_event(
+        db,
+        run.id,
+        vessel_id=vessel.id,
+        t_start=t,
+        kind=EventKind.MISSED,
+        source="pipeline",
+        detail={"concept": "liquid", "last_seen_t": 600.0, "message": "m"},
+    )
+
+
+def test_a_control_lost_after_its_last_reading_is_left_out_of_the_mean(db, two_by_two):
+    """A's last reading came before SAM lost the liquid: it is no reading of now (D-91)."""
+    run, vessels = two_by_two
+    missed(db, run, vessels[0], t=650.0)
+    refs = build_refs(db, run.id, 700.0, recipe=COLOUR, plan=PLAN)
+    lost = refs.get("m:A:delta_e")
+    assert lost.kind == "last_reading" and lost.value == 4.0
+    assert lost.label == (
+        "Vessel A (control, room): delta_e at its last reading, before SAM stopped finding the liquid"
+    )
+    change = refs.get("chg:A:delta_e").label
+    assert change == "Vessel A (control, room): delta_e change from its first reading to its last"
+    assert refs.get("diff:C:delta_e").value == pytest.approx(25.6 - 5.0)  # B alone
+    assert refs.get("m:B:delta_e").kind == "measurement"
+
+
+def test_a_lost_treatment_has_no_difference(db, two_by_two):
+    run, vessels = two_by_two
+    missed(db, run, vessels[2], t=650.0)
+    refs = build_refs(db, run.id, 700.0, recipe=COLOUR, plan=PLAN)
+    assert "diff:C:delta_e" not in refs and "diff:D:delta_e" in refs
+    assert refs.get("m:C:delta_e").kind == "last_reading"
+
+
+def test_a_miss_before_the_last_reading_changes_nothing(db, two_by_two):
+    """Readings went on after the miss (colour from the last outline, or the liquid found again): still current."""
+    run, vessels = two_by_two
+    missed(db, run, vessels[0], t=500.0)
+    refs = build_refs(db, run.id, 700.0, recipe=COLOUR, plan=PLAN)
+    assert refs.get("m:A:delta_e").kind == "measurement"
+    assert refs.get("diff:C:delta_e").value == pytest.approx(25.6 - 4.5)
+
+
+def test_every_vessel_lost_still_builds(db, two_by_two):
+    run, vessels = two_by_two
+    for v in vessels:
+        missed(db, run, v, t=650.0)
+    refs = build_refs(db, run.id, 700.0, recipe=COLOUR, plan=PLAN)
+    assert "noise:delta_e" in refs and not [i for i in refs.ids() if i.startswith("diff:")]
+    assert {refs.get(f"m:{v.label}:delta_e").kind for v in vessels} == {"last_reading"}
+
+
+def test_the_missed_event_ref_names_the_concept_and_vessel(db, two_by_two):
+    run, vessels = two_by_two
+    missed(db, run, vessels[0], t=650.0)
+    refs = build_refs(db, run.id, 700.0, recipe=COLOUR, plan=PLAN)
+    [event] = [refs.get(i) for i in refs.ids() if i.startswith("ev:")]
+    assert event.label == "Time SAM stopped finding the liquid in Vessel A (control, room)" and event.t == 650.0
+
+
+def test_a_lost_control_is_not_counted_as_measured(db, two_by_two):
+    run, vessels = two_by_two
+    missed(db, run, vessels[0], t=650.0)
+    refs = build_refs(db, run.id, 700.0, recipe=COLOUR, plan=PLAN)
+    inputs = verdict_inputs(db, run, refs, plan=PLAN, t=700.0, recipe=COLOUR)
+    assert inputs.controls == 1 and inputs.treatments == 2

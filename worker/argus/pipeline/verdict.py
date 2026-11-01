@@ -11,7 +11,7 @@ from argus.analyze.ceiling import TOO_EARLY, VerdictInputs, ceiling, choose_verd
 from argus.analyze.fits import vessel_fits
 from argus.api.events import EventBroker
 from argus.claims.checker import check_text_fields, render
-from argus.claims.refs import FITTED, NOTABLE, RefTable, build_refs
+from argus.claims.refs import FITTED, NOTABLE, Ref, RefTable, build_refs
 from argus.claims.schema import schema_errors
 from argus.config import Settings
 from argus.datasets.manifest import ManifestError, load_manifest
@@ -139,6 +139,10 @@ def _fit_notes(
     return tuple(notes)
 
 
+def _current(ref: Ref | None) -> bool:
+    return ref is not None and ref.kind != "last_reading"
+
+
 def verdict_inputs(
     db: Database, run: Run, refs: RefTable, *, plan: Plan | None, t: float, recipe: Recipe | None = None
 ) -> VerdictInputs:
@@ -153,7 +157,8 @@ def verdict_inputs(
     if quantity in FITTED and recipe is None:  # no curve to fit: no dish could be named as failed
         raise ValueError("a plan judged on a fitted quantity needs the recipe's curve")
     own, diff = (FITTED[quantity][0], FITTED[quantity][1]) if quantity in FITTED else ("m", "diff")
-    controls = [v for v in vessels if v.role is Role.CONTROL and f"{own}:{v.label}:{metric}" in refs]
+    # A control whose latest reading came before SAM lost the object is not measured now (D-91).
+    controls = [v for v in vessels if v.role is Role.CONTROL and _current(refs.get(f"{own}:{v.label}:{metric}"))]
     compared = [
         v
         for v in vessels
@@ -206,7 +211,7 @@ def verdict_inputs(
         min_effect=plan.min_effect if plan is not None and plan.min_effect is not None else 0.0,
         direction=plan.direction if plan is not None else None,
         rivals=rival_states(db, run, plan.rivals) if plan is not None else {},
-        measured=any(i.startswith("m:") and i.endswith(f":{metric}") for i in refs.ids()),
+        measured=any(i.startswith("m:") and i.endswith(f":{metric}") and _current(refs.get(i)) for i in refs.ids()),
         noise_display=noise.display if noise is not None else "",
         min_effect_display=min_effect.display if min_effect is not None else "",
         metric=metric,

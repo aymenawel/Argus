@@ -20,7 +20,9 @@ from argus.recipes.model import Recipe
 from argus.storage.db import Database
 from argus.storage.repos import add_derived, events_for_run, measurements_for_run, vessels_for_run
 
-NOTABLE = frozenset({"intervention", "rule", "camera_moved", "segment_failed", "interrupted", "spend", "quality"})
+NOTABLE = frozenset(
+    {"intervention", "rule", "camera_moved", "segment_failed", "interrupted", "spend", "quality", "missed"}
+)
 MAX_EVENT_REFS = 20
 STILL_SHARE = 0.10  # without an event, the first tenth of the run so far counts as still
 
@@ -148,15 +150,31 @@ def _still_until(vessel_id: str, rows: Sequence[Measurement], events: Sequence[R
     return max(STILL_SHARE * t, third)
 
 
-def _measurement_ref(vessel: Vessel, metric: str, last: Measurement) -> Ref:
+def _lost_concept(
+    vessel: Vessel, metric: str, last: Measurement, recipe: Recipe, events: Sequence[RunEvent]
+) -> str | None:
+    """The concept SAM stopped finding in this vessel after its latest reading of the metric, if it did: that reading
+    is then no reading of now (D-91). A quiet stretch without segmentation never makes a reading stale; a miss does."""
+    spec = recipe.measurement_for(metric)
+    read = {spec.source, spec.touching}
+    for event in events:
+        concept = event.detail.get("concept")
+        if event.kind == "missed" and event.vessel_id == vessel.id and event.t_start > last.t and concept in read:
+            return concept
+    return None
+
+
+def _measurement_ref(vessel: Vessel, metric: str, last: Measurement, lost: str | None = None) -> Ref:
+    """A vessel's latest reading: of now, or (`lost`) its last before SAM stopped finding that concept (D-91)."""
+    now = f"{metric} now" if lost is None else f"{metric} at its last reading, before SAM stopped finding the {lost}"
     return Ref(
         id=f"m:{vessel.label}:{metric}",
-        label=f"{_vessel_label(vessel)}: {metric} now",
+        label=f"{_vessel_label(vessel)}: {now}",
         value=last.value,
         uncertainty=last.uncertainty,
         unit=last.unit,
         display=format_measurement(last.value, last.uncertainty, last.unit),
-        kind="measurement",
+        kind="measurement" if lost is None else "last_reading",
         t=last.t,
         vessel_id=vessel.id,
         evidence=(last.id,),
@@ -175,6 +193,7 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
 
     for metric in recipe.stored_metrics():
         latest: dict[str, Measurement] = {}
+        lost: set[str] = set()  # vessels whose latest reading came before SAM lost the object: not of now (D-91)
         by_vessel: dict[str, list[Measurement]] = {}
         floors: list[tuple[float, list[str]]] = []
         wobbled = False  # a vessel's floor came from its wobble, not a still period
@@ -185,12 +204,16 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
             first, last = rows[0], rows[-1]
             latest[vessel.id] = last
             by_vessel[vessel.id] = rows
-            refs[f"m:{vessel.label}:{metric}"] = _measurement_ref(vessel, metric, last)
+            concept = _lost_concept(vessel, metric, last, recipe, events)
+            if concept is not None:
+                lost.add(vessel.id)
+            refs[f"m:{vessel.label}:{metric}"] = _measurement_ref(vessel, metric, last, concept)
             if len(rows) >= 2:
+                since = "since its first reading" if concept is None else "from its first reading to its last"
                 change = DerivedDraft(
                     t=t,
                     kind="change",
-                    label=f"{_vessel_label(vessel)}: {metric} change since its first reading",
+                    label=f"{_vessel_label(vessel)}: {metric} change {since}",
                     value=last.value - first.value,
                     uncertainty=_quadrature(last.uncertainty, first.uncertainty),
                     unit=last.unit,
@@ -206,14 +229,14 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
                 floors.append((wobble, [r.id for r in rows]))
                 wobbled = True
 
-        controls = [latest[v.id] for v in vessels if v.role is Role.CONTROL and v.id in latest]
+        controls = [latest[v.id] for v in vessels if v.role is Role.CONTROL and v.id in latest and v.id not in lost]
         if controls:
             values = [c.value for c in controls]
             spread = statistics.stdev(values) / math.sqrt(len(values)) if len(values) >= 2 else 0.0
             measured = _quadrature(*(c.uncertainty for c in controls)) / len(controls)
             mean, u_mean = statistics.fmean(values), _quadrature(spread, measured)
             for vessel in vessels:
-                if vessel.role is not Role.TREATMENT or vessel.id not in latest:
+                if vessel.role is not Role.TREATMENT or vessel.id not in latest or vessel.id in lost:
                     continue
                 mine = latest[vessel.id]
                 difference = DerivedDraft(
@@ -260,10 +283,15 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
             )
 
     notable = [e for e in events if e.kind in NOTABLE][-MAX_EVENT_REFS:]
+    names = {v.id: _vessel_label(v) for v in vessels}
     for n, event in enumerate(notable, start=1):
+        label = f"Time of the {event.kind} event"
+        if event.kind == "missed":
+            where = names.get(event.vessel_id, "a vessel")
+            label = f"Time SAM stopped finding the {event.detail.get('concept')} in {where}"
         refs[f"ev:{n}"] = Ref(
             id=f"ev:{n}",
-            label=f"Time of the {event.kind} event",
+            label=label,
             value=event.t_start,
             uncertainty=0.0,
             unit="s",
