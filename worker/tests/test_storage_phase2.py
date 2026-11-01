@@ -123,6 +123,21 @@ def test_sam_answers_are_evidence(db, run, vessel, frame):
     assert sam_answers_for_run(db, run.id) == answers
 
 
+def test_sam_answers_record_how_the_object_was_found(db, run, vessel, frame):
+    """Found by name, by pointing SAM at what changed, or by code outlining the change (D-93); by name unless said."""
+    answers = {(vessel.id, "root"): 1, (vessel.id, "bean"): 2, (vessel.id, "leaf"): 0}
+    add_sam_answers(db, run.id, frame.id, answers, via={(vessel.id, "root"): "pointed", (vessel.id, "bean"): "code"})
+    assert [(a.concept, a.via) for a in sam_answers_for_run(db, run.id)] == [
+        ("root", "pointed"),
+        ("bean", "code"),
+        ("leaf", "name"),
+    ]
+    with pytest.raises(sqlite3.IntegrityError):
+        add_sam_answers(db, run.id, frame.id, {(vessel.id, "stem"): 1}, via={(vessel.id, "stem"): "guess"})
+    with pytest.raises(sqlite3.IntegrityError), db.write() as c:
+        c.execute("UPDATE sam_answers SET via='name'")
+
+
 def test_the_latest_calibration_at_a_time_wins(db, run):
     first = add_calibration(db, run.id, calibration(t=0.0))
     moved = add_calibration(db, run.id, calibration(t=600.0))

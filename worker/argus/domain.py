@@ -262,6 +262,7 @@ class SamAnswer(Record):
     concept: str
     found: int = Field(ge=0)
     t: float  # the frame's time
+    via: Literal["name", "pointed", "code"] = "name"  # by name, SAM pointed at the change, or code (D-93)
 
 
 class EventKind(StrEnum):

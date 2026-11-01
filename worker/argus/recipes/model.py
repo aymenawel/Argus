@@ -50,6 +50,9 @@ class Concept(Spec):
     # Something that can really disappear (foam collapsing): an empty answer after a sighting reads zero. Anything
     # else SAM stops finding is a miss, a gap with a `missed` event, never a zero (D-90).
     can_vanish: bool = False
+    # Not there at the start, it grows into view (a colony): an empty answer for it is checked against what changed
+    # since the start, SAM is pointed there, and code outlines the change if SAM still finds nothing (D-92).
+    appears: bool = False
 
 
 class MeasurementSpec(Spec):

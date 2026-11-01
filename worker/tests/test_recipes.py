@@ -46,6 +46,15 @@ def test_bundled_recipes_load_and_point_to_real_measurements():
         assert r.main_measurement in {m.id for m in r.measurements}
 
 
+def test_only_the_colony_appears():
+    """A colony isn't there at the start and grows into view: its empty answers are checked against the change since
+    the start (D-92). Seeds, glasses and foam are there from the start."""
+    recipes = load_all(REPO_ROOT / "recipes")
+    assert recipes["colony-spread"].version == 2
+    assert [c.appears for c in recipes["colony-spread"].concepts] == [True]
+    assert not any(c.appears for r in recipes.values() if r.id != "colony-spread" for c in r.concepts)
+
+
 def test_only_foam_can_vanish_and_metrics_map_back_to_their_concepts():
     """Foam can really collapse to nothing; a colony or a root SAM stops finding is a miss (D-90)."""
     recipes = load_all(REPO_ROOT / "recipes")

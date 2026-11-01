@@ -1,7 +1,8 @@
 # A colony spreading over agar in a dish (a bacterial swarm, a mould), seen from above or below: Argus measures the
-# area SAM finds in each dish. A faint colony is only found in its own dish's region (D-89).
+# area SAM finds in each dish. A faint colony is only found in its own dish's region (D-89). It isn't there at the
+# start: when SAM finds nothing, Argus points it at what changed in the dish since then, or outlines the change (D-92).
 id = "colony-spread"
-version = 1
+version = 2
 title = "Colony spread"
 default_mode = "smart_trigger"
 analysis_step_s = 600.0
@@ -13,6 +14,7 @@ stills_view = "vessel"
 
 [[concepts]]
 name = "microbial colony"
+appears = true
 
 [[measurements]]
 id = "area"

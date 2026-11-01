@@ -523,19 +523,30 @@ def detections_for_frame(db: Database, frame_id: str) -> list[Detection]:
     ]
 
 
-def add_sam_answers(db: Database, run_id: str, frame_id: str, answers: Mapping[tuple[str, str], int]) -> None:
-    """What SAM answered on one frame: objects found per (vessel id, concept), 0 for an empty answer (D-90)."""
+def add_sam_answers(
+    db: Database,
+    run_id: str,
+    frame_id: str,
+    answers: Mapping[tuple[str, str], int],
+    via: Mapping[tuple[str, str], str] | None = None,
+) -> None:
+    """What SAM answered on one frame: objects found per (vessel id, concept), 0 for an empty answer (D-90), and how
+    they were found when not by name: "pointed" or "code" (D-93)."""
+    via = via or {}
     with db.write() as c:
         c.executemany(
-            "INSERT INTO sam_answers(run_id, frame_id, vessel_id, concept, found) VALUES (?,?,?,?,?)",
-            [(run_id, frame_id, vessel_id, concept, found) for (vessel_id, concept), found in answers.items()],
+            "INSERT INTO sam_answers(run_id, frame_id, vessel_id, concept, found, via) VALUES (?,?,?,?,?,?)",
+            [
+                (run_id, frame_id, vessel_id, concept, found, via.get((vessel_id, concept), "name"))
+                for (vessel_id, concept), found in answers.items()
+            ],
         )
 
 
 def sam_answers_for_run(db: Database, run_id: str) -> list[SamAnswer]:
     with db.read() as c:
         rows = c.execute(
-            "SELECT a.frame_id, a.vessel_id, a.concept, a.found, f.t FROM sam_answers a "
+            "SELECT a.frame_id, a.vessel_id, a.concept, a.found, f.t, a.via FROM sam_answers a "
             "JOIN frames f ON f.id = a.frame_id WHERE a.run_id=? ORDER BY f.t, a.rowid",
             (run_id,),
         ).fetchall()
