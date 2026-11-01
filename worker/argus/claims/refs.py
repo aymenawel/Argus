@@ -11,6 +11,7 @@ import statistics
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
+from argus.analyze.coverage import lost_after
 from argus.analyze.fits import fit_series
 from argus.analyze.next_run import pooled_sd
 from argus.analyze.noise import noise_floor, wobble_floor
@@ -150,20 +151,6 @@ def _still_until(vessel_id: str, rows: Sequence[Measurement], events: Sequence[R
     return max(STILL_SHARE * t, third)
 
 
-def _lost_concept(
-    vessel: Vessel, metric: str, last: Measurement, recipe: Recipe, events: Sequence[RunEvent]
-) -> str | None:
-    """The concept SAM stopped finding in this vessel after its latest reading of the metric, if it did: that reading
-    is then no reading of now (D-91). A quiet stretch without segmentation never makes a reading stale; a miss does."""
-    spec = recipe.measurement_for(metric)
-    read = {spec.source, spec.touching}
-    for event in events:
-        concept = event.detail.get("concept")
-        if event.kind == "missed" and event.vessel_id == vessel.id and event.t_start > last.t and concept in read:
-            return concept
-    return None
-
-
 def _measurement_ref(vessel: Vessel, metric: str, last: Measurement, lost: str | None = None) -> Ref:
     """A vessel's latest reading: of now, or (`lost`) its last before SAM stopped finding that concept (D-91)."""
     now = f"{metric} now" if lost is None else f"{metric} at its last reading, before SAM stopped finding the {lost}"
@@ -204,7 +191,7 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
             first, last = rows[0], rows[-1]
             latest[vessel.id] = last
             by_vessel[vessel.id] = rows
-            concept = _lost_concept(vessel, metric, last, recipe, events)
+            concept = lost_after(events, vessel.id, recipe.measurement_for(metric), last.t)
             if concept is not None:
                 lost.add(vessel.id)
             refs[f"m:{vessel.label}:{metric}"] = _measurement_ref(vessel, metric, last, concept)
@@ -282,7 +269,14 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
                 evidence=(row.id,),
             )
 
-    notable = [e for e in events if e.kind in NOTABLE][-MAX_EVENT_REFS:]
+    # A dish SAM keeps finding and losing opens a missed event per stretch: only the newest per vessel and concept
+    # gets a ref, so they can't push the other events out of the cap.
+    newest = {(e.vessel_id, e.detail.get("concept")): e.id for e in events if e.kind == "missed"}
+    notable = [
+        e
+        for e in events
+        if e.kind in NOTABLE and (e.kind != "missed" or newest[(e.vessel_id, e.detail.get("concept"))] == e.id)
+    ][-MAX_EVENT_REFS:]
     names = {v.id: _vessel_label(v) for v in vessels}
     for n, event in enumerate(notable, start=1):
         label = f"Time of the {event.kind} event"

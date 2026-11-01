@@ -77,6 +77,9 @@ class VerdictInputs:
         tuple[str, bool | None, str, str], ...
     ] = ()  # (check id, ok, text, prompt): refused or unreached fits, plateaus
     control_vessels: int = 0  # control vessels in the run, fitted or not
+    # A level plan's vessels whose latest reading came before SAM stopped finding the object (D-91): measured, not now.
+    lost_controls: int = 0
+    lost_treatments: int = 0
 
 
 def _effect(ref: Ref, inputs: VerdictInputs) -> Literal["clear", "opposed", "small", "unclear"]:
@@ -144,13 +147,13 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
                 "was recorded. Give the start time when you import to settle it.",
             )
         )
-    checks.append(
-        _check(
-            "measured",
-            inputs.measured,
-            f"{metric} was measured in this run." if inputs.measured else f"{metric} has no readings in this run.",
-        )
-    )
+    if inputs.measured:
+        measured = f"{metric} was measured in this run."
+    elif inputs.lost_controls or inputs.lost_treatments:
+        measured = f"{metric} was measured, but SAM stopped finding the object in every vessel after its last reading."
+    else:
+        measured = f"{metric} has no readings in this run."
+    checks.append(_check("measured", inputs.measured, measured))
     fitted = inputs.quantity in FITTED
     present = max(inputs.controls, inputs.control_vessels)
     if fitted and present and inputs.controls < MIN_FITTED_CONTROLS:
@@ -172,21 +175,34 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
                 prompt="There are control vessels to compare against.",
             )
         )
+    elif inputs.lost_controls:
+        text = (
+            "SAM stopped finding the object in every control vessel after its last reading, so no control is "
+            "measured now and a treatment can't be told from other causes."
+        )
+        checks.append(_check("control", False, text))
     else:
         checks.append(
             _check("control", False, "There is no control vessel, so a treatment can't be told from other causes.")
         )
     enough = inputs.treatments >= MIN_REPLICATES
     counted = "with a fitted difference from the controls" if fitted else "in the comparison measured"
+    lost, lost_prompt = "", ""
+    if inputs.lost_treatments:
+        lost = f" SAM stopped finding the object in {inputs.lost_treatments} of them after its last reading."
+        lost_prompt = " SAM stopped finding the object in some of them after its last reading."
     checks.append(
         _check(
             "replicates",
             enough,
             f"{inputs.treatments} of {max(inputs.planned, inputs.treatments)} treatment vessel(s) {counted}; "
-            f"at least {MIN_REPLICATES} are needed.",
-            prompt=f"Enough treatment vessels {counted.replace(' measured', '')}."
-            if enough
-            else f"Too few treatment vessels {counted.replace(' measured', '')} to count replicates.",
+            f"at least {MIN_REPLICATES} are needed." + lost,
+            prompt=(
+                f"Enough treatment vessels {counted.replace(' measured', '')}."
+                if enough
+                else f"Too few treatment vessels {counted.replace(' measured', '')} to count replicates."
+            )
+            + lost_prompt,
         )
     )
     if fitted:

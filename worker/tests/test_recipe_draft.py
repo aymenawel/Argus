@@ -47,6 +47,7 @@ def answer(**overrides) -> dict:
         },
         "safety_notes": [],
         "question_for_researcher": "",
+        "vanishing": [],
     }
     for key, value in overrides.items():
         if key in plan:
@@ -205,3 +206,25 @@ async def test_a_process_named_as_a_concept_is_retried(concept):
     draft, calls = await draft_recipe(WORDS_GERMINATION, reasoner=reasoner, templates=TEMPLATES)
     assert "a process, not a thing a camera can outline" in reasoner.tasks[1].variable[-1]
     assert len(calls) == 2 and [c.name for c in draft.recipe.concepts] == ["seed", "root"]
+
+
+@pytest.mark.anyio
+async def test_a_thing_that_can_vanish_keeps_its_zeros():
+    """An ice cube really disappears: the drafted recipe marks it, so its empty answers stay zeros; seeds and roots
+    SAM stops finding are misses (D-90)."""
+    area = {"id": "area", "method": "area", "from": "ice cube", "touching": None, "min_length_mm": None}
+    melt = answer(
+        concepts=["ice cube"], measurements=[area], main_measurement="area", metric="area", vanishing=["ice cube"]
+    )
+    words = "I'll time how fast ice cubes shrink in salt water and in tap water"
+    draft, _ = await draft_recipe(words, reasoner=FakeReasoner([melt]), templates=TEMPLATES)
+    assert [c.can_vanish for c in draft.recipe.concepts] == [True]
+    plain, _ = await draft_recipe(WORDS_GERMINATION, reasoner=FakeReasoner([answer()]), templates=TEMPLATES)
+    assert not any(c.can_vanish for c in plain.recipe.concepts)
+
+
+@pytest.mark.anyio
+async def test_vanishing_must_name_one_of_the_concepts():
+    reasoner = FakeReasoner([answer(vanishing=["ice cube"]), answer()])
+    await draft_recipe(WORDS_GERMINATION, reasoner=reasoner, templates=TEMPLATES)
+    assert "vanishing: 'ice cube' is not one of the concepts" in reasoner.tasks[1].variable[-1]

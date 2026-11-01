@@ -15,7 +15,7 @@ from argus.claims.refs import FITTED, NOTABLE, Ref, RefTable, build_refs
 from argus.claims.schema import schema_errors
 from argus.config import Settings
 from argus.datasets.manifest import ManifestError, load_manifest
-from argus.domain import Plan, Role, Run, RunMode, RunStatus, Verdict, VerdictDraft, VerdictLevel
+from argus.domain import Plan, Role, Run, RunMode, RunStatus, Verdict, VerdictDraft, VerdictLevel, Vessel
 from argus.reason import Reasoner, ReasonError, ReasonResult
 from argus.reason.prompts import critique_task, load_schema, verdict_task
 from argus.recipes.model import Recipe
@@ -143,6 +143,12 @@ def _current(ref: Ref | None) -> bool:
     return ref is not None and ref.kind != "last_reading"
 
 
+def _lost(refs: RefTable, vessel: Vessel, metric: str) -> bool:
+    """Measured, but its latest reading came before SAM stopped finding the object (D-91)."""
+    ref = refs.get(f"m:{vessel.label}:{metric}")
+    return ref is not None and ref.kind == "last_reading"
+
+
 def verdict_inputs(
     db: Database, run: Run, refs: RefTable, *, plan: Plan | None, t: float, recipe: Recipe | None = None
 ) -> VerdictInputs:
@@ -211,7 +217,15 @@ def verdict_inputs(
         min_effect=plan.min_effect if plan is not None and plan.min_effect is not None else 0.0,
         direction=plan.direction if plan is not None else None,
         rivals=rival_states(db, run, plan.rivals) if plan is not None else {},
-        measured=any(i.startswith("m:") and i.endswith(f":{metric}") and _current(refs.get(i)) for i in refs.ids()),
+        # A fitted quantity is fitted to every reading there is; a level is judged on readings of now (D-91).
+        measured=any(
+            i.startswith("m:") and i.endswith(f":{metric}") and (quantity in FITTED or _current(refs.get(i)))
+            for i in refs.ids()
+        ),
+        lost_controls=0
+        if quantity in FITTED
+        else sum(_lost(refs, v, metric) for v in vessels if v.role is Role.CONTROL),
+        lost_treatments=0 if quantity in FITTED else sum(_lost(refs, v, metric) for v in compared),
         noise_display=noise.display if noise is not None else "",
         min_effect_display=min_effect.display if min_effect is not None else "",
         metric=metric,

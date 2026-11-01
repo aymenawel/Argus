@@ -1,5 +1,7 @@
 """The claim checker (spec §7.2): numbers only as refs, refs that exist, the ceiling, known evidence."""
 
+import dataclasses
+
 import pytest
 
 from argus.claims.checker import check_note, check_text_fields, render, render_note
@@ -135,6 +137,16 @@ def test_a_code_note_uses_only_refs_and_says_so():
     assert body["written_by"] == "code" and body["reason"] == "notes paused: spend cap"
     assert "3.7 ± 0.1 dE00" in body["observation"] and "25.1 ± 0.1 dE00" in body["observation"]
     assert fallback_note("checkpoint", RefTable({}), reason="x")["observation"] == "No readings yet."
+
+
+def test_a_code_note_never_calls_a_reading_from_before_a_miss_now():
+    """A reading SAM lost the object after is its last, not one of now (D-91), in code-written notes too."""
+    base = refs_table({"m:A:delta_e": "3.7 ± 0.1 dE00", "chg:A:delta_e": "3.2 ± 0.1 dE00"})
+    lost = dataclasses.replace(base.get("m:A:delta_e"), kind="last_reading")
+    refs = RefTable({"m:A:delta_e": lost, "chg:A:delta_e": base.get("chg:A:delta_e")})
+    observation = fallback_note("checkpoint", refs, reason="x")["observation"]
+    assert "3.7 ± 0.1 dE00 at its last reading, before SAM stopped finding it" in observation
+    assert " now" not in observation and "3.2 ± 0.1 dE00 from its first reading to its last" in observation
 
 
 @pytest.mark.parametrize(

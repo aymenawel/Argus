@@ -13,12 +13,13 @@ from dataclasses import dataclass, field
 
 from scipy import stats
 
+from argus.analyze.coverage import lost_after
 from argus.analyze.fits import Fit, vessel_fits
 from argus.analyze.levels import level_bounds, suggest_levels
 from argus.domain import Direction, Plan, Run, Vessel
 from argus.recipes.model import Recipe
 from argus.storage.db import Database
-from argus.storage.repos import measurements_for_run, vessels_for_run
+from argus.storage.repos import events_for_run, measurements_for_run, vessels_for_run
 
 ALPHA = 0.05
 POWER = 0.8
@@ -197,7 +198,10 @@ def next_run_numbers(db: Database, run: Run, recipe: Recipe, plan: Plan | None) 
         judged = {vid: f.rate_per_h[0] for vid, f in fits.items() if f.ok and f.rate_per_h is not None}
         judged_unit = f"{unit}/h"
     else:
-        judged = {r.vessel_id: r.value for r in rows}  # the latest wins: the readings the verdict compared
+        latest = {r.vessel_id: r for r in rows}  # the latest wins: the readings the verdict compared
+        # ... and, like the verdict, not a reading taken before SAM stopped finding the object (D-91)
+        spec, events = recipe.measurement_for(metric), events_for_run(db, run.id)
+        judged = {vid: r.value for vid, r in latest.items() if lost_after(events, vid, spec, r.t) is None}
         judged_unit = unit
     groups: dict[str, list[float]] = {}
     for vessel in vessels:

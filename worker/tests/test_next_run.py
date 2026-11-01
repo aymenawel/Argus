@@ -12,6 +12,7 @@ from argus.analyze.next_run import replicates_needed, replicates_with_reason, ru
 from argus.domain import (
     Condition,
     Direction,
+    EventKind,
     MeasurementDraft,
     PlanDraft,
     Role,
@@ -277,4 +278,34 @@ def test_a_level_plans_spread_comes_from_the_readings_the_verdict_compared(db):
     groups: dict[str, list[float]] = {}
     for v in vessels_for_run(db, run.id):
         groups.setdefault(str(v.role), []).append(latest[v.id])
+    assert f"spread of {pooled_sd(groups):.2g} mm" in numbers.replicates_reason
+
+
+def test_a_level_plans_spread_leaves_out_readings_sam_lost_the_object_after(db):
+    """The verdict leaves out a reading taken before SAM lost the object (D-91); so must the replicates' spread."""
+    from argus.analyze.next_run import next_run_numbers, pooled_sd
+    from argus.storage.repos import add_event, first_locked_plan, measurements_for_run, vessels_for_run
+
+    run = finished_run(db, quantity=None, checkpoint_s=43200.0)
+    plan = first_locked_plan(db, run.experiment_id)
+    a = next(v for v in vessels_for_run(db, run.id) if v.label == "A")
+    odd = MeasurementDraft(
+        vessel_id=a.id,
+        frame_id=None,
+        t=48.2 * 3600,
+        metric="root_length",
+        value=30.0,
+        uncertainty=0.1,
+        unit="mm",
+        method_version="skeleton_length/1",
+    )
+    add_measurements(db, run.id, [odd])  # A's last reading, then SAM lost the root
+    detail = {"concept": "root", "last_seen_t": 48.2 * 3600, "message": "m"}
+    add_event(db, run.id, vessel_id=a.id, t_start=48.3 * 3600, kind=EventKind.MISSED, source="pipeline", detail=detail)
+    latest = {r.vessel_id: r.value for r in measurements_for_run(db, run.id, metric="root_length")}
+    groups: dict[str, list[float]] = {}
+    for v in vessels_for_run(db, run.id):
+        if v.id != a.id:
+            groups.setdefault(str(v.role), []).append(latest[v.id])
+    numbers = next_run_numbers(db, run, RECIPE, plan)
     assert f"spread of {pooled_sd(groups):.2g} mm" in numbers.replicates_reason

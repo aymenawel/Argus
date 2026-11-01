@@ -1,11 +1,13 @@
 """Refs a reasoning call may cite, built from stored measurements and events, and the noise floor."""
 
+import re
 import statistics
 from datetime import UTC, datetime
 from math import hypot
 
 import pytest
 
+from argus.analyze.ceiling import ceiling
 from argus.analyze.noise import noise_floor
 from argus.claims.refs import build_refs, format_run_time
 from argus.config import REPO_ROOT
@@ -23,6 +25,7 @@ from argus.domain import (
 )
 from argus.measure.uncertainty import format_measurement
 from argus.pipeline.verdict import verdict_inputs
+from argus.reason.prompts import load_prompt
 from argus.recipes.loader import load_recipe
 from argus.storage.repos import (
     add_event,
@@ -271,3 +274,50 @@ def test_a_lost_control_is_not_counted_as_measured(db, two_by_two):
     refs = build_refs(db, run.id, 700.0, recipe=COLOUR, plan=PLAN)
     inputs = verdict_inputs(db, run, refs, plan=PLAN, t=700.0, recipe=COLOUR)
     assert inputs.controls == 1 and inputs.treatments == 2
+
+
+def test_the_verdict_says_sam_lost_every_vessel_rather_than_that_nothing_was_measured(db, two_by_two):
+    """Every vessel was measured; SAM lost the liquid in each after its last reading. The checks must say that, not
+    that there are no readings or no control vessel (D-91)."""
+    run, vessels = two_by_two
+    for v in vessels:
+        missed(db, run, v, t=650.0)
+    refs = build_refs(db, run.id, 700.0, recipe=COLOUR, plan=PLAN)
+    _, checks = ceiling(verdict_inputs(db, run, refs, plan=PLAN, t=700.0, recipe=COLOUR))
+    text = {c.id: c.text for c in checks}
+    assert "SAM stopped finding" in text["measured"] and "no readings" not in text["measured"]
+    assert "SAM stopped finding" in text["control"] and "There is no control vessel" not in text["control"]
+    assert "SAM stopped finding" in text["replicates"]
+
+
+def test_a_lost_treatment_is_named_in_the_replicates_check(db, two_by_two):
+    run, vessels = two_by_two
+    missed(db, run, vessels[2], t=650.0)
+    refs = build_refs(db, run.id, 700.0, recipe=COLOUR, plan=PLAN)
+    _, checks = ceiling(verdict_inputs(db, run, refs, plan=PLAN, t=700.0, recipe=COLOUR))
+    replicates = next(c for c in checks if c.id == "replicates")
+    assert replicates.text.startswith("1 of 2 treatment vessel(s)") and "SAM stopped finding" in replicates.text
+
+
+def test_a_flickering_vessel_takes_one_event_ref_not_all_of_them(db, two_by_two):
+    """Each missed stretch is an event; only the newest per vessel and concept gets a ref, so a dish SAM keeps finding
+    and losing can't push an intervention out of the refs."""
+    run, vessels = two_by_two
+    add_event(db, run.id, vessel_id=None, t_start=10.0, kind=EventKind.INTERVENTION, source="researcher", detail={})
+    for i in range(25):
+        missed(db, run, vessels[0], t=20.0 + 20.0 * i)
+    refs = build_refs(db, run.id, 700.0, recipe=COLOUR, plan=PLAN)
+    assert [refs.get(i).t for i in refs.ids() if i.startswith("ev:")] == [10.0, 500.0]
+
+
+def test_the_rules_quote_the_labels_a_lost_reading_and_its_miss_carry(db, two_by_two):
+    """Rule 3 tells the model how to read a lost reading by its label, and where the time it was lost is: both must
+    be the labels Argus writes, or the rule points at nothing."""
+    run, vessels = two_by_two
+    missed(db, run, vessels[0], t=650.0)
+    refs = build_refs(db, run.id, 700.0, recipe=COLOUR, plan=PLAN)
+    rules = load_prompt("system/scientific-rules.md")
+    [lost, missed_at] = re.findall(r'"([^"]*SAM stopped finding[^"]*)"', rules)
+    assert lost in refs.get("m:A:delta_e").label
+    [event] = [refs.get(i) for i in refs.ids() if i.startswith("ev:")]
+    assert event.label.startswith(missed_at)

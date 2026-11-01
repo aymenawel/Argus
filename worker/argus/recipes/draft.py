@@ -130,6 +130,18 @@ def _concept_problems(concepts: Any) -> list[str]:
     return problems
 
 
+def _vanishing_problems(data: object) -> list[str]:
+    """Each concept that can vanish (D-90) must be one of the answer's concepts."""
+    if not isinstance(data, dict) or not isinstance(data.get("concepts"), list):
+        return []
+    vanishing = data.get("vanishing")
+    return [
+        f"vanishing: '{v}' is not one of the concepts"
+        for v in (vanishing if isinstance(vanishing, list) else [])
+        if v not in data["concepts"]
+    ]
+
+
 def _build(data: dict) -> tuple[Recipe, PlanDraft]:
     """The answer as a Recipe and a plan draft; raises ValueError with every reason."""
     measurements = []
@@ -156,7 +168,7 @@ def _build(data: dict) -> tuple[Recipe, PlanDraft]:
                 "analysis_step_s": data["analysis_step_s"],
                 "curve": data["curve"],
                 "rivals": data["rivals"],
-                "concepts": [{"name": c} for c in data["concepts"]],
+                "concepts": [{"name": c, "can_vanish": c in data["vanishing"]} for c in data["concepts"]],
                 "measurements": measurements,
                 "main_measurement": data["main_measurement"],
             }
@@ -209,8 +221,10 @@ async def draft_recipe(
             continue
         calls += [*result.failed_calls, result.call]
         data = result.data
-        reasons = schema_errors(data, schema) + _concept_problems(
-            data.get("concepts") if isinstance(data, dict) else None
+        reasons = (
+            schema_errors(data, schema)
+            + _concept_problems(data.get("concepts") if isinstance(data, dict) else None)
+            + _vanishing_problems(data)
         )
         if reasons:
             continue

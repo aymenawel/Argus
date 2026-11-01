@@ -291,3 +291,21 @@ def test_a_fitted_plan_needs_the_recipe(db, exp):
     refs = build_refs(db, run.id, 48 * 3600.0, recipe=RECIPE, plan=plan)
     with pytest.raises(ValueError, match="recipe"):
         verdict_inputs(db, run, refs, plan=plan, t=48 * 3600.0, recipe=None)
+
+
+def test_a_fitted_plan_still_counts_readings_sam_lost_the_object_after(db, exp):
+    """A half-way time is fitted to every reading there is; a miss at the end doesn't unmeasure it (D-91)."""
+    from argus.claims.refs import build_refs
+    from argus.domain import EventKind
+    from argus.pipeline.verdict import verdict_inputs
+    from argus.storage.repos import add_event, first_locked_plan, vessels_for_run
+
+    run = run_with(db, exp, {"A": logistic(10, 22), "B": logistic(10, 22), "C": logistic(10, 14)})
+    for v in vessels_for_run(db, run.id):
+        detail = {"concept": "seed", "last_seen_t": 48 * 3600.0, "message": "m"}
+        add_event(
+            db, run.id, vessel_id=v.id, t_start=49 * 3600.0, kind=EventKind.MISSED, source="pipeline", detail=detail
+        )
+    plan = first_locked_plan(db, exp.id)
+    refs = build_refs(db, run.id, 50 * 3600.0, recipe=RECIPE, plan=plan)
+    assert verdict_inputs(db, run, refs, plan=plan, t=50 * 3600.0, recipe=RECIPE).measured

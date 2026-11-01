@@ -12,9 +12,13 @@ def fallback_note(level: str, refs: RefTable, *, reason: str) -> dict:
     sentences = []
     for label, metric in keys:
         latest, change = refs.get(f"m:{label}:{metric}"), refs.get(f"chg:{label}:{metric}")
-        parts = [f"{latest.display} now"] if latest is not None else []
+        lost = latest is not None and latest.kind == "last_reading"  # SAM lost the object after it (D-91)
+        now = "at its last reading, before SAM stopped finding it" if lost else "now"
+        parts = [f"{latest.display} {now}"] if latest is not None else []
         if change is not None:
-            parts.append(f"{change.display} since its first reading")
+            parts.append(
+                f"{change.display} {'from its first reading to its last' if lost else 'since its first reading'}"
+            )
         sentences.append(f"Vessel {label}: {metric} " + ", ".join(parts) + ".")
     return {
         "level": level,
