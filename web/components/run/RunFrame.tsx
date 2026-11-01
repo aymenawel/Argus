@@ -121,7 +121,9 @@ export function RunFrame({ snapshot, source, mainMetric }: Props) {
                 key={v.id}
                 type="button"
                 className={`${styles.tag} ${on ? styles.selectedTag : ""}`}
-                style={{ left: `${left}%`, top: `max(8px, calc(${top}% - 34px))` }}
+                // Inside the vessel's own region, below the frame's top pills: above it, in a grid of dishes, a
+                // label sat on the dish above and seemed to name it.
+                style={{ left: `${left}%`, top: `max(48px, calc(${top}% + 8px))` }}
                 aria-pressed={on}
                 aria-label={`Vessel ${v.label}${value ? `, ${value.display}` : ""}`}
                 onClick={() => playhead.selectVessel(on ? null : v.id)}

@@ -7,10 +7,10 @@
   background: var(--raised);
 }
 
-/* The researcher's own notes sit on the surface, with a rule: a different voice from Argus's. */
+/* The researcher's own notes sit on the surface with a hairline border: a different voice from Argus's. */
 .mine {
   background: var(--surface);
-  box-shadow: inset 3px 0 0 var(--accent);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
 .head {

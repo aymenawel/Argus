@@ -33,6 +33,13 @@
   font-weight: 400;
 }
 
+.sub {
+  display: block;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: 400;
+}
+
 .ok {
   color: var(--muted);
 }

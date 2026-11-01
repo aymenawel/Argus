@@ -34,6 +34,15 @@ export function ReplayIndex() {
     <>
       <ReplayBanner manifest={null} />
       <PageHeader title="Replays" finding="Finished runs, recorded and replayed read-only." />
+      <p className={styles.intro}>
+        Argus is an AI lab partner: it watches an experiment through a camera, measures what changes in real units with
+        SAM 3.1, judges the researcher&apos;s hypothesis with Muse Wonder and suggests the next run. Each replay below
+        is a finished run in the same app, read-only: its pictures with SAM&apos;s outlines, every reading with its ±,
+        the AI&apos;s notes, the verdict and its checks.{" "}
+        <a href="https://github.com/aymenawel/Argus" target="_blank" rel="noreferrer">
+          Source and how it works
+        </a>
+      </p>
       {error ? (
         <Panel className={styles.panel}>
           <div className={styles.message} role="alert">
@@ -56,7 +65,8 @@ export function ReplayIndex() {
                 <div className={styles.card}>
                   <h2 className={styles.cardTitle}>{run.title}</h2>
                   <p className={styles.meta}>
-                    {sentence(run.source_label)} · recorded {day(run.recorded)}
+                    {sentence(run.source_label)} · {run.source_label === "published data" ? "analysed" : "recorded"}{" "}
+                    {day(run.recorded)}
                   </p>
                   {run.verdict && <VerdictChip level={run.verdict as VerdictLevel} />}
                   <div className={styles.links}>

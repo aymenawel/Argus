@@ -11,7 +11,8 @@ export function ReplayBanner({ manifest }: { manifest: BundleManifest | null }) 
     <div className={styles.banner} role="note">
       <p className={styles.lead}>
         {manifest
-          ? `Replay · recorded ${day(manifest.recorded)} · nothing on this page is live`
+          ? `Replay · ${manifest.source_label === "published data" ? "analysed" : "recorded"} ${day(manifest.recorded)}` +
+            " · nothing on this page is live"
           : "Replay · nothing on this page is live"}
       </p>
       {manifest?.source_label === "published data" && manifest.credit && (

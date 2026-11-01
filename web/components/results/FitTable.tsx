@@ -43,8 +43,8 @@ export function FitTable({ fits }: { fits: FitsView }) {
                 <td>{v.condition ? String(v.condition.value) : "—"}</td>
                 <td className="num">
                   {found}
-                  {how && <span className={styles.role}>{how}</span>}
-                  {missed && <span className={styles.role}>{missed}</span>}
+                  {how && <span className={styles.sub}>{how}</span>}
+                  {missed && <span className={styles.sub}>{missed}</span>}
                 </td>
                 <td className="num">{fit?.ok && fit.half_time_h ? formatPair(fit.half_time_h, "h") : "—"}</td>
                 <td className="num">{fit?.ok && fit.rate_per_h ? formatPair(fit.rate_per_h, `${unit}/h`) : "—"}</td>

@@ -13,6 +13,14 @@ type Props = {
   onDraft: (draft: RecipeDraft) => void;
 };
 
+// An example question per kind of experiment, so the box shows what a good answer looks like here.
+const EXAMPLES: Record<string, string> = {
+  "seed-germination": "Do rye seeds sprout sooner than pearl millet seeds?",
+  "colour-reaction": "Does food colouring spread faster in warm water than in cold water?",
+  "foam-height": "Does more washing-up liquid make the foam last longer?",
+  "colony-spread": "Does switching on fliA make the swarm spread faster?",
+};
+
 // "What are you testing?": Muse Spark drafts the plan, the factor and its conditions from the researcher's words.
 // Nothing is saved until the later steps, where every field can be changed.
 export function DescribeStep({ experimentId, recipe, draft, onDraft }: Props) {
@@ -33,7 +41,7 @@ export function DescribeStep({ experimentId, recipe, draft, onDraft }: Props) {
           className={styles.textarea}
           value={words}
           onChange={(e) => setWords(e.target.value)}
-          placeholder="Does food colouring spread faster in warm water than in cold water?"
+          placeholder={EXAMPLES[recipe.id] ?? "Which condition do you expect to change faster, and by how much?"}
           maxLength={4000}
         />
       </label>

@@ -125,11 +125,21 @@
 .topLeft {
   left: 14px;
   top: 14px;
+  max-width: calc(60% - 14px); /* a long source name gives way to the scale on the right */
+}
+
+.topLeft .hudText {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 28px;
 }
 
 .topRight {
   right: 14px;
   top: 14px;
+  max-width: calc(40% - 22px);
 }
 
 .bottomLeft {
@@ -159,7 +169,8 @@
 @media (max-width: 720px) {
   .tag,
   .topRight,
-  .bottomRight {
+  .bottomRight,
+  .topLeft .hudText {
     display: none;
   }
 

@@ -25,8 +25,18 @@ export function outlineCaption(items: DetectionOutline[]): string {
 export function coverageLines(c: Coverage | null | undefined, span: number): [string, string | null, string | null] {
   if (!c) return ["—", null, null];
   const found = `${c.found} of ${c.asked} pictures`;
-  const [byName, pointed, byCode] = [c.by_name ?? 0, c.pointed ?? 0, c.by_code ?? 0];
-  const how = pointed + byCode > 0 ? `${byName} by name · ${pointed} pointed · ${byCode} by code` : null;
+  const ways: [number, string][] = [
+    [c.by_name ?? 0, "by name"],
+    [c.pointed ?? 0, "pointed"],
+    [c.by_code ?? 0, "by code"],
+  ];
+  const how =
+    ways[1][0] + ways[2][0] > 0
+      ? ways
+          .filter(([n]) => n > 0)
+          .map(([n, way]) => `${n} ${way}`)
+          .join(" · ")
+      : null;
   if (c.first_found_t === null) return [found, how, "never found"];
   if (c.missed_after === 0) return [found, how, null];
   return [found, how, `not found in ${c.missed_after} since ${formatRunTime(c.first_found_t, span)}`];

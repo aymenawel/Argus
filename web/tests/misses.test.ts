@@ -23,6 +23,8 @@ test("coverage reads as pictures found, how they were found, and misses since th
   ]);
   const byName = { ...c, by_name: 14, pointed: 0, by_code: 0 }; // all by name: nothing to split (D-93)
   assert.equal(coverageLines(byName, 86400)[1], null);
+  const noCode = { ...c, found: 123, by_name: 92, pointed: 31, by_code: 0 }; // a way that found nothing isn't listed
+  assert.equal(coverageLines(noCode, 86400)[1], "92 by name · 31 pointed");
 });
 
 test("an outline drawn by code is told apart from SAM's", () => {

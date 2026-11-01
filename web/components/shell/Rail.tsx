@@ -23,6 +23,7 @@ const svg = (children: ReactNode) => (
   </svg>
 );
 
+// The design-system kit (/kit) is for building Argus, so it is reachable by its address but not listed here.
 const MAIN: NavItem[] = [
   {
     href: "/",
@@ -31,29 +32,6 @@ const MAIN: NavItem[] = [
       <>
         <rect x="3" y="4" width="18" height="16" rx="2" />
         <path d="M3 9h18M9 9v11" />
-      </>,
-    ),
-  },
-  {
-    href: "/views",
-    label: "Views",
-    icon: svg(
-      <>
-        <rect x="4" y="4" width="7" height="7" rx="2" />
-        <rect x="13" y="4" width="7" height="7" rx="2" />
-        <rect x="4" y="13" width="7" height="7" rx="2" />
-        <path d="M14 19l2.5-4 2.5 4z" />
-      </>,
-    ),
-  },
-  {
-    href: "/kit",
-    label: "Kit",
-    icon: svg(
-      <>
-        <circle cx="8" cy="8" r="4" />
-        <rect x="13" y="13" width="7" height="7" rx="2" />
-        <path d="M13 4h7M16.5 4v6M4 16h6M4 20h6" />
       </>,
     ),
   },
