@@ -17,7 +17,15 @@ test("coverage reads as pictures found and misses since the first find", () => {
 });
 
 test("an open miss runs to the end of the run; other open events are a mark", () => {
-  const e: RunEvent = { id: "e", vessel_id: "v", t_start: 100, t_end: null, kind: "missed", source: "pipeline", detail: {} };
+  const e: RunEvent = {
+    id: "e",
+    vessel_id: "v",
+    t_start: 100,
+    t_end: null,
+    kind: "missed",
+    source: "pipeline",
+    detail: {},
+  };
   assert.equal(markEnd(e, 900), 900);
   assert.equal(markEnd({ ...e, t_end: 300 }, 900), 300);
   assert.equal(markEnd({ ...e, kind: "quality" }, 900), 100);
