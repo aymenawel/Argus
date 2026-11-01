@@ -118,6 +118,13 @@ Request (image):
 - **One concept per request.** Comma or "+" lists return zero matches. Every matching instance is returned.
 - Box/point prompts use a token grammar, e.g. `<0f>1<|box;x1=..;y1=..;x2=..;y2=..;w=W;h=H|>`; up to 16 objects; `w`/`h` must match the media's pixel size.
 - `mask_encoding`: `lossless` (default) or `one_bit` (several times smaller). Box/point prompts always return `one_bit`.
+- **Box prompts, measured Nov 1** (`worker/probes/sam_pointed.py`, $0.0125 in all): on a 716×716 crop of a swarm dish
+  where SAM had found no "microbial colony" by name, five boxes (`<0f>1<|box;…|>,2<|box;…|>,…`) came back as five
+  objects (confidence 0.37–0.95, 2.3 s), the swarm's mask matching its change region (34.8k px against 31.5k). A box and a
+  positive point for one object (`1<|box;…|><|point;…|>`, no comma) is accepted and returns that object (0.96, 0.5 s).
+  **SAM traces whatever a box holds:** boxes on false change regions (scan banding in the agar, the dish's rim) came back as
+  objects too, so boxes must come from regions that are trustworthy (D-92 requires a core of at least 25 px). The text part
+  holds only the tokens; the concept is not sent with them.
 - **Video:** `input_video` with `video_url` or `file_id`; MP4/MOV with H.264, H.265 or MPEG-4 (no VP9/WebM); up to **15,000 frames (~10 min) per request**; up to 16 tracked objects; **billed at least 50 frames per request**. `metadata.propagation_direction`: `both` | `forward` | `backward`.
 - With concept prompts, the leading integer per record is an object ordinal; the docs don't promise it stays the same across frames, so Argus matches IDs itself in image mode.
 - **Parsing:** output is a custom text grammar streamed in the Responses output-text lane. Use the official **`meta-sam-parser`** (0.1.0; Python ≥3.10, no dependencies). Pattern that works (probe `worker/probes/sam.py`): `stream = await AsyncOpenAI(...).responses.create(model="sam-3.1", input=[...], metadata={...}, stream=True)` → `await parse_responses_stream(stream, image_segmentation_format()).final_result()` (or `video_segmentation_format()`). Records are `SegmentationBoxRecord` and `SegmentationMaskRecord`; masks are **box-local** (mask width/height equal the box size), so place `decode_mask_to_raster(record.mask)` (row-major bytes, `mask.height × mask.width`) at `record.bounds.left/top`. `decode_mask_to_svg_path` exists but returns pixel-staircase paths; simplify contours with OpenCV for the UI (D-43).

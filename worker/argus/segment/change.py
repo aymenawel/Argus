@@ -15,13 +15,12 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
-from skimage.filters import apply_hysteresis_threshold
 from skimage.measure import label
 
 REFERENCE_FRAMES = 3  # kept crops the start reference is the median of
 RIM_ERODE = 0.06  # of the vessel's equivalent radius: the rim's glare and condensation are left out
 MIN_OUTSIDE_PX = 500  # crop pixels outside the vessel needed to take out light that changed everywhere
-CORE_NOISE, CORE_MIN = 8.0, 6.0  # a region's core: above max(8 x noise, 6 ΔE)
+CORE_NOISE, CORE_MIN = 8.0, 6.0  # a region's core: above max(8 x noise, 6 ΔE), at least MIN_AREA_PX connected
 FRINGE_NOISE, FRINGE_MIN = 4.0, 3.0  # grown into connected pixels above max(4 x noise, 3 ΔE)
 MIN_AREA_FRACTION, MIN_AREA_PX = 0.002, 25  # smaller regions are specks: max(0.2% of the vessel, 25 px)
 MAX_REGIONS = 16  # SAM takes at most 16 prompted objects per request
@@ -78,7 +77,13 @@ def change_regions(reference: ChangeReference, crop: np.ndarray) -> list[ChangeR
     delta = np.where(reference.inside, _delta_e(lab, reference.lab), 0.0)
     high = max(CORE_NOISE * reference.noise, CORE_MIN)
     low = max(FRINGE_NOISE * reference.noise, FRINGE_MIN)
-    changed = apply_hysteresis_threshold(delta, low, high)
+    # A core of some size seeds a region: scan streaks scatter single strong pixels through bands of faint change,
+    # and each would otherwise grow the whole band into a region.
+    cores = label(delta > high, connectivity=2)
+    seeds = np.flatnonzero(np.bincount(cores.ravel()) >= MIN_AREA_PX)
+    fringe = label(delta > low, connectivity=2)
+    grown = np.unique(fringe[np.isin(cores, seeds[seeds > 0])])
+    changed = np.isin(fringe, grown[grown > 0])
     floor = max(MIN_AREA_FRACTION * reference.inside.sum(), MIN_AREA_PX)
     labels = label(changed, connectivity=2)
     masks = [labels == i for i in range(1, labels.max() + 1)]

@@ -26,8 +26,8 @@ are there from the start (seeds, glasses, foam).
      vessel's region eroded by 6% of its equivalent radius). Light that changed everywhere is taken out first: the
      median Lab shift of the crop's pixels outside the vessel is subtracted, when there are at least 500 of them.
   2. A pixel has changed when it passes hysteresis thresholds set from the reference's own noise (noise = 1.4826 ×
-     the median ΔE of the 3 reference crops from their median): a core above max(8 × noise, 6 ΔE), grown into
-     connected pixels above max(4 × noise, 3 ΔE). Connected regions smaller than max(0.2% of the vessel's area, 25
+     the median ΔE of the 3 reference crops from their median): a core of at least 25 connected px above max(8 × noise,
+     6 ΔE), grown into connected pixels above max(4 × noise, 3 ΔE). Connected regions smaller than max(0.2% of the vessel's area, 25
      px) are dropped; the 16 largest are kept.
   3. With at least one region, Argus asks SAM again on the vessel's crop with one box per region (its bounding box
      padded by 15%, clipped to the crop, `x2`/`y2` inclusive) and, if the probe shows the API accepts it, a positive

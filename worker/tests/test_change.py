@@ -57,6 +57,15 @@ def test_a_speck_below_the_size_floor_is_dropped():
     assert change_regions(reference(), raised(agar(4), speck, 80)) == []
 
 
+def test_strong_specks_scattered_in_a_faint_band_are_not_growth():
+    """Scan streaks put single strong pixels into a band of faint change: a core needs some size to seed a region."""
+    band = (YY >= 30) & (YY < 50)
+    specks = np.zeros((SIZE, SIZE), bool)
+    specks[40, 30:90:12] = True
+    crop = raised(raised(agar(4), band, 20), specks, 80)  # the band is above the fringe, below the core
+    assert change_regions(reference(), crop) == []
+
+
 def test_the_rim_is_left_out():
     ring = disc(*CENTRE, RADIUS) & ~disc(*CENTRE, 48)
     assert change_regions(reference(), raised(agar(4), ring, 80)) == []
