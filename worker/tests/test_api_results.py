@@ -4,7 +4,15 @@ import numpy as np
 import pytest
 
 from argus.domain import Direction, MeasurementDraft, PlanDraft, Role, RunMode, RunSource, SourceKind, VesselDraft
-from argus.storage.repos import add_measurements, add_vessels, create_run, lock_plan, save_plan_draft
+from argus.storage.repos import (
+    add_frame,
+    add_measurements,
+    add_sam_answers,
+    add_vessels,
+    create_run,
+    lock_plan,
+    save_plan_draft,
+)
 from tests.api_client import api_client
 
 TIMES_H = np.arange(0.0, 48.01, 0.5)
@@ -92,3 +100,17 @@ def test_an_unknown_metric_is_a_422(client, db, experiment):
     run_id = run_of(db, experiment, {"A": logistic(20)})
     assert client.get(f"/api/runs/{run_id}/fits", params={"metric": "height"}).status_code == 422
     assert client.get("/api/runs/run_000000000000/fits").status_code == 404
+
+
+def test_fits_say_how_often_sam_found_each_vessels_object(client, db, experiment):
+    run_id = run_of(db, experiment, {"A": logistic(20), "B": logistic(20)})
+    view = client.get(f"/api/runs/{run_id}/fits", params={"metric": "root_length"}).json()
+    assert [v["coverage"] for v in view["vessels"]] == [None, None]  # a run from before SAM's answers were kept
+    a = next(v["vessel_id"] for v in view["vessels"] if v["label"] == "A")
+    for i, found in enumerate([0, 1, 0]):
+        frame = add_frame(db, run_id, 60.0 * i, f"f{i}.jpg", [])
+        add_sam_answers(db, run_id, frame.id, {(a, "root"): found, (a, "mung bean"): 1})
+    view = client.get(f"/api/runs/{run_id}/fits", params={"metric": "root_length"}).json()
+    coverage = {v["label"]: v["coverage"] for v in view["vessels"]}
+    assert coverage["A"] == {"concept": "root", "asked": 3, "found": 1, "first_found_t": 60.0, "missed_after": 1}
+    assert coverage["B"] is None

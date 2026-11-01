@@ -6,8 +6,10 @@ import math
 
 import numpy as np
 import pytest
+from argus.analyze.coverage import Coverage, detection_coverage
 
 from argus.analyze.fits import fit_series
+from argus.domain import SamAnswer
 
 HALF_HOUR = 1800.0
 
@@ -105,3 +107,16 @@ def test_a_series_that_starts_well_above_zero_is_refused(curve, make):
     """These curves start at zero: fitted to a series with a baseline, the half-way point lands in the wrong place."""
     fit = fit_series(*series(make, hours=8, step_h=0.25, noise=0.05), curve)
     assert not fit.ok and "above zero" in fit.reason
+
+
+def test_coverage_counts_what_sam_found_and_missed_after_the_first_find():
+    """How often SAM found a vessel's object, and how often it found nothing after the first find (D-90)."""
+    found = [0, 0, 2, 0, 1, 0]
+    answers = [
+        SamAnswer(frame_id=f"f{i}", vessel_id="v", concept="c", found=n, t=60.0 * i) for i, n in enumerate(found)
+    ]
+    assert detection_coverage(answers, "v", "c") == Coverage("c", asked=6, found=2, first_found_t=120.0, missed_after=2)
+    assert detection_coverage(answers, "other", "c") is None
+    assert detection_coverage(answers, "v", "another concept") is None
+    never = [a.model_copy(update={"found": 0}) for a in answers]
+    assert detection_coverage(never, "v", "c") == Coverage("c", asked=6, found=0, first_found_t=None, missed_after=0)

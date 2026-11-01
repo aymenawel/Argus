@@ -16,6 +16,7 @@ import numpy as np
 from scipy.optimize import OptimizeWarning, curve_fit
 from uncertainties import correlated_values, umath
 
+from argus.analyze.coverage import detection_coverage
 from argus.recipes.model import Recipe
 from argus.recipes.resolve import recipe_for
 from argus.storage import repos
@@ -210,6 +211,8 @@ def fits_view(db: Database, recipes: Mapping[str, Recipe], run_id: str, metric: 
         raise ValueError(f"the {recipe.title} recipe doesn't measure '{metric}': use one of {', '.join(metrics)}")
     rows = repos.measurements_for_run(db, run_id, metric=metric)
     fits = vessel_fits(db, run_id, recipe, metric)
+    answers = repos.sam_answers_for_run(db, run_id)
+    concept = recipe.measurement_for(metric).source  # how often SAM found what this metric is measured from
     units = {m.id: m.unit for m in recipe.measurements}
     vessels = []
     for vessel in repos.vessels_for_run(db, run_id):
@@ -222,6 +225,7 @@ def fits_view(db: Database, recipes: Mapping[str, Recipe], run_id: str, metric: 
                 "condition": vessel.condition.model_dump() if vessel.condition else None,
                 "readings": [[r.t, r.value] for r in rows if r.vessel_id == vessel.id],
                 "fit": asdict(fit) if fit is not None else None,
+                "coverage": asdict(c) if (c := detection_coverage(answers, vessel.id, concept)) else None,
             }
         )
     return {
