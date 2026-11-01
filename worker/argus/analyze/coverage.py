@@ -17,6 +17,9 @@ class Coverage:
     found: int  # of those, frames where it found at least one object
     first_found_t: float | None  # run time of the first find (s); None if never found
     missed_after: int  # frames after the first find where it found nothing
+    by_name: int = 0  # of the frames found: by name, by pointing SAM at the change, by code outlining it (D-93)
+    pointed: int = 0
+    by_code: int = 0
 
 
 def lost_after(events: Sequence[RunEvent], vessel_id: str, spec: MeasurementSpec, t: float) -> str | None:
@@ -38,4 +41,6 @@ def detection_coverage(answers: Sequence[SamAnswer], vessel_id: str, concept: st
         return None
     first = next((a.t for a in mine if a.found), None)
     missed = 0 if first is None else sum(1 for a in mine if not a.found and a.t > first)
-    return Coverage(concept, len(mine), sum(1 for a in mine if a.found), first, missed)
+    found = [a for a in mine if a.found]
+    by = {via: sum(1 for a in found if a.via == via) for via in ("name", "pointed", "code")}
+    return Coverage(concept, len(mine), len(found), first, missed, by["name"], by["pointed"], by["code"])

@@ -21,10 +21,16 @@ from argus.pipeline.analyzer import RunContext, segment_with_retries
 from argus.recipes.model import Recipe
 from argus.rois import roi_box
 from argus.segment import MaskPatch, ObjectPrompt, SegmentResult
-from argus.segment.change import REFERENCE_FRAMES, ChangeReference, ChangeRegion, change_reference, change_regions
+from argus.segment.change import (
+    CODE,
+    REFERENCE_FRAMES,
+    ChangeReference,
+    ChangeRegion,
+    change_reference,
+    change_regions,
+)
 
 POINTED = "sam-3.1/pointed"  # SAM, prompted with boxes on what changed
-CODE = "change-map"  # the change itself, outlined by code
 CROP_MARGIN_PX = 8  # around a vessel's region when SAM is shown that vessel alone
 BOX_PAD = 0.15  # of a region's size, on each side: a faint edge just outside the change is still in the box
 VESSEL_SIZED = 0.85  # a SAM mask covering this much of the vessel outlined the vessel, unless...

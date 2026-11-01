@@ -111,6 +111,7 @@ def test_import_run_end_to_end_over_the_api(client, experiment, clip):
     assert decoded.shape[1] == 160
     detections = client.get(f"/api/runs/{run_id}/frames/{frame['id']}/detections").json()
     assert detections and detections[0]["outline"] and detections[0]["vessel_id"] == view["vessels"][0]["id"]
+    assert detections[0]["backend"].startswith("sam-3.1/")  # who drew it: SAM by name here (D-93)
     windowed = client.get(f"/api/runs/{run_id}/timeline", params={"t_from": 60, "t_to": 120}).json()
     assert all(60 <= f["t"] <= 120 for f in windowed["frames"])
 

@@ -9,10 +9,11 @@ import pytest
 
 from argus.analyze.ceiling import ceiling
 from argus.analyze.noise import noise_floor
-from argus.claims.refs import build_refs, format_run_time
+from argus.claims.refs import CODE_OUTLINED, build_refs, format_run_time
 from argus.config import REPO_ROOT
 from argus.domain import (
     Condition,
+    Detection,
     Direction,
     EventKind,
     MeasurementDraft,
@@ -28,7 +29,9 @@ from argus.pipeline.verdict import verdict_inputs
 from argus.reason.prompts import load_prompt
 from argus.recipes.loader import load_recipe
 from argus.storage.repos import (
+    add_detection_rows,
     add_event,
+    add_frame,
     add_measurements,
     add_vessels,
     create_run,
@@ -321,3 +324,38 @@ def test_the_rules_quote_the_labels_a_lost_reading_and_its_miss_carry(db, two_by
     assert lost in refs.get("m:A:delta_e").label
     [event] = [refs.get(i) for i in refs.ids() if i.startswith("ev:")]
     assert event.label.startswith(missed_at)
+
+
+def test_a_code_outlined_reading_says_so_in_its_label(db, two_by_two):
+    """SAM found nothing and code outlined the change: the reading's label says so, in the words rule 3 quotes."""
+    run, vessels = two_by_two
+    frame = add_frame(db, run.id, 650.0, "f.jpg", [])
+    outline = Detection(
+        id="det_code",
+        frame_id=frame.id,
+        vessel_id=vessels[0].id,
+        track_key="A:liquid:1",
+        concept="liquid",
+        outline=[],
+        bbox=(0.0, 0.0, 1.0, 1.0),
+        area_px=1,
+        backend="change-map",
+        mask_path="m.png",
+    )
+    add_detection_rows(db, [outline])
+    reading = MeasurementDraft(
+        vessel_id=vessels[0].id,
+        frame_id=frame.id,
+        t=650.0,
+        metric="delta_e",
+        value=4.0,
+        uncertainty=0.1,
+        unit="dE00",
+        method_version="delta_e/1",
+    )
+    add_measurements(db, run.id, [reading])
+    refs = build_refs(db, run.id, 700.0, recipe=COLOUR, plan=PLAN)
+    assert refs.get("m:A:delta_e").label.endswith(CODE_OUTLINED)
+    assert not refs.get("m:B:delta_e").label.endswith(CODE_OUTLINED)
+    [quoted] = re.findall(r'"(outlined by code)"', load_prompt("system/scientific-rules.md"))
+    assert quoted in CODE_OUTLINED

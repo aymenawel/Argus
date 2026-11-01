@@ -6,8 +6,8 @@ import math
 
 import numpy as np
 import pytest
-from argus.analyze.coverage import Coverage, detection_coverage
 
+from argus.analyze.coverage import Coverage, detection_coverage
 from argus.analyze.fits import fit_series
 from argus.domain import SamAnswer
 
@@ -115,8 +115,22 @@ def test_coverage_counts_what_sam_found_and_missed_after_the_first_find():
     answers = [
         SamAnswer(frame_id=f"f{i}", vessel_id="v", concept="c", found=n, t=60.0 * i) for i, n in enumerate(found)
     ]
-    assert detection_coverage(answers, "v", "c") == Coverage("c", asked=6, found=2, first_found_t=120.0, missed_after=2)
+    assert detection_coverage(answers, "v", "c") == Coverage(
+        "c", asked=6, found=2, first_found_t=120.0, missed_after=2, by_name=2
+    )
     assert detection_coverage(answers, "other", "c") is None
     assert detection_coverage(answers, "v", "another concept") is None
     never = [a.model_copy(update={"found": 0}) for a in answers]
     assert detection_coverage(never, "v", "c") == Coverage("c", asked=6, found=0, first_found_t=None, missed_after=0)
+
+
+def test_coverage_counts_how_each_picture_was_found():
+    """Pictures found by name, by pointing SAM at the change, or by code outlining it (D-93); misses aren't found."""
+    found = [1, 0, 1, 1, 1]
+    vias = ["name", "name", "pointed", "code", "name"]
+    answers = [
+        SamAnswer(frame_id=f"f{i}", vessel_id="v", concept="c", found=n, t=60.0 * i, via=v)
+        for i, (n, v) in enumerate(zip(found, vias, strict=True))
+    ]
+    coverage = detection_coverage(answers, "v", "c")
+    assert (coverage.found, coverage.by_name, coverage.pointed, coverage.by_code) == (4, 2, 1, 1)

@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from argus.claims.refs import RefTable
+from argus.claims.refs import CODE_OUTLINED, RefTable
 
 
 def fallback_note(level: str, refs: RefTable, *, reason: str) -> dict:
@@ -14,7 +14,12 @@ def fallback_note(level: str, refs: RefTable, *, reason: str) -> dict:
         latest, change = refs.get(f"m:{label}:{metric}"), refs.get(f"chg:{label}:{metric}")
         lost = latest is not None and latest.kind == "last_reading"  # SAM lost the object after it (D-91)
         now = "at its last reading, before SAM stopped finding it" if lost else "now"
-        parts = [f"{latest.display} {now}"] if latest is not None else []
+        coded = latest is not None and latest.label.endswith(CODE_OUTLINED)  # SAM found nothing; code drew it (D-93)
+        parts = (
+            [f"{latest.display} {now}" + (" (outlined by code, not SAM)" if coded else "")]
+            if latest is not None
+            else []
+        )
         if change is not None:
             parts.append(
                 f"{change.display} {'from its first reading to its last' if lost else 'since its first reading'}"

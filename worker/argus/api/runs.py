@@ -297,7 +297,7 @@ def register_run_routes(app: FastAPI, *, db: Database, settings: Settings, jobs:
     @app.get("/api/runs/{run_id}/frames/{frame_id}/detections")
     def detections(run_id: str, frame_id: str) -> list[dict]:
         frame_or_404(run_id, frame_id)
-        fields = {"vessel_id", "track_key", "concept", "outline", "confidence"}
+        fields = {"vessel_id", "track_key", "concept", "outline", "confidence", "backend"}  # backend: who drew it
         return [d.model_dump(include=fields) for d in repos.detections_for_frame(db, frame_id)]
 
     @app.post("/api/experiments/{experiment_id}/vessels/detect")

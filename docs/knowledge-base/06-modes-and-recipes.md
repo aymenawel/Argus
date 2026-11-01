@@ -49,6 +49,8 @@ rival_explanations: [temperature, uneven_watering, position_in_tray, seed_batch]
 method_card: prompts/recipes/seed-germination/method.md
 ```
 
+As built, recipes are TOML (`recipes/*.toml`). Two settings on a concept change how an empty SAM answer is read: `can_vanish = true` for something that can really disappear (foam: an empty answer after a sighting reads zero, D-90), and `appears = true` for something that isn't there at the start and grows into view (a colony: an empty answer is checked against the change since the start, SAM is pointed there, and code outlines the change if SAM still finds nothing, D-92).
+
 ## The five measurement families
 
 Every recipe mixes these; that is why one engine covers many fields.

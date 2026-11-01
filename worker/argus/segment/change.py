@@ -24,6 +24,7 @@ CORE_NOISE, CORE_MIN = 8.0, 6.0  # a region's core: above max(8 x noise, 6 ΔE),
 FRINGE_NOISE, FRINGE_MIN = 4.0, 3.0  # grown into connected pixels above max(4 x noise, 3 ΔE)
 MIN_AREA_FRACTION, MIN_AREA_PX = 0.002, 25  # smaller regions are specks: max(0.2% of the vessel, 25 px)
 MAX_REGIONS = 16  # SAM takes at most 16 prompted objects per request
+CODE = "change-map"  # a detection's backend when these regions are its outline: drawn by code, not SAM (D-93)
 
 
 @dataclass(frozen=True)

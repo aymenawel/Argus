@@ -6,7 +6,7 @@ import pytest
 
 from argus.claims.checker import check_note, check_text_fields, render, render_note
 from argus.claims.fallback import fallback_note
-from argus.claims.refs import Ref, RefTable
+from argus.claims.refs import CODE_OUTLINED, Ref, RefTable
 from argus.domain import VerdictLevel
 from argus.pipeline.notes import _cited
 
@@ -157,6 +157,14 @@ def test_a_code_note_never_calls_a_reading_from_before_a_miss_now():
     observation = fallback_note("checkpoint", refs, reason="x")["observation"]
     assert "3.7 ± 0.1 dE00 at its last reading, before SAM stopped finding it" in observation
     assert " now" not in observation and "3.2 ± 0.1 dE00 from its first reading to its last" in observation
+
+
+def test_the_fallback_says_a_reading_was_outlined_by_code():
+    """A reading code outlined, not SAM, says so in code-written notes too (D-93)."""
+    base = refs_table({"m:A:delta_e": "3.7 ± 0.1 dE00"}).get("m:A:delta_e")
+    coded = dataclasses.replace(base, label=base.label + CODE_OUTLINED)
+    observation = fallback_note("checkpoint", RefTable({"m:A:delta_e": coded}), reason="x")["observation"]
+    assert "3.7 ± 0.1 dE00 now (outlined by code, not SAM)" in observation
 
 
 @pytest.mark.parametrize(

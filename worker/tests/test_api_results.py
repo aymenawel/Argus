@@ -112,5 +112,14 @@ def test_fits_say_how_often_sam_found_each_vessels_object(client, db, experiment
         add_sam_answers(db, run_id, frame.id, {(a, "root"): found, (a, "mung bean"): 1})
     view = client.get(f"/api/runs/{run_id}/fits", params={"metric": "root_length"}).json()
     coverage = {v["label"]: v["coverage"] for v in view["vessels"]}
-    assert coverage["A"] == {"concept": "root", "asked": 3, "found": 1, "first_found_t": 60.0, "missed_after": 1}
+    assert coverage["A"] == {
+        "concept": "root",
+        "asked": 3,
+        "found": 1,
+        "first_found_t": 60.0,
+        "missed_after": 1,
+        "by_name": 1,
+        "pointed": 0,
+        "by_code": 0,
+    }
     assert coverage["B"] is None

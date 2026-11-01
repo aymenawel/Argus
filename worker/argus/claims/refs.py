@@ -17,13 +17,22 @@ from argus.analyze.next_run import pooled_sd
 from argus.analyze.noise import noise_floor, wobble_floor
 from argus.domain import DerivedDraft, Measurement, Plan, Role, RunEvent, Vessel
 from argus.measure.uncertainty import format_measurement
-from argus.recipes.model import Recipe
+from argus.recipes.model import MeasurementSpec, Recipe
+from argus.segment.change import CODE
 from argus.storage.db import Database
-from argus.storage.repos import add_derived, events_for_run, measurements_for_run, vessels_for_run
+from argus.storage.repos import (
+    add_derived,
+    detections_for_frame,
+    events_for_run,
+    measurements_for_run,
+    vessels_for_run,
+)
 
 NOTABLE = frozenset(
     {"intervention", "rule", "camera_moved", "segment_failed", "interrupted", "spend", "quality", "missed"}
 )
+# Rule 3 of the scientific rules quotes "outlined by code": a reading taken on the change since the start, not on SAM
+CODE_OUTLINED = ", outlined by code from the change since the start, not by SAM"
 MAX_EVENT_REFS = 20
 STILL_SHARE = 0.10  # without an event, the first tenth of the run so far counts as still
 
@@ -151,12 +160,15 @@ def _still_until(vessel_id: str, rows: Sequence[Measurement], events: Sequence[R
     return max(STILL_SHARE * t, third)
 
 
-def _measurement_ref(vessel: Vessel, metric: str, last: Measurement, lost: str | None = None) -> Ref:
-    """A vessel's latest reading: of now, or (`lost`) its last before SAM stopped finding that concept (D-91)."""
+def _measurement_ref(
+    vessel: Vessel, metric: str, last: Measurement, lost: str | None = None, coded: bool = False
+) -> Ref:
+    """A vessel's latest reading: of now, or (`lost`) its last before SAM stopped finding that concept (D-91); and
+    (`coded`) measured on an outline code drew from the change since the start, SAM having found nothing (D-93)."""
     now = f"{metric} now" if lost is None else f"{metric} at its last reading, before SAM stopped finding the {lost}"
     return Ref(
         id=f"m:{vessel.label}:{metric}",
-        label=f"{_vessel_label(vessel)}: {now}",
+        label=f"{_vessel_label(vessel)}: {now}" + (CODE_OUTLINED if coded else ""),
         value=last.value,
         uncertainty=last.uncertainty,
         unit=last.unit,
@@ -165,6 +177,17 @@ def _measurement_ref(vessel: Vessel, metric: str, last: Measurement, lost: str |
         t=last.t,
         vessel_id=vessel.id,
         evidence=(last.id,),
+    )
+
+
+def _code_outlined(db: Database, vessel_id: str, spec: MeasurementSpec, last: Measurement) -> bool:
+    """Whether the reading was taken on an outline code drew, not SAM: on its frame, the vessel's object was the
+    change since the start (D-92)."""
+    if last.frame_id is None:
+        return False
+    return any(
+        d.vessel_id == vessel_id and d.concept == spec.source and d.backend == CODE
+        for d in detections_for_frame(db, last.frame_id)
     )
 
 
@@ -194,7 +217,9 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
             concept = lost_after(events, vessel.id, recipe.measurement_for(metric), last.t)
             if concept is not None:
                 lost.add(vessel.id)
-            refs[f"m:{vessel.label}:{metric}"] = _measurement_ref(vessel, metric, last, concept)
+            refs[f"m:{vessel.label}:{metric}"] = _measurement_ref(
+                vessel, metric, last, concept, _code_outlined(db, vessel.id, recipe.measurement_for(metric), last)
+            )
             if len(rows) >= 2:
                 since = "since its first reading" if concept is None else "from its first reading to its last"
                 change = DerivedDraft(

@@ -11,6 +11,8 @@ Use these words consistently in code, UI and docs.
 | **Recipe** | Config for an experiment type: SAM concepts, measurements, curve, events, watcher preset, method card |
 | **Method card** | Short prompt file per recipe, loaded only for that recipe |
 | **Miss** | A picture where SAM finds nothing in a vessel after it has found the object there once. Recorded as a gap with a `missed` event, never as a zero (except for things that can vanish, such as foam) (D-90) |
+| **Change map** | How far each pixel in a vessel has moved in colour since the vessel's start (the median of its first three kept pictures), with the rim and light that changed everywhere left out. Its regions tell SAM where to look when it found nothing by name (D-92) |
+| **Code outline** | An outline Argus drew from the change map itself, because SAM found nothing even when pointed there. Measured like any outline, and labelled everywhere as drawn by code, not SAM (D-93) |
 | **Plan / pre-registration** | Hypothesis, prediction and success threshold, locked with a timestamp at start |
 | **ROI** | Region of interest: the vessel's area the watcher looks at |
 | **Keyframe** | The last frame that was analyzed; the watcher compares new frames to it |
