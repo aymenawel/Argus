@@ -8,6 +8,7 @@ from argus.claims.checker import check_note, check_text_fields, render, render_n
 from argus.claims.fallback import fallback_note
 from argus.claims.refs import Ref, RefTable
 from argus.domain import VerdictLevel
+from argus.pipeline.notes import _cited
 
 ALL = set(VerdictLevel)
 
@@ -94,6 +95,15 @@ def test_every_text_field_is_checked():
 def test_model_names_and_the_word_one_are_allowed():
     note = clean_note(observation="SAM 3.1 found one glass; Muse Spark 1.3 wrote this.")
     assert check_note(note, REFS, allowed=ALL, evidence=set()) == []
+
+
+def test_a_vessel_label_with_a_space_is_rendered_and_checked():
+    """Published datasets name dishes "fliA 1": their refs must render, be checked and count as cited like any other."""
+    refs = refs_table({"m:fliA 1:area": "368 ± 40 mm2"})
+    assert render("{ref:m:fliA 1:area} now", refs) == "368 ± 40 mm2 now"
+    assert check_text_fields({"x": "fliA 1 reads {ref:m:fliA 1:area}"}, ["x"], refs) == []
+    assert check_text_fields({"x": "{ref:m:fliA 9:area}"}, ["x"], refs) == ["unknown ref: m:fliA 9:area"]
+    assert _cited({"observation": "{ref:m:fliA 1:area}", "refs_used": []}) == ["m:fliA 1:area"]
 
 
 def test_refs_used_must_exist_too():

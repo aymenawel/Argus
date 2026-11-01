@@ -14,7 +14,9 @@ from typing import Any
 from argus.claims.refs import RefTable
 from argus.domain import VerdictLevel
 
-TOKEN = re.compile(r"\{ref:([A-Za-z0-9_:.\-]+)\}")
+# A ref id holds a vessel label, which may have spaces or any letters ("fliA 0.1"): anything but braces, quotes and
+# line breaks, so a token never runs into the JSON or text around it.
+TOKEN = re.compile(r'\{ref:([^{}"\n]+)\}')
 # Model and product names carry digits that are not claims; they are taken out before the digit check.
 MODEL_NAMES = ("Muse Wonder 1.0", "Muse Spark 1.3", "muse-wonder-1.0", "muse-spark-1.3", "SAM 3.1", "sam-3.1")
 NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
