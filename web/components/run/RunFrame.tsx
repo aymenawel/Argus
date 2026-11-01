@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { playhead, usePlayhead } from "@/lib/playhead";
+import { outlineCaption, outlinedByCode } from "@/lib/misses";
 import { activeBundle, originalSize } from "@/lib/replay";
 import { byVessel, regionAt } from "@/lib/run-data";
 import type { RunSnapshot, RunSource } from "@/lib/run-source";
@@ -98,7 +99,9 @@ export function RunFrame({ snapshot, source, mainMetric }: Props) {
                 <polygon
                   key={`${i}-${j}`}
                   points={points(polygon)}
-                  className={`${styles.outline} ${d.vessel_id === selected ? styles.selectedOutline : ""}`}
+                  className={`${styles.outline} ${d.vessel_id === selected ? styles.selectedOutline : ""} ${
+                    outlinedByCode(d) ? styles.coded : ""
+                  }`}
                 />
               )),
             )}
@@ -140,9 +143,7 @@ export function RunFrame({ snapshot, source, mainMetric }: Props) {
           <span className={`${styles.hudText} num`}>{formatRunTime(frame?.t ?? t, span)}</span>
         </div>
         <div className={`${styles.hud} ${styles.bottomRight}`}>
-          <span className={`${styles.hudText} num`}>
-            SAM 3.1 · {shown.length} {shown.length === 1 ? "object" : "objects"}
-          </span>
+          <span className={`${styles.hudText} num`}>{outlineCaption(shown)}</span>
         </div>
       </div>
       {provenance && <Credit provenance={provenance} />}

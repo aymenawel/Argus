@@ -68,6 +68,11 @@
   stroke-width: 2.4;
 }
 
+/* Drawn by code from the change since the start, not by SAM (D-93). */
+.coded {
+  stroke-dasharray: 5 4;
+}
+
 /* On-frame pills keep their light look in both themes: they sit on a photograph. */
 .tag {
   position: absolute;

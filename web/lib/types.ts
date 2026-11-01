@@ -179,6 +179,7 @@ export type DetectionOutline = {
   concept: string;
   outline: [number, number][][];
   confidence: number | null;
+  backend?: string; // who drew it: "sam-3.1/..." or "change-map" (code, D-93); absent in older bundles
 };
 
 export type RunProgress = {
@@ -258,6 +259,11 @@ export type Coverage = {
   found: number;
   first_found_t: number | null;
   missed_after: number;
+  // Of the pictures found: by name, by pointing SAM at the change, by code outlining it (D-93). A bundle published
+  // before then has none.
+  by_name?: number;
+  pointed?: number;
+  by_code?: number;
 };
 
 export type FitsView = {
