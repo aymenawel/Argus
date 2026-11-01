@@ -32,9 +32,11 @@ are there from the start (seeds, glasses, foam).
   3. With at least one region, Argus asks SAM again on the vessel's crop with one box per region (its bounding box
      padded by 15%, clipped to the crop, `x2`/`y2` inclusive) and, if the probe shows the API accepts it, a positive
      point at the region's strongest change. One request, $0.0025, logged like every call. A SAM mask covering 85% or
-     more of the vessel is dropped when the change regions cover less than 50% of it (SAM outlined the dish).
-  4. If SAM still returns nothing, the change regions themselves are the outline (**code outline**), measured in mm²
-     like any mask.
+     more of the vessel is dropped when the change regions cover less than 50% of it (SAM outlined the dish), and so
+     is one more than twice the size of the region it was pointed at (amended Nov 1 after the re-import: from a box
+     around a swarm in a square region, SAM sometimes outlined the whole dish).
+  4. Each region without a SAM mask kept for it is its own outline (**code outline**), measured in mm² like any
+     mask.
   5. With no region, nothing is asked: the empty answer stands, a gap after a first sighting (D-90) or a zero before.
 
   The reference resets when the vessel's region changes (a camera move); until 3 new crops are in, nothing is

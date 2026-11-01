@@ -461,7 +461,8 @@ async def test_an_import_points_sam_at_what_changed_in_a_still(ctx, tmp_path):
         async def pointed(self, image_bgr, concept, prompts):
             asked.append(len(prompts))
             patches = dark_patches(image_bgr)
-            tracks = [Track(f"obj{i}", concept, (TrackFrame(0, p, 0.9),)) for i, p in enumerate(patches)]
+            # numbered from 1 in the order of the prompts, as SAM numbers prompted objects
+            tracks = [Track(f"obj{i}", concept, (TrackFrame(0, p, 0.9),)) for i, p in enumerate(patches, start=1)]
             return SegmentResult(tracks, ok_call(images=1))
 
     ctx.segmenter = NeverByName()

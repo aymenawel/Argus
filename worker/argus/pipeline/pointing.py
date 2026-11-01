@@ -3,9 +3,10 @@
 SAM traces almost anything it is pointed at but recognises few lab words, so a faint colony it can't find by name is
 often found once a box says where it is. For a concept marked `appears` (not there at the start), each vessel keeps a
 start reference: the median of its first kept crops. When SAM's answer by name is empty, the change since the start
-gives regions; SAM is asked again with a box on each and its strongest point; if SAM still finds nothing (or can't be
-asked: the spend cap, a failure), the regions themselves are the outline, drawn by code. Every patch says who drew it
-(D-93). Without a change, nothing is asked: the empty answer stands, a gap after a first sighting (D-90).
+gives regions; SAM is asked again with a box on each and its strongest point. Each region keeps SAM's outline when
+that outline keeps to it; otherwise (SAM found nothing there, traced far more such as the whole dish, or
+couldn't be asked: the spend cap, a failure) the region itself is the outline, drawn by code. Every patch says who
+drew it (D-93). Without a change, nothing is asked: the empty answer stands, a gap after a first sighting (D-90).
 """
 
 from __future__ import annotations
@@ -35,6 +36,9 @@ CROP_MARGIN_PX = 8  # around a vessel's region when SAM is shown that vessel alo
 BOX_PAD = 0.15  # of a region's size, on each side: a faint edge just outside the change is still in the box
 VESSEL_SIZED = 0.85  # a SAM mask covering this much of the vessel outlined the vessel, unless...
 MOSTLY_CHANGED = 0.5  # ...the change covers at least this much of it
+# A SAM outline up to twice its region's size fills in faint parts the change map missed; bigger, and SAM traced
+# something else than the change it was pointed at: from a box around a swarm, sometimes the whole dish.
+MAX_GROWTH = 2.0
 
 
 def pointing_concepts(recipe: Recipe) -> set[str]:
@@ -83,6 +87,12 @@ def _prompt(region: ChangeRegion, width: int, height: int) -> ObjectPrompt:
     return ObjectPrompt(box, region.peak)
 
 
+def _number(key: str) -> int | None:
+    """The prompt a pointed track answers: SAM numbers prompted objects from 1, in the order they were sent."""
+    digits = key.removeprefix("obj")
+    return int(digits) if digits.isdigit() else None
+
+
 def _drawn_by_code(region: ChangeRegion, x0: int, y0: int) -> MaskPatch:
     bx0, by0, bx1, by1 = region.box
     return MaskPatch(x0 + bx0, y0 + by0, region.mask[by0:by1, bx0:bx1], CODE)
@@ -98,8 +108,8 @@ async def point_again(
     t: float,
     frame_id: str,
 ) -> list[MaskPatch]:
-    """After an empty answer by name: SAM's outlines at what changed, else the change drawn by code, in frame
-    pixels; [] when nothing changed (and SAM isn't asked)."""
+    """After an empty answer by name, each region of change outlined by SAM when SAM's outline keeps to it, else by
+    code, in frame pixels; [] when nothing changed (and SAM isn't asked)."""
     crop, _, (x0, y0) = vessel_crop(vessel, image_bgr)
     if crop.shape != reference.lab.shape:
         return []
@@ -109,13 +119,20 @@ async def point_again(
     height, width = crop.shape[:2]
     prompts = [_prompt(r, width, height) for r in regions]
     result = await segment_with_retries(ctx, crop, concept, t=t, frame_ids=[frame_id], prompts=prompts)
-    patches: list[MaskPatch] = []
+    by_sam: dict[int, list[MaskPatch]] = {}
     if isinstance(result, SegmentResult):
         inside = int(reference.inside.sum())
         mostly_changed = sum(int(r.mask.sum()) for r in regions) >= MOSTLY_CHANGED * inside
         for track in result.tracks:
-            patch = track.frames[0].patch
+            number, patch = _number(track.key), track.frames[0].patch
+            if number is None or not 1 <= number <= len(prompts):
+                continue
             if patch.area_px >= VESSEL_SIZED * inside and not mostly_changed:
                 continue  # SAM outlined the vessel, not what changed in it
-            patches.append(replace(patch.shifted(x0, y0), source=POINTED))
-    return patches or [_drawn_by_code(r, x0, y0) for r in regions]
+            if patch.area_px > MAX_GROWTH * int(regions[number - 1].mask.sum()):
+                continue  # SAM traced far more than the change it was pointed at
+            by_sam.setdefault(number, []).append(replace(patch.shifted(x0, y0), source=POINTED))
+    patches: list[MaskPatch] = []
+    for number, region in enumerate(regions, start=1):
+        patches += by_sam.get(number) or [_drawn_by_code(region, x0, y0)]
+    return patches

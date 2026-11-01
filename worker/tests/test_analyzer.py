@@ -66,7 +66,7 @@ class FakeSegmenter:
     def __init__(self):
         self.steps: list[str] = []
         self.calls = 0
-        self.pointed_steps: list[str] = []  # "ok" (the dark blobs in the crop), "empty", "whole" or "fail"
+        self.pointed_steps: list[str] = []  # "ok" (the crop's dark blobs), "empty", "whole", "spill" or "fail"
         self.pointed_asks: list[tuple[str, list]] = []  # (concept, prompts) per pointed call
 
     def script(self, steps):
@@ -82,6 +82,10 @@ class FakeSegmenter:
         if step == "whole":  # SAM outlined the whole crop: the dish, not what changed in it
             whole = MaskPatch(0, 0, np.ones(image_bgr.shape[:2], bool))
             return SegmentResult([Track("obj1", concept, (TrackFrame(0, whole, 0.9),))], call())
+        if step == "spill":  # SAM traced far past the box it was given: most of the crop, under the vessel guard
+            h, w = image_bgr.shape[:2]
+            spill = MaskPatch(0, 0, np.ones((h, int(w * 0.5)), bool))
+            return SegmentResult([Track("obj1", concept, (TrackFrame(0, spill, 0.9),))], call())
         return SegmentResult(dark_tracks(image_bgr, concept), call())
 
     async def image(self, image_bgr, concept):
@@ -617,6 +621,19 @@ async def test_a_vessel_sized_answer_is_dropped_for_the_code_outline(ctx, scene)
     appearing(ctx)
     ctx.segmenter.script(["ok"] * 3 + ["empty"])
     ctx.segmenter.pointed_steps = ["whole"]
+    await start(ctx, image, mask)
+    out = await analyze_frame(ctx, 180.0, image, segment=True)
+    assert drawn_by(ctx, out.frame_id) == ["change-map"]
+
+
+@pytest.mark.anyio
+async def test_a_sam_outline_far_bigger_than_the_change_is_replaced_by_the_change(ctx, scene):
+    """Pointed at a swarm in a square region around a round dish, SAM sometimes outlines the whole dish: under the
+    vessel-sized guard (a disc covers ~80% of its square), but many times the change it was pointed at (D-92)."""
+    image, mask = scene
+    appearing(ctx)
+    ctx.segmenter.script(["ok"] * 3 + ["empty"])
+    ctx.segmenter.pointed_steps = ["spill"]
     await start(ctx, image, mask)
     out = await analyze_frame(ctx, 180.0, image, segment=True)
     assert drawn_by(ctx, out.frame_id) == ["change-map"]
