@@ -111,6 +111,10 @@ def _check(id_: str, ok: bool | None, text: str, refs: tuple[str, ...] = (), pro
     return Check(id_, ok, text, refs, text if prompt is None else prompt)
 
 
+def _vessels(n: int, role: str) -> str:
+    return f"{n} {role} {'vessel' if n == 1 else 'vessels'}"
+
+
 def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
     """The allowed verdicts and every check behind them, in words."""
     if not inputs.locked:
@@ -147,12 +151,13 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
                 "was recorded. Give the start time when you import to settle it.",
             )
         )
+    named = metric[:1].upper() + metric[1:]  # a check is a sentence: "Area was measured", not "area was measured"
     if inputs.measured:
-        measured = f"{metric} was measured in this run."
+        measured = f"{named} was measured in this run."
     elif inputs.lost_controls or inputs.lost_treatments:
-        measured = f"{metric} was measured, but SAM stopped finding the object in every vessel after its last reading."
+        measured = f"{named} was measured, but SAM stopped finding the object in every vessel after its last reading."
     else:
-        measured = f"{metric} has no readings in this run."
+        measured = f"{named} has no readings in this run."
     checks.append(_check("measured", inputs.measured, measured))
     fitted = inputs.quantity in FITTED
     present = max(inputs.controls, inputs.control_vessels)
@@ -161,8 +166,8 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
             _check(
                 "control",
                 False,
-                f"{inputs.controls} of {present} control vessel(s) have a fitted value; at least {MIN_FITTED_CONTROLS} "
-                "are needed, since a fit's ± doesn't show how much dishes differ.",
+                f"{inputs.controls} of {_vessels(present, 'control')} have a fitted value; at least "
+                f"{MIN_FITTED_CONTROLS} are needed, since a fit's ± doesn't show how much dishes differ.",
                 prompt="Too few control vessels with a fitted value to show how much dishes differ.",
             )
         )
@@ -171,7 +176,7 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
             _check(
                 "control",
                 True,
-                f"{inputs.controls} control vessel(s) to compare against.",
+                f"{_vessels(inputs.controls, 'control')} to compare against.",
                 prompt="There are control vessels to compare against.",
             )
         )
@@ -195,7 +200,7 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
         _check(
             "replicates",
             enough,
-            f"{inputs.treatments} of {max(inputs.planned, inputs.treatments)} treatment vessel(s) {counted}; "
+            f"{inputs.treatments} of {_vessels(max(inputs.planned, inputs.treatments), 'treatment')} {counted}; "
             f"at least {MIN_REPLICATES} are needed." + lost,
             prompt=(
                 f"Enough treatment vessels {counted.replace(' measured', '')}."

@@ -261,7 +261,8 @@ async def segment_with_retries(
                 ctx.reserved_usd -= expected
         if result is not None:
             limit = ctx.settings.sam_max_objects
-            if len(result.tracks) >= limit and concept not in ctx.limit_reported:
+            # Pointed, SAM traces one object per box, and Argus sends at most 16: no sign there are more to find.
+            if not prompts and len(result.tracks) >= limit and concept not in ctx.limit_reported:
                 ctx.limit_reported.add(concept)  # SAM keeps the first `limit`: there may be more than it found
                 message = (
                     f"SAM 3.1 returns at most {limit} objects per request: there may be more '{concept}' than found"

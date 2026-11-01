@@ -299,7 +299,7 @@ def test_a_lost_treatment_is_named_in_the_replicates_check(db, two_by_two):
     refs = build_refs(db, run.id, 700.0, recipe=COLOUR, plan=PLAN)
     _, checks = ceiling(verdict_inputs(db, run, refs, plan=PLAN, t=700.0, recipe=COLOUR))
     replicates = next(c for c in checks if c.id == "replicates")
-    assert replicates.text.startswith("1 of 2 treatment vessel(s)") and "SAM stopped finding" in replicates.text
+    assert replicates.text.startswith("1 of 2 treatment vessels") and "SAM stopped finding" in replicates.text
 
 
 def test_a_flickering_vessel_takes_one_event_ref_not_all_of_them(db, two_by_two):
@@ -357,9 +357,34 @@ def test_a_code_outlined_reading_says_so_in_its_label(db, two_by_two):
     refs = build_refs(db, run.id, 700.0, recipe=COLOUR, plan=PLAN)
     assert refs.get("m:A:delta_e").label.endswith(CODE_OUTLINED)
     assert not refs.get("m:B:delta_e").label.endswith(CODE_OUTLINED)
-    # what is computed from it says so too: A's change, and each treatment's difference from the controls' mean
+    # what is computed from A's own readings says so too; a treatment compared with the controls' mean doesn't: A's
+    # reading carries its own label, and spreading it made notes call every reading code-drawn
     assert "outlined by code" in refs.get("chg:A:delta_e").label
-    assert "outlined by code" in refs.get("diff:C:delta_e").label
+    assert "outlined by code" not in refs.get("diff:C:delta_e").label
     assert "outlined by code" not in refs.get("chg:B:delta_e").label
+    assert "outlined by code" not in refs.get("noise:delta_e").label
     [quoted] = re.findall(r'"(outlined by code)"', load_prompt("system/scientific-rules.md"))
     assert quoted in CODE_OUTLINED
+
+
+def test_zeros_before_anything_appeared_are_not_the_noise_floor(db, exp):
+    """A colony isn't there for the first hours: its zeros don't wobble, so a floor taken from them would be 0 and any
+    difference would count as clear. The floor comes from the readings once something is there."""
+    run = create_run(db, exp.id, RunMode.LIVE, RunSource(kind=SourceKind.WEBCAM, camera_index=0))
+    [a] = add_vessels(db, run.id, [vessel("A", Role.CONTROL, "room")])
+    rows = [(i * 10.0, 0.0, 0.0) for i in range(8)] + [
+        (80.0 + i * 10.0, 5.0 + i + 0.3 * (-1) ** i, 0.1) for i in range(8)
+    ]
+    store(db, run, [a], {"A": rows})
+    refs = build_refs(db, run.id, 160.0, recipe=COLOUR, plan=PLAN)
+    assert refs.get("noise:delta_e").value > 0
+
+
+def test_the_verdict_checks_read_as_sentences(db, two_by_two):
+    """Each check starts with a capital and counts in plain English: "2 control vessels", not "vessel(s)"."""
+    run, _ = two_by_two
+    refs = build_refs(db, run.id, 700.0, recipe=COLOUR, plan=PLAN)
+    _, checks = ceiling(verdict_inputs(db, run, refs, plan=PLAN, t=700.0, recipe=COLOUR))
+    assert all(c.text[0].isupper() or c.text[0].isdigit() for c in checks), [c.text for c in checks]
+    assert not [c.text for c in checks if "(s)" in c.text]
+    assert any(c.text.startswith("2 control vessels to compare against") for c in checks)

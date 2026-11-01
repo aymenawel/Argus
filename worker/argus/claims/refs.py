@@ -150,6 +150,13 @@ def _fitted(
     return out
 
 
+def _present(rows: Sequence[Measurement]) -> Sequence[Measurement]:
+    """A vessel's readings from the first that isn't exactly zero: before an object appears (a colony, a sprout) its
+    zeros say nothing about how readings wobble, and a floor of 0 would make any difference look clear."""
+    first = next((i for i, r in enumerate(rows) if r.value != 0), len(rows))
+    return rows[first:]
+
+
 def _still_until(vessel_id: str, rows: Sequence[Measurement], events: Sequence[RunEvent], t: float) -> float:
     """The end of the vessel's still period: its first intervention, rule crossing or watcher change; without
     one, the first tenth of the run so far (and at least its first three readings)."""
@@ -224,12 +231,13 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
                     method_version="change/1",
                 )
                 pending.append((f"chg:{vessel.label}:{metric}", change, last.t, vessel.id))
-            still = _still_until(vessel.id, rows, events, t)
-            floor = noise_floor(rows, still_until=still)
+            present = _present(rows)
+            still = _still_until(vessel.id, present, events, t)
+            floor = noise_floor(present, still_until=still)
             if floor is not None:
-                floors.append((floor, [r.id for r in rows if r.t <= still]))
-            elif (wobble := wobble_floor(rows)) is not None:  # too short a still period: an event came early
-                floors.append((wobble, [r.id for r in rows]))
+                floors.append((floor, [r.id for r in present if r.t <= still]))
+            elif (wobble := wobble_floor(present)) is not None:  # too short a still period: an event came early
+                floors.append((wobble, [r.id for r in present]))
                 wobbled = True
 
         controls = [latest[v.id] for v in vessels if v.role is Role.CONTROL and v.id in latest and v.id not in lost]
@@ -268,9 +276,14 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
             pending.append((f"noise:{metric}", noise, t, None))
         if plan is not None and plan.quantity in FITTED and plan.metric == metric:
             pending += _fitted(t, recipe.curve, plan.quantity, metric, vessels, by_vessel)
-        for i in range(first_pending, len(pending)):  # computed from a reading code drew: it says so (D-93)
+        for i in range(first_pending, len(pending)):  # computed from the vessel's own code-drawn readings (D-93)
             ref_id, draft, ref_t, vessel_id = pending[i]
-            if coded.intersection(draft.inputs):
+            # A difference's other inputs are the controls', whose own readings carry their labels; a noise floor
+            # pools every vessel. Labelling those too made notes call every reading code-drawn.
+            own = (
+                draft.inputs[:1] if draft.kind == "difference" else draft.inputs if draft.kind != "noise_floor" else []
+            )
+            if coded.intersection(own):
                 pending[i] = (ref_id, draft.model_copy(update={"label": draft.label + CODE_INPUTS}), ref_t, vessel_id)
 
     if pending:

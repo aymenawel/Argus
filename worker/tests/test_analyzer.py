@@ -714,6 +714,23 @@ async def test_beside_an_outline_sam_kept_a_change_it_would_not_keep_to_is_left_
 
 
 @pytest.mark.anyio
+async def test_sixteen_pointed_objects_are_not_sams_object_limit(ctx, scene):
+    """SAM traces at most 16 prompted objects because Argus sends at most 16 boxes: no "there may be more" warning."""
+    image, _ = scene
+
+    class Sixteen(FakeSegmenter):
+        async def pointed(self, image_bgr, concept, prompts):
+            patch = MaskPatch(0, 0, np.ones((2, 2), bool))
+            return SegmentResult(
+                [Track(f"obj{i}", concept, (TrackFrame(0, patch, 0.9),)) for i in range(1, 17)], call()
+            )
+
+    ctx.segmenter = Sixteen()
+    await segment_with_retries(ctx, image, "root", t=0.0, prompts=[ObjectPrompt((0, 0, 1, 1))] * 16)
+    assert "quality" not in kinds(ctx)
+
+
+@pytest.mark.anyio
 async def test_no_change_means_no_pointed_call(ctx, scene):
     """Found by name, then lost where nothing changed since the start: a miss (D-90), and SAM isn't asked again."""
     image, mask = scene
