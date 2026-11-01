@@ -29,6 +29,7 @@ from argus.pipeline.notes import NoteWriter
 from argus.reason import Reasoner
 from argus.recipes.model import MeasurementSpec, Recipe
 from argus.segment import Clip, MaskPatch, ObjectPrompt, SegmentError, SegmentResult, segment
+from argus.segment.change import ChangeReference
 from argus.segment.outline import outline_polygons
 from argus.segment.sam import SEGMENTER_OFF, SegmenterOff, sam_client
 from argus.segment.tracking import TrackMatcher, assign_to_vessels
@@ -119,6 +120,9 @@ class RunContext:
     sighted: dict[str, set[str]] = field(default_factory=dict)  # vessel -> the concepts SAM has found there (D-90)
     missing: dict[tuple[str, str], str] = field(default_factory=dict)  # (vessel, concept) -> its open missed event
     last_found_t: dict[tuple[str, str], float] = field(default_factory=dict)  # (vessel, concept) -> when last found
+    # (vessel, concept) -> the crops of its start reference while it is taken, with the region they were taken at
+    change_crops: dict[tuple[str, str], tuple[tuple, list[np.ndarray]]] = field(default_factory=dict)
+    change_refs: dict[tuple[str, str], ChangeReference] = field(default_factory=dict)  # then the reference (D-92)
     retry_delays_s: tuple[float, ...] = (1.0, 4.0)
     cap_reported: bool = False
     calibration_reported: bool = False
@@ -301,7 +305,7 @@ def _store_detections(
                         bbox=patch.bbox,
                         area_px=patch.area_px,
                         confidence=confidence.get(id(patch)),
-                        backend=backend,
+                        backend=patch.source or backend,
                         mask_path=mask_path.relative_to(ctx.settings.data_dir).as_posix(),
                     )
                 )
@@ -400,15 +404,23 @@ async def _track_misses(
     dropped from `keyed`, so it is a gap, not a zero, with one missed event per stretch, closed when the object is
     found again. Empty answers before the first sighting stay zeros, and so do those of a concept that can really
     vanish (foam)."""
+    from argus.pipeline.pointing import CODE, POINTED  # pointing builds on this module
+
     answers = {
         (vessel_id, concept): len(p) for vessel_id, by_concept in keyed.items() for concept, p in by_concept.items()
     }
     if not answers:
         return
+    via = {}  # found by pointing SAM at the change, or by code outlining it, not by name (D-93)
+    for vessel_id, by_concept in keyed.items():
+        for concept, patches in by_concept.items():
+            sources = {patch.source for _, patch in patches}
+            if CODE in sources or POINTED in sources:
+                via[(vessel_id, concept)] = "code" if CODE in sources else "pointed"
     vanish = {c.name for c in ctx.recipe.concepts if c.can_vanish}
     labels = {v.id: v.label for v in ctx.vessels}
     async with ctx.miss_lock:
-        await asyncio.to_thread(add_sam_answers, ctx.db, ctx.run.id, frame_id, answers)
+        await asyncio.to_thread(add_sam_answers, ctx.db, ctx.run.id, frame_id, answers, via)
         for (vessel_id, concept), found in answers.items():
             key = (vessel_id, concept)
             if found:
@@ -430,6 +442,28 @@ async def _track_misses(
                     ctx.missing[key] = await ctx.event(
                         t, EventKind.MISSED, "pipeline", detail, vessel_id=vessel_id, frame_ids=[frame_id]
                     )
+
+
+async def _point_where_changed(
+    ctx: RunContext,
+    t: float,
+    frame_id: str,
+    image_bgr: np.ndarray,
+    keyed: dict[str, dict[str, list[tuple[str, MaskPatch]]]],
+    blocked: set[str],
+) -> None:
+    """For a concept that appears, each kept frame goes into the vessel's start reference, and an empty answer by
+    name where the vessel changed since then is answered by pointing SAM at the change, or by code (D-92)."""
+    from argus.pipeline.pointing import observe, point_again, pointing_concepts  # pointing builds on this module
+
+    for concept in pointing_concepts(ctx.recipe):
+        for vessel in (v for v in ctx.vessels if v.id not in blocked):
+            reference = observe(ctx, vessel, concept, image_bgr)
+            if reference is None or keyed.get(vessel.id, {}).get(concept) != []:
+                continue  # still taking the reference, found by name, or not answered at all
+            patches = await point_again(ctx, vessel, concept, image_bgr, reference, t=t, frame_id=frame_id)
+            if patches:
+                keyed[vessel.id][concept] = list(zip(ctx.matcher.match(vessel, concept, patches), patches, strict=True))
 
 
 async def analyze_frame(
@@ -496,6 +530,8 @@ async def analyze_frame(
     # the hand, so nothing of that vessel is kept from this frame. A gap, not a reading.
     blocked = {flag.split(":", 1)[1] for flag in quality_flags if flag.startswith("occluded:")}
     keyed = {vessel_id: by_concept for vessel_id, by_concept in keyed.items() if vessel_id not in blocked}
+    if segment and masks is None:
+        await _point_where_changed(ctx, t, frame_id, image_bgr, keyed, blocked)
     await _track_misses(ctx, t, frame_id, keyed)
     if keyed:
         await asyncio.to_thread(_store_detections, ctx, frame_id, keyed, confidence, backend)

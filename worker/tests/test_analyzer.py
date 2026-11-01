@@ -13,7 +13,9 @@ from argus.calibration.run import calibrate
 from argus.config import Settings
 from argus.domain import ModelCallDraft, Role, RunMode, RunSource, SourceKind, VesselDraft
 from argus.pipeline.analyzer import RunContext, Skipped, analyze_frame, correction_paused, segment_with_retries
+from argus.pipeline.pointing import CROP_MARGIN_PX
 from argus.recipes.model import Concept, Recipe
+from argus.rois import roi_box
 from argus.segment import Clip, MaskPatch, ObjectPrompt, SegmentError, SegmentResult, Track, TrackFrame
 from argus.storage.files import RunFiles
 from argus.storage.repos import (
@@ -64,9 +66,23 @@ class FakeSegmenter:
     def __init__(self):
         self.steps: list[str] = []
         self.calls = 0
+        self.pointed_steps: list[str] = []  # "ok" (the dark blobs in the crop), "empty", "whole" or "fail"
+        self.pointed_asks: list[tuple[str, list]] = []  # (concept, prompts) per pointed call
 
     def script(self, steps):
         self.steps = list(steps)
+
+    async def pointed(self, image_bgr, concept, prompts):
+        self.pointed_asks.append((concept, list(prompts)))
+        step = self.pointed_steps.pop(0) if self.pointed_steps else "ok"
+        if step == "fail":
+            raise SegmentError("ReadTimeout: timed out", call("error", cost=0.0, error="ReadTimeout: timed out"))
+        if step == "empty":
+            return SegmentResult([], call())
+        if step == "whole":  # SAM outlined the whole crop: the dish, not what changed in it
+            whole = MaskPatch(0, 0, np.ones(image_bgr.shape[:2], bool))
+            return SegmentResult([Track("obj1", concept, (TrackFrame(0, whole, 0.9),))], call())
+        return SegmentResult(dark_tracks(image_bgr, concept), call())
 
     async def image(self, image_bgr, concept):
         self.calls += 1
@@ -75,19 +91,24 @@ class FakeSegmenter:
             raise SegmentError("ReadTimeout: timed out", call("error", cost=0.0, error="ReadTimeout: timed out"))
         if step == "empty":
             return SegmentResult([], call())
-        grey = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
-        count, labels, stats, _ = cv2.connectedComponentsWithStats((grey < 60).astype(np.uint8))
-        tracks = []
-        for i in range(1, count):
-            x, y, w, h = (
-                int(stats[i, k]) for k in (cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT)
-            )
-            patch = MaskPatch(x, y, labels[y : y + h, x : x + w] == i)
-            tracks.append(Track(f"obj{i}", concept, (TrackFrame(0, patch, 0.95),)))
-        return SegmentResult(tracks, call())
+        return SegmentResult(dark_tracks(image_bgr, concept), call())
 
     async def video(self, clip, concept):
         raise NotImplementedError
+
+
+def dark_tracks(image_bgr, concept):
+    """Every dark blob, as SAM's tracks."""
+    grey = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    count, labels, stats, _ = cv2.connectedComponentsWithStats((grey < 60).astype(np.uint8))
+    tracks = []
+    for i in range(1, count):
+        x, y, w, h = (
+            int(stats[i, k]) for k in (cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT)
+        )
+        patch = MaskPatch(x, y, labels[y : y + h, x : x + w] == i)
+        tracks.append(Track(f"obj{i}", concept, (TrackFrame(0, patch, 0.95),)))
+    return tracks
 
 
 @pytest.fixture
@@ -521,3 +542,138 @@ async def test_prompts_go_to_the_pointed_segmenter_and_are_logged(ctx, scene):
     assert isinstance(result, SegmentResult)
     assert asked == [("root", prompts)] and ctx.segmenter.calls == 0  # never asked by name
     assert calls(ctx) == ["ok"]
+
+
+def appearing(ctx, *others):
+    """The test recipe with its root marked as appearing (D-92), plus concepts that don't."""
+    ctx.recipe = RECIPE.model_copy(
+        update={"concepts": [Concept(name="root", appears=True), *(Concept(name=c) for c in others)]}
+    )
+
+
+def plain(image, mask):
+    """The scene before the root grew: the bar painted over with the card around it."""
+    return cv2.inpaint(image, mask.astype(np.uint8) * 255, 5, cv2.INPAINT_TELEA)
+
+
+async def start(ctx, image, mask):
+    """Three kept frames of the start: the reference each vessel's change is measured from."""
+    for t in (0.0, 60.0, 120.0):
+        await analyze_frame(ctx, t, plain(image, mask), segment=True)
+    assert ctx.segmenter.pointed_asks == []  # never pointed while the reference is being taken
+
+
+def drawn_by(ctx, frame_id):
+    a = ctx.vessels[0].id
+    return [d.backend for d in detections_for_frame(ctx.db, frame_id) if d.vessel_id == a]
+
+
+def via_of_a(ctx, t):
+    a = ctx.vessels[0].id
+    return next(x.via for x in sam_answers_for_run(ctx.db, ctx.run.id) if x.vessel_id == a and x.t == t)
+
+
+def last_length_of_a(ctx):
+    a = ctx.vessels[0].id
+    return [m for m in measurements_for_run(ctx.db, ctx.run.id, metric="length") if m.vessel_id == a][-1]
+
+
+@pytest.mark.anyio
+async def test_an_empty_answer_where_the_vessel_changed_points_sam_at_the_change(ctx, scene):
+    image, mask = scene
+    appearing(ctx)
+    ctx.segmenter.script(["ok"] * 3 + ["empty"])
+    await start(ctx, image, mask)
+    out = await analyze_frame(ctx, 180.0, image, segment=True)
+    [(concept, prompts)] = ctx.segmenter.pointed_asks
+    x0, y0, _, _ = roi_box(ctx.vessels[0], *image.shape[:2], margin=CROP_MARGIN_PX)
+    ys, xs = np.nonzero(mask)
+    bx0, by0, bx1, by1 = prompts[0].box
+    assert concept == "root" and len(prompts) == 1 and prompts[0].point is not None
+    assert bx0 + x0 <= xs.min() and by0 + y0 <= ys.min() and bx1 + x0 >= xs.max() and by1 + y0 >= ys.max()
+    assert drawn_by(ctx, out.frame_id) == ["sam-3.1/pointed"]
+    assert via_of_a(ctx, 180.0) == "pointed"
+    reading = last_length_of_a(ctx)
+    assert reading.t == 180.0 and reading.value > 30
+
+
+@pytest.mark.anyio
+async def test_when_pointed_sam_finds_nothing_code_outlines_the_change(ctx, scene):
+    image, mask = scene
+    appearing(ctx)
+    ctx.segmenter.script(["ok"] * 3 + ["empty"])
+    ctx.segmenter.pointed_steps = ["empty"]
+    await start(ctx, image, mask)
+    out = await analyze_frame(ctx, 180.0, image, segment=True)
+    assert drawn_by(ctx, out.frame_id) == ["change-map"]
+    assert via_of_a(ctx, 180.0) == "code"
+    reading = last_length_of_a(ctx)
+    assert reading.t == 180.0 and reading.value > 30
+
+
+@pytest.mark.anyio
+async def test_a_vessel_sized_answer_is_dropped_for_the_code_outline(ctx, scene):
+    image, mask = scene
+    appearing(ctx)
+    ctx.segmenter.script(["ok"] * 3 + ["empty"])
+    ctx.segmenter.pointed_steps = ["whole"]
+    await start(ctx, image, mask)
+    out = await analyze_frame(ctx, 180.0, image, segment=True)
+    assert drawn_by(ctx, out.frame_id) == ["change-map"]
+
+
+@pytest.mark.anyio
+async def test_no_change_means_no_pointed_call(ctx, scene):
+    """Found by name, then lost where nothing changed since the start: a miss (D-90), and SAM isn't asked again."""
+    image, mask = scene
+    appearing(ctx)
+    ctx.segmenter.script(["ok"] * 3 + ["ok", "empty"])
+    await start(ctx, image, mask)
+    await analyze_frame(ctx, 180.0, image, segment=True)
+    await analyze_frame(ctx, 240.0, plain(image, mask), segment=True)
+    assert ctx.segmenter.pointed_asks == []
+    assert last_length_of_a(ctx).t == 180.0
+    assert len(misses(ctx)) == 1
+
+
+@pytest.mark.anyio
+async def test_a_concept_that_does_not_appear_is_never_pointed(ctx, scene):
+    image, mask = scene
+    appearing(ctx, "stem")
+    ctx.segmenter.script(["ok"] * 6 + ["empty", "empty"])
+    await start(ctx, image, mask)
+    await analyze_frame(ctx, 180.0, image, segment=True)
+    assert [concept for concept, _ in ctx.segmenter.pointed_asks] == ["root"]
+
+
+@pytest.mark.anyio
+async def test_a_refused_or_failed_pointed_call_still_outlines_the_change(ctx, scene):
+    """The change is code and costs nothing: when the spend cap refuses SAM, or SAM fails, code outlines it."""
+    image, mask = scene
+    appearing(ctx)
+    ctx.segmenter.script(["ok"] * 3 + ["empty", "empty"])
+    await start(ctx, image, mask)
+    ctx.settings = ctx.settings.model_copy(update={"run_spend_cap_usd": 0.0101})  # by name fits, pointed doesn't
+    refused = await analyze_frame(ctx, 180.0, image, segment=True)
+    assert ctx.segmenter.pointed_asks == [] and drawn_by(ctx, refused.frame_id) == ["change-map"]
+    ctx.settings = ctx.settings.model_copy(update={"run_spend_cap_usd": 10.0})
+    ctx.segmenter.pointed_steps = ["fail"] * 3
+    failed = await analyze_frame(ctx, 240.0, image, segment=True)
+    assert len(ctx.segmenter.pointed_asks) == 3 and drawn_by(ctx, failed.frame_id) == ["change-map"]
+    assert "segment_failed" in kinds(ctx)
+
+
+@pytest.mark.anyio
+async def test_the_reference_starts_again_after_the_vessel_moves(ctx, scene):
+    image, mask = scene
+    appearing(ctx)
+    ctx.segmenter.script(["ok"] * 3 + ["empty", "ok", "ok", "empty"])
+    await start(ctx, image, mask)
+    a = ctx.vessels[0]
+    ctx.vessels = [a.model_copy(update={"roi": [(x + 5, y) for x, y in a.roi]}), *ctx.vessels[1:]]
+    await analyze_frame(ctx, 180.0, image, segment=True)  # the first frame of the new reference
+    for t in (240.0, 300.0):
+        await analyze_frame(ctx, t, plain(image, mask), segment=True)
+    assert ctx.segmenter.pointed_asks == []
+    await analyze_frame(ctx, 360.0, image, segment=True)
+    assert len(ctx.segmenter.pointed_asks) == 1

@@ -23,6 +23,7 @@ from argus.storage.files import RunFiles
 from argus.storage.repos import (
     add_vessels,
     create_run,
+    detections_for_frame,
     events_for_run,
     frames_for_run,
     get_run,
@@ -382,13 +383,19 @@ async def test_an_import_counts_an_object_whose_outline_grew(ctx, clip):
 
 def write_plate(tmp_path) -> ImportRequest:
     """Three stills 30 min apart, the bar in vessel A growing 10, 20 and 30 mm, with a one-tile manifest."""
+    return write_stills(
+        tmp_path, [scene_with_bar_on_card_plane(STANDARD, length_mm=n, width_mm=2)[0] for n in (10, 20, 30)]
+    )
+
+
+def write_stills(tmp_path, images) -> ImportRequest:
+    """Stills 30 min apart with a one-tile manifest."""
     import json
 
     folder = tmp_path / "plate"
     folder.mkdir()
     names = []
-    for i, length in enumerate((10, 20, 30)):
-        image, _ = scene_with_bar_on_card_plane(STANDARD, length_mm=length, width_mm=2)
+    for i, image in enumerate(images):
         cv2.imencode(".jpg", image)[1].tofile(folder / f"frame_{i}.jpg")
         names.append(f"frame_{i}.jpg")
     tile = {"label": "A", "condition": "x", "run": "r1", "dish": 1, "box": [0, 0, 10, 10], "seeds": 1}
@@ -434,3 +441,36 @@ async def test_a_recipe_can_show_sam_one_vessel_of_each_still_at_a_time(ctx, tmp
     assert len(rows) == 3
     for row, true_mm in zip(rows, (10, 20, 30), strict=True):
         assert abs(row.value - true_mm) <= row.uncertainty, (row.value, row.uncertainty, true_mm)
+
+
+@pytest.mark.anyio
+async def test_an_import_points_sam_at_what_changed_in_a_still(ctx, tmp_path):
+    """A colony SAM never finds by name: after three stills of the start, each still where vessel A changed is shown
+    to SAM again with a box on the change (D-92); vessel B, unchanged, is never pointed at."""
+    concepts = [{"name": "root", "appears": True}]
+    ctx.recipe = Recipe.model_validate(
+        {**RECIPE.model_dump(by_alias=True), "stills_view": "vessel", "concepts": concepts}
+    )
+    asked = []
+
+    class NeverByName(FakeSegmenter):
+        async def image(self, image_bgr, concept):
+            self.modes.append("image")
+            return SegmentResult([], ok_call(images=1))
+
+        async def pointed(self, image_bgr, concept, prompts):
+            asked.append(len(prompts))
+            patches = dark_patches(image_bgr)
+            tracks = [Track(f"obj{i}", concept, (TrackFrame(0, p, 0.9),)) for i, p in enumerate(patches)]
+            return SegmentResult(tracks, ok_call(images=1))
+
+    ctx.segmenter = NeverByName()
+    start, _ = scene_with_bar_on_card_plane(STANDARD, length_mm=6, width_mm=2)  # a scene with no edge reads as blurred
+    grown, _ = scene_with_bar_on_card_plane(STANDARD, length_mm=30, width_mm=2)
+    status = await run_import(ctx, write_stills(tmp_path, [start] * 3 + [grown] * 2), cancel=asyncio.Event())
+    assert status is RunStatus.FINISHED
+    assert asked == [1, 1]
+    a = ctx.vessels[0].id
+    frames = frames_for_run(ctx.db, ctx.run.id)
+    drawn = [d.backend for f in frames[3:] for d in detections_for_frame(ctx.db, f.id) if d.vessel_id == a]
+    assert drawn == ["sam-3.1/pointed"] * 2

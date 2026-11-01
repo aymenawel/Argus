@@ -30,13 +30,13 @@ from argus.datasets.manifest import load_manifest
 from argus.domain import EventKind, ReferenceValueDraft, RunStatus, Vessel, new_id
 from argus.pipeline.analyzer import KeyedPatches, RunContext, Skipped, _write_jpeg, analyze_frame, segment_with_retries
 from argus.pipeline.moves import after_card_moved
+from argus.pipeline.pointing import CROP_MARGIN_PX, observe, point_again, pointing_concepts
 from argus.rois import roi_box
 from argus.segment import Clip, MaskPatch, SegmentResult
 from argus.segment.tracking import assign_to_vessels
 from argus.storage.repos import add_calibration, add_event, add_frame, add_reference_values, set_run_status
 from argus.watcher import Watcher, WatcherSettings
 
-CROP_MARGIN_PX = 8
 CLIP_FPS = 10
 CROP_JPEG_QUALITY = 95
 
@@ -300,6 +300,7 @@ async def _segment_stills(
         if cancel.is_set():
             return False
         x0 = y0 = 0
+        image = None
         if ctx.recipe.stills_view == "vessel":
             x0, y0, x1, y1 = roi_box(vessel, *shape, margin=CROP_MARGIN_PX)
             image = await asyncio.to_thread(cv2.imread, str(sample.path))
@@ -312,6 +313,14 @@ async def _segment_stills(
                 return False
             continue
         patches = [track.frames[0].patch.shifted(x0, y0) for track in single.tracks]
+        if concept in pointing_concepts(ctx.recipe):  # D-92: the start reference, and pointing where it changed
+            if image is None:
+                image = await asyncio.to_thread(cv2.imread, str(sample.path))
+            reference = observe(ctx, vessel, concept, image)
+            if reference is not None and not assign_to_vessels(patches, [vessel], shape)[vessel.id]:
+                patches = await point_again(
+                    ctx, vessel, concept, image, reference, t=sample.t, frame_id=sample.frame_id
+                )
         masks[sample.frame_id].setdefault(vessel.id, {})[concept] = _keep(ctx, vessel, concept, patches, shape)
     return True
 
