@@ -153,6 +153,12 @@
   fill: var(--neg-bg);
 }
 
+/* SAM lost the object it had found (D-90): a gap, drawn fainter than a failed segmentation. */
+.missed {
+  fill: var(--neg-bg);
+  opacity: 0.55;
+}
+
 /* Out of the grid flow (absolute), over the track column: an explicitly placed grid item would push the
    auto-placed ruler and filmstrip into the label column. */
 .playheadLayer {

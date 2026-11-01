@@ -2,6 +2,7 @@
 
 import { Fragment, type KeyboardEvent, type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { markEnd } from "@/lib/misses";
 import { playhead, usePlayhead } from "@/lib/playhead";
 import { byVessel } from "@/lib/run-data";
 import type { RunSnapshot, RunSource } from "@/lib/run-source";
@@ -14,7 +15,7 @@ type Props = { snapshot: RunSnapshot; source: RunSource; mainMetric: string };
 
 // Tick steps in seconds; the first that fits the ruler (at most 8 ticks) is used.
 const STEPS = [10, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 10800, 21600, 43200, 86400];
-const MARKED = new Set<RunEvent["kind"]>(["change", "intervention", "camera_moved", "segment_failed"]);
+const MARKED = new Set<RunEvent["kind"]>(["change", "intervention", "camera_moved", "segment_failed", "missed"]);
 const LANE_W = 1000;
 const LANE_H = 40;
 
@@ -186,7 +187,7 @@ export function Timeline({ snapshot, source, mainMetric }: Props) {
                       className={`${styles.mark} ${styles[e.kind] ?? ""}`}
                       x={laneX(e.t_start)}
                       y={4}
-                      width={Math.max(4, laneX(e.t_end ?? e.t_start) - laneX(e.t_start))}
+                      width={Math.max(4, laneX(markEnd(e, tEnd)) - laneX(e.t_start))}
                       height={LANE_H - 8}
                     />
                   ))}

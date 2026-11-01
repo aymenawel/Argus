@@ -158,6 +158,7 @@ export type RunEventKind =
   | "camera_moved"
   | "no_calibration"
   | "segment_failed"
+  | "missed" // SAM found nothing where it had found the object before (D-90)
   | "spend"
   | "interrupted"
   | "rule";
@@ -250,6 +251,15 @@ export type VesselFit = {
   samples: [number, number][]; // (t in s, fitted value)
 };
 
+/** How often SAM found a vessel's object (D-90); times in s. */
+export type Coverage = {
+  concept: string;
+  asked: number;
+  found: number;
+  first_found_t: number | null;
+  missed_after: number;
+};
+
 export type FitsView = {
   metric: string;
   unit: string;
@@ -262,6 +272,7 @@ export type FitsView = {
     condition: Condition | null;
     readings: [number, number][]; // (t in s, value)
     fit: VesselFit | null;
+    coverage?: Coverage | null; // absent in bundles published before D-90
   }[];
 };
 

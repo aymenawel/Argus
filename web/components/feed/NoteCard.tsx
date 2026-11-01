@@ -28,6 +28,7 @@ const EVENT: Record<string, string> = {
   rule: "Threshold crossed",
   camera_moved: "Camera moved",
   segment_failed: "Segmentation failed",
+  missed: "Lost by SAM",
   quality: "Quality",
   spend: "Spend cap",
   interrupted: "Interrupted",
