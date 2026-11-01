@@ -22,6 +22,7 @@ from argus.storage.repos import (
     add_event,
     add_frame,
     add_model_call,
+    add_sam_answers,
     close_event,
     create_run,
     detections_for_frame,
@@ -34,6 +35,7 @@ from argus.storage.repos import (
     mark_frame_analyzed,
     run_spend_usd,
     runs_for_experiment,
+    sam_answers_for_run,
     save_plan_draft,
     set_experiment_status,
     stop_interrupted_runs,
@@ -100,6 +102,25 @@ def test_detections_and_calibrations_are_evidence(db, run, vessel, frame):
         with pytest.raises(sqlite3.IntegrityError), db.write() as c:
             c.execute(sql, params)
     assert detections_for_frame(db, frame.id) == [d]
+
+
+def test_sam_answers_are_evidence(db, run, vessel, frame):
+    """What SAM answered for each vessel and concept, empty answers included: how often it found the object."""
+    add_sam_answers(db, run.id, frame.id, {(vessel.id, "root"): 2, (vessel.id, "bean"): 0})
+    answers = sam_answers_for_run(db, run.id)
+    assert [(a.concept, a.found, a.t) for a in answers] == [("root", 2, frame.t), ("bean", 0, frame.t)]
+    replace = (
+        "INSERT OR REPLACE INTO sam_answers(run_id, frame_id, vessel_id, concept, found) VALUES (?, ?, ?, 'root', 9)"
+    )
+    statements = [
+        ("UPDATE sam_answers SET found=5", ()),
+        ("DELETE FROM sam_answers", ()),
+        (replace, (run.id, frame.id, vessel.id)),
+    ]
+    for sql, params in statements:
+        with pytest.raises(sqlite3.IntegrityError), db.write() as c:
+            c.execute(sql, params)
+    assert sam_answers_for_run(db, run.id) == answers
 
 
 def test_the_latest_calibration_at_a_time_wins(db, run):

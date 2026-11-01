@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -40,6 +40,7 @@ from argus.domain import (
     RunMode,
     RunSource,
     RunStatus,
+    SamAnswer,
     Setup,
     Verdict,
     VerdictDraft,
@@ -520,6 +521,25 @@ def detections_for_frame(db: Database, frame_id: str) -> list[Detection]:
         Detection(**{**dict(r), "outline": json.loads(r["outline"]), "bbox": tuple(json.loads(r["bbox"]))})
         for r in rows
     ]
+
+
+def add_sam_answers(db: Database, run_id: str, frame_id: str, answers: Mapping[tuple[str, str], int]) -> None:
+    """What SAM answered on one frame: objects found per (vessel id, concept), 0 for an empty answer (D-90)."""
+    with db.write() as c:
+        c.executemany(
+            "INSERT INTO sam_answers(run_id, frame_id, vessel_id, concept, found) VALUES (?,?,?,?,?)",
+            [(run_id, frame_id, vessel_id, concept, found) for (vessel_id, concept), found in answers.items()],
+        )
+
+
+def sam_answers_for_run(db: Database, run_id: str) -> list[SamAnswer]:
+    with db.read() as c:
+        rows = c.execute(
+            "SELECT a.frame_id, a.vessel_id, a.concept, a.found, f.t FROM sam_answers a "
+            "JOIN frames f ON f.id = a.frame_id WHERE a.run_id=? ORDER BY f.t, a.rowid",
+            (run_id,),
+        ).fetchall()
+    return [SamAnswer(**dict(r)) for r in rows]
 
 
 # ---- Events ----

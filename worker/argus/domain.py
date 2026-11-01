@@ -254,6 +254,16 @@ class Detection(DetectionDraft):
     id: str
 
 
+class SamAnswer(Record):
+    """How many objects SAM found for one vessel and concept on one frame; 0 when it answered with nothing."""
+
+    frame_id: str
+    vessel_id: str
+    concept: str
+    found: int = Field(ge=0)
+    t: float  # the frame's time
+
+
 class EventKind(StrEnum):
     FIRST = "first"
     CHANGE = "change"
@@ -264,6 +274,7 @@ class EventKind(StrEnum):
     CAMERA_MOVED = "camera_moved"
     NO_CALIBRATION = "no_calibration"
     SEGMENT_FAILED = "segment_failed"
+    MISSED = "missed"  # SAM found nothing where it had found the object before (D-90)
     SPEND = "spend"
     INTERRUPTED = "interrupted"
     RULE = "rule"

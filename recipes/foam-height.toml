@@ -1,6 +1,6 @@
 # Foam, dough or any layer rising in a vessel, side view.
 id = "foam-height"
-version = 1
+version = 2
 title = "Foam or growth height"
 default_mode = "continuous"
 analysis_step_s = 5.0
@@ -11,6 +11,7 @@ default_views = ["gauge", "curves", "target", "groups"]
 
 [[concepts]]
 name = "foam"
+can_vanish = true  # foam can really collapse to nothing: an empty answer reads zero (D-90)
 
 [[measurements]]
 id = "height"

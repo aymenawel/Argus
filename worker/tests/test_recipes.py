@@ -46,6 +46,19 @@ def test_bundled_recipes_load_and_point_to_real_measurements():
         assert r.main_measurement in {m.id for m in r.measurements}
 
 
+def test_only_foam_can_vanish_and_metrics_map_back_to_their_concepts():
+    """Foam can really collapse to nothing; a colony or a root SAM stops finding is a miss (D-90)."""
+    recipes = load_all(REPO_ROOT / "recipes")
+    assert [c.can_vanish for c in recipes["foam-height"].concepts] == [True]
+    assert not any(c.can_vanish for r in recipes.values() if r.id != "foam-height" for c in r.concepts)
+    general = recipes["general"]
+    lab = next(m for m in general.measurements if m.method == "lab_mean")
+    assert general.measurement_for(f"{lab.id}_a") is lab
+    assert recipes["seed-germination"].measurement_for("root_length").source == "root"
+    with pytest.raises(KeyError):
+        general.measurement_for("nope")
+
+
 def test_image_sequences_show_sam_the_whole_frame_unless_a_recipe_asks_for_one_vessel_at_a_time():
     """Small seeds stand out on the whole plate; a faint colony filling its dish is only found in the dish (D-89)."""
     recipes = load_all(REPO_ROOT / "recipes")

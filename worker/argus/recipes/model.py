@@ -47,6 +47,9 @@ class Spec(BaseModel):
 
 class Concept(Spec):
     name: str = Field(min_length=1)
+    # Something that can really disappear (foam collapsing): an empty answer after a sighting reads zero. Anything
+    # else SAM stops finding is a miss, a gap with a `missed` event, never a zero (D-90).
+    can_vanish: bool = False
 
 
 class MeasurementSpec(Spec):
@@ -127,6 +130,13 @@ class Recipe(Spec):
                 continue
             names += [f"{spec.id}_{axis}" for axis in "lab"] if spec.method == "lab_mean" else [spec.id]
         return names
+
+    def measurement_for(self, metric: str) -> MeasurementSpec:
+        """The measurement a stored metric comes from (a lab_mean's `<id>_l`, `_a` and `_b` too); KeyError if none."""
+        for spec in self.measurements:
+            if metric == spec.id or (spec.method == "lab_mean" and metric in {f"{spec.id}_{axis}" for axis in "lab"}):
+                return spec
+        raise KeyError(metric)
 
     @field_validator("concepts")
     @classmethod
