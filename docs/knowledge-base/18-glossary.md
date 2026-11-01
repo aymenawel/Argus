@@ -10,6 +10,7 @@ Use these words consistently in code, UI and docs.
 | **Replicate** | An independent vessel under the same condition. Repeated frames of one vessel are **not** replicates |
 | **Recipe** | Config for an experiment type: SAM concepts, measurements, curve, events, watcher preset, method card |
 | **Method card** | Short prompt file per recipe, loaded only for that recipe |
+| **Miss** | A picture where SAM finds nothing in a vessel after it has found the object there once. Recorded as a gap with a `missed` event, never as a zero (except for things that can vanish, such as foam) (D-90) |
 | **Plan / pre-registration** | Hypothesis, prediction and success threshold, locked with a timestamp at start |
 | **ROI** | Region of interest: the vessel's area the watcher looks at |
 | **Keyframe** | The last frame that was analyzed; the watcher compares new frames to it |

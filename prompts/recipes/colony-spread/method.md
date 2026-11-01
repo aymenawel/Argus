@@ -2,7 +2,7 @@
 
 # Method: colony spread
 
-**What is measured.** SAM finds the "microbial colony" in each dish, one dish at a time. Argus reports its area in square millimetres, calibrated by the Argus Card or by the dish rim of stated diameter. A dish where SAM found nothing reads zero; a failed segmentation is a gap. SAM misses a colony while it is small and faint, and sometimes misses a large one, so a zero is not proof that nothing grew: compare it with the image and with the dish's readings before and after.
+**What is measured.** SAM finds the "microbial colony" in each dish, one dish at a time. Argus reports its area in square millimetres, calibrated by the Argus Card or by the dish rim of stated diameter. A dish reads zero until SAM first finds the colony; after that, a scan where SAM finds nothing is a miss (no reading, a "missed" event). A failed segmentation is a gap too. SAM misses small, faint colonies, so an early zero is not proof that nothing grew.
 
 **Typical curve.** A lag after inoculation, then a spreading phase whose area grows quickly, then a slowdown as the colony nears the dish wall or the agar dries. A swarm can spread in bursts (rings or branches) rather than smoothly.
 

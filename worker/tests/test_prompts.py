@@ -191,6 +191,13 @@ def test_every_recipe_has_a_short_method_card():
         assert 40 < len(card.split()) <= 250
 
 
+def test_the_cards_say_a_miss_after_a_sighting_is_a_gap():
+    """Once SAM has found the object, a picture where it finds nothing is a miss, not a zero (D-90, D-91)."""
+    for recipe in ("colony-spread", "seed-germination", "general"):
+        assert '"missed" event' in load_prompt(f"recipes/{recipe}/method.md"), recipe
+    assert "last reading" in load_prompt("system/scientific-rules.md")
+
+
 def test_a_recipe_without_a_method_card_uses_the_general_one():
     custom = COLOUR.model_copy(update={"id": "my-own-recipe"})
     task = note_task("checkpoint", custom, None, RefTable({}), [], [])

@@ -2,7 +2,7 @@
 
 # Method: general
 
-**What is measured.** SAM finds the "object" in each vessel or region. Argus reports its area in square millimetres, calibrated by the Argus Card, and its mean colour in CIELAB. A region where nothing was found reads zero area; a failed segmentation is a gap.
+**What is measured.** SAM finds the "object" in each vessel or region. Argus reports its area in square millimetres, calibrated by the Argus Card, and its mean colour in CIELAB. A region reads zero area until the object is first found; after that, a picture where SAM finds nothing is a miss (a gap, with a "missed" event). A failed segmentation is a gap too.
 
 **Typical curve.** Unknown in advance: describe what the readings do (steady, rising, falling, jumping) rather than assuming a shape.
 
