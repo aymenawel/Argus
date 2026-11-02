@@ -403,6 +403,8 @@ async def test_an_import_recorded_before_the_plan_was_locked_is_not_judged(db, e
     run = create_run(db, exp.id, RunMode.IMPORTED, source, time_scale=1.0)
     verdict = await judge(db, run, FakeReasoner([]))
     assert verdict.allowed == [VerdictLevel.TOO_EARLY] and verdict.checks[0]["id"] == "plan"
+    # The page shows the plan, so the check says it came too late rather than that there was none.
+    assert verdict.checks[0]["text"].startswith("The plan was locked after this run's data began")
 
 
 @pytest.mark.anyio

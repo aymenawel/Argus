@@ -6,6 +6,7 @@ import { AgreementTable } from "./AgreementTable";
 import { Button } from "@/components/ui/Button";
 import { ApiError, askVerdict, getPlans, getReviews, postReview } from "@/lib/api";
 import { useReadOnly } from "@/lib/replay";
+import { explanationToShow } from "@/lib/results";
 import type { RunSnapshot } from "@/lib/run-source";
 import type { Check, Plan, Review, Verdict, VerdictLevel } from "@/lib/types";
 import styles from "./VerdictPanel.module.css";
@@ -264,7 +265,7 @@ function Body({
     <div className={styles.body}>
       <VerdictChecks verdict={verdict} />
 
-      {b.explanation && <p className={styles.explanation}>{b.explanation}</p>}
+      {explanationToShow(verdict) && <p className={styles.explanation}>{b.explanation}</p>}
 
       {b.rivals.length > 0 && (
         <section className={styles.section}>

@@ -16,6 +16,15 @@ read-only in the same app: the Run view (frames with SAM's outlines, readings, n
 Results (fitted curves, half-way times, the verdict's checks, the next run, the videos). Nothing on it is live, and
 every page says so. The germination plate is published data (Genze et al. 2020, CC BY 4.0), credited on every page.
 
+The dye run is our own: three glasses of cold, room-temperature and warm water filmed by a webcam for 21 minutes on
+Oct 28, re-analysed from its saved pictures. Argus measured the warm glass at 25.1 ± 0.1 ΔE00 against 4.6 for the
+room-temperature one, with all 12 of its notes passing the claim checker first time. It still refuses a verdict: the
+plan was written the next day, after the footage existed, and a prediction written with the data in view isn't a
+test. The verdict says exactly that, and the next-run suggestion is to lock the plan before filming.
+
+![The dye run's highlights reel at 4 minutes: SAM's outlines on the glasses, dye spreading through the warm one, and
+the readings so far](docs/images/dye-run-reel.jpg)
+
 ## How it works
 
 - **Watch.** A cheap local watcher reads every frame and wakes the expensive steps only when something changed.
@@ -75,8 +84,8 @@ Videos and bundles are made from stored records only, with the same fitted curve
 
 ## Validation
 
-How well Argus measured, printed by `uv run python -m argus validation --runs run_9334d302e075` from the database,
-pasted unedited. A check with nothing stored behind it says "not measured yet".
+How well Argus measured, printed by `uv run python -m argus validation --runs run_9334d302e075 run_ff0b8786cc3c`
+from the database, pasted unedited. A check with nothing stored behind it says "not measured yet".
 
 | Check | Run | Result |
 |---|---|---|
@@ -87,6 +96,12 @@ pasted unedited. A check with nothing stored behind it says "not measured yet".
 | Events caught | Rye vs pearl millet (Genze plate, speed) (run_9334d302e075) | not measured yet |
 | Claim checker | Rye vs pearl millet (Genze plate, speed) (run_9334d302e075) | 1 accepted first try, 2 after a retry, 1 written by code; 4 answers rejected: quantity in words ×7 |
 | Models | Rye vs pearl millet (Genze plate, speed) (run_9334d302e075) | SAM 95 of 95 calls succeeded · spend $0.71 |
+| Scale | Dye vs water temperature (phase 3 check) (run_ff0b8786cc3c) | compact card · 0.328 ± 0.003 mm/px · print check 100.0 mm of 100 mm |
+| Noise floor | Dye vs water temperature (phase 3 check) (run_ff0b8786cc3c) | delta_e: 0.13 dE00 (still period) |
+| Counting against labels | Dye vs water temperature (phase 3 check) (run_ff0b8786cc3c) | not measured yet |
+| Events caught | Dye vs water temperature (phase 3 check) (run_ff0b8786cc3c) | not measured yet |
+| Claim checker | Dye vs water temperature (phase 3 check) (run_ff0b8786cc3c) | 12 accepted first try, 0 after a retry, 0 written by code; none rejected |
+| Models | Dye vs water temperature (phase 3 check) (run_ff0b8786cc3c) | SAM 3 of 3 calls succeeded · spend $1.26 |
 
 SAM 3.1 returns at most 16 objects per request, so a dish with more seeds and sprouts than that can be undercounted;
 the run flags it as a quality event at its first frame.

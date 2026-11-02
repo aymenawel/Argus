@@ -4,12 +4,11 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { ApiError, getNextRun, suggestNextRun } from "@/lib/api";
 import { useReadOnly } from "@/lib/replay";
+import { runLength } from "@/lib/results";
 import type { NextRun } from "@/lib/types";
 import styles from "./NextRunCard.module.css";
 
 type Props = { runId: string; running: boolean };
-
-const hours = (h: number) => `${h >= 10 ? h.toFixed(0) : h.toFixed(1)} h`;
 
 // The next run (D-80): replicates and run length computed in code from this run, the reasons written by Muse Wonder
 // through the claim checker (or by code). A suggestion, never a measurement: Argus doesn't start runs.
@@ -77,7 +76,7 @@ export function NextRunCard({ runId, running }: Props) {
         </div>
         <div>
           <dt>Run length</dt>
-          <dd className="num">{numbers.hours !== null ? hours(numbers.hours) : "Unknown"}</dd>
+          <dd className="num">{numbers.hours !== null ? runLength(numbers.hours) : "Unknown"}</dd>
           <dd className={styles.reason}>{numbers.hours_reason}</dd>
         </div>
         <div>

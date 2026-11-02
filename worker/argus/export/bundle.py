@@ -194,7 +194,8 @@ def _build(
         "credit": provenance.credit if provenance else None,
         "licence": provenance.licence if provenance else None,
         "dataset_url": provenance.url if provenance else None,
-        "recorded": run.started_at.isoformat(),
+        # When the footage was filmed, if known (an import's start time), not when Argus ran: the replay dates it.
+        "recorded": (run.source.start_time or run.started_at).isoformat(),
         "exported_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "commit": commit,
         "frames": {

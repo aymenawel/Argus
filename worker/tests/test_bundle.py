@@ -2,6 +2,7 @@
 frames and a manifest the public replay reads."""
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import cv2
@@ -220,3 +221,11 @@ def test_local_paths_never_reach_the_public_bundle(db, tmp_path, settings, recip
         assert "someone" not in text, file
     view = json.loads((bundle / "api" / "runs" / f"{run.id}.json").read_text("utf-8"))
     assert view["run"]["source"]["paths"] == ["dye run.mp4", "b.mp4"]
+
+
+def test_a_recording_is_dated_when_it_was_recorded_not_when_argus_imported_it(db, tmp_path, settings, recipes):
+    """An imported recording with its start time given: the replay says when it was filmed, not when it was imported."""
+    filmed = datetime(2026, 10, 29, 3, 22, 55, tzinfo=UTC)
+    run = finished_run(db, tmp_path / "data", start_time=filmed)
+    manifest = json.loads((export(db, settings, recipes, run, tmp_path) / "manifest.json").read_text("utf-8"))
+    assert datetime.fromisoformat(manifest["recorded"]) == filmed

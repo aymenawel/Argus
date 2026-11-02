@@ -25,6 +25,7 @@ import {
 } from "@/lib/api";
 import { homeLink, runHref } from "@/lib/links";
 import { useReadOnly } from "@/lib/replay";
+import { explanationToShow } from "@/lib/results";
 import type { Experiment, FitsView, Plan, RecipeDetail, RunView, Verdict } from "@/lib/types";
 import styles from "./page.module.css";
 
@@ -277,7 +278,7 @@ export function ResultsScreen({ experimentId }: { experimentId?: string } = {}) 
               />
             </div>
             <VerdictChecks verdict={verdict} />
-            {verdict.body.explanation && <p className={styles.explanation}>{verdict.body.explanation}</p>}
+            {explanationToShow(verdict) && <p className={styles.explanation}>{verdict.body.explanation}</p>}
           </>
         )}
         {view.run.source.provenance && plan?.metric && (

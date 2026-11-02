@@ -42,6 +42,8 @@ class NextRunRefused(RuntimeError):
 
 
 def _hours(h: float) -> str:
+    if h < 1:  # a dye run is judged at 2 minutes: "0.0 h" would read as no time at all
+        return f"{h * 60:.0f} min"
     return f"{h:.0f} h" if h >= 10 else f"{h:.1f} h"
 
 

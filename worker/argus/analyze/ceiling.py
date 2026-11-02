@@ -117,8 +117,12 @@ def _vessels(n: int, role: str) -> str:
 
 def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
     """The allowed verdicts and every check behind them, in words."""
-    if not inputs.locked:
-        return {TOO_EARLY}, [_check("plan", False, "No plan was locked before the run, so nothing can be judged.")]
+    if not inputs.locked:  # a run with no locked plan at all is refused before this (D-67): this one came too late
+        text = (
+            "The plan was locked after this run's data began, so it can't be judged against it: "
+            "a prediction written with the data in view isn't a test."
+        )
+        return {TOO_EARLY}, [_check("plan", False, text)]
     if inputs.checkpoint_s is not None and inputs.t < inputs.checkpoint_s:
         if inputs.running:
             text = "Before the plan's checkpoint: a verdict would be too early."

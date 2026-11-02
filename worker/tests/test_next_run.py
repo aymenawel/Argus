@@ -309,3 +309,13 @@ def test_a_level_plans_spread_leaves_out_readings_sam_lost_the_object_after(db):
             groups.setdefault(str(v.role), []).append(latest[v.id])
     numbers = next_run_numbers(db, run, RECIPE, plan)
     assert f"spread of {pooled_sd(groups):.2g} mm" in numbers.replicates_reason
+
+
+def test_a_run_length_under_an_hour_reads_in_minutes():
+    from argus.analyze.next_run import NextRunNumbers
+    from argus.pipeline.next_run import _next_refs
+
+    short = NextRunNumbers(replicates=None, replicates_reason="", hours=2 / 60, hours_reason="")
+    long = NextRunNumbers(replicates=None, replicates_reason="", hours=4.5, hours_reason="")
+    assert _next_refs(short)["next:hours"].display == "2 min"  # not "0.0 h": a dye run is judged at 2 minutes
+    assert _next_refs(long)["next:hours"].display == "4.5 h"
