@@ -12,7 +12,7 @@ const COPY: Record<RunMode, { label: string; title: string }> = {
 export function Badge({ source, provenance }: { source: RunMode; provenance?: Provenance | null }) {
   const { label, title } = provenance
     ? {
-        label: provenance.retrospective ? "PUBLISHED · RETROSPECTIVE" : "PUBLISHED",
+        label: provenance.retrospective ? "PUBLISHED · LOOKING BACK" : "PUBLISHED",
         title: `Published data from ${provenance.credit}, measured by Argus${
           provenance.retrospective ? " after the data existed" : ""
         }`,

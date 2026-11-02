@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getAgreement } from "@/lib/api";
+import { metricWords } from "@/lib/plain";
 import { formatRunTime } from "@/lib/scale";
 import type { Agreement } from "@/lib/types";
 import styles from "./AgreementTable.module.css";
@@ -28,7 +29,7 @@ export function AgreementTable({ runId, metric, refresh }: Props) {
   }, [runId, metric, refresh]);
 
   if (!result) return null;
-  const words = metric.replaceAll("_", " ");
+  const words = metricWords(metric);
   return (
     <section className={styles.agreement} aria-label="Agreement with the dataset's labels">
       <h3>Against {result.source}&apos;s labels</h3>
@@ -36,7 +37,7 @@ export function AgreementTable({ runId, metric, refresh }: Props) {
         {result.mean_abs_diff === null
           ? `Argus hasn't measured ${words} on a labelled picture yet.`
           : `Argus vs the labels: off by ${diff(result.mean_abs_diff)} on average · the same in ` +
-            `${share(result.exact_share)} of frames.`}
+            `${share(result.exact_share)} of pictures.`}
       </p>
       <div className={styles.scroll}>
         <table className={styles.table}>
@@ -65,7 +66,7 @@ export function AgreementTable({ runId, metric, refresh }: Props) {
         </table>
       </div>
       <p className={styles.note}>
-        Half-way: when {words} first reached half its final labelled value. Frames Argus didn&apos;t measure are left
+        Half-way: when {words} first reached half its final labelled value. Pictures Argus didn&apos;t measure are left
         out, not counted as zero.
       </p>
     </section>

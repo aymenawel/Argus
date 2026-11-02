@@ -162,7 +162,7 @@ function Credit({ provenance: p }: { provenance: Provenance }) {
       <a href={p.url} target="_blank" rel="noreferrer">
         {p.dataset}
       </a>{" "}
-      (doi:{p.doi}), {p.licence}.{p.assembled && " Argus assembled these frames from the published dishes."}
+      (doi:{p.doi}), {p.licence}.{p.assembled && " Argus assembled these pictures from the published dishes."}
     </p>
   );
 }
