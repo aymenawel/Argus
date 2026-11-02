@@ -1,7 +1,7 @@
 // Scales and ticks for the Results page's SVG charts (lib/chart.ts).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { conditionGroups, formatPair, groupKey, linearScale, niceTicks } from "../lib/chart.ts";
+import { conditionGroups, formatPair, groupKey, linearScale, niceTicks, timeAxis } from "../lib/chart.ts";
 
 test("a linear scale maps the domain onto the range, either way round", () => {
   assert.equal(linearScale([0, 10], [0, 100])(5), 50);
@@ -44,4 +44,9 @@ test("treatment conditions are told apart by dash and by dot shape; controls sta
     ],
   );
   assert.equal(groups.get(groupKey(vessel("treatment", "100 mM")))?.marker, "square");
+});
+
+test("a run under an hour is drawn in minutes", () => {
+  assert.deepEqual(timeAxis(21 * 60), { seconds: 60, unit: "minutes" });
+  assert.deepEqual(timeAxis(47 * 3600), { seconds: 3600, unit: "hours" });
 });

@@ -28,7 +28,7 @@ function calibrationText(snapshot: RunSnapshot): string {
   const cal = snapshot.view.calibration;
   if (!cal) return "No scale yet";
   const name = cal.card === "ruler" ? "Ruler" : cal.card === "dish" ? "Dish rim" : "Card";
-  return `${name} · ${(1 / cal.mm_per_px).toFixed(2)} px/mm ± ${(cal.rel_uncertainty * 100).toFixed(1)}%`;
+  return `${name} scale · ${(1 / cal.mm_per_px).toFixed(2)} pixels per mm ± ${(cal.rel_uncertainty * 100).toFixed(1)}%`;
 }
 
 export function RunFrame({ snapshot, source, mainMetric }: Props) {

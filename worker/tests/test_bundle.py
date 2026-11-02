@@ -193,7 +193,7 @@ def test_a_thinned_manifest_says_so(db, tmp_path, settings, recipes):
     assert manifest["frames"] == {
         "total": 1000,
         "shown": shown,
-        "note": f"1 frame in {round(1000 / shown)} shown; measurements use all 1,000 frames",
+        "note": f"1 picture in {round(1000 / shown)} shown; measurements use all 1,000 pictures",
         "scale": 1.0,
     }
     assert len(manifest["frame_map"]) == 1000

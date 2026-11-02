@@ -100,7 +100,7 @@ export function CheckStep({ experimentId, setup, frame, preview, onPreview, onCh
           <div className={styles.step}>
             {preview.calibration ? (
               <p className={styles.good}>
-                {CARD[preview.calibration.card]} · {preview.calibration.px_per_mm.toFixed(2)} px/mm ±{" "}
+                {CARD[preview.calibration.card]} · {preview.calibration.px_per_mm.toFixed(2)} pixels per mm ±{" "}
                 {(preview.calibration.rel_uncertainty * 100).toFixed(1)} %
               </p>
             ) : (

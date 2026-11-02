@@ -135,7 +135,7 @@ def _thinning_note(thinning: Thinning) -> str | None:
     total, shown = len(thinning.frame_map), len(thinning.kept)
     if shown == total:
         return None
-    return f"1 frame in {round(total / shown)} shown; measurements use all {total:,} frames"
+    return f"1 picture in {round(total / shown)} shown; measurements use all {total:,} pictures"
 
 
 def _build(

@@ -39,6 +39,11 @@ export function formatDuration([hours, uncertainty]: [number, number]): string {
   return hours < 1 ? formatPair([hours * 60, uncertainty * 60], "min") : formatPair([hours, uncertainty], "h");
 }
 
+/** A chart's time axis: a run under an hour is drawn in minutes (0–21), not in fractions of an hour (0–0.4). */
+export function timeAxis(maxSeconds: number): { seconds: number; unit: "minutes" | "hours" } {
+  return maxSeconds < 3600 ? { seconds: 60, unit: "minutes" } : { seconds: 3600, unit: "hours" };
+}
+
 export type Marker = "circle" | "square" | "diamond";
 export type SeriesGroup = { label: string; control: boolean; dash?: string; marker: Marker };
 type Grouped = { role: "control" | "treatment"; condition: { value: number | string } | null };
