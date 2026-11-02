@@ -17,6 +17,7 @@ from argus.analyze.coverage import lost_after
 from argus.analyze.fits import Fit, vessel_fits
 from argus.analyze.levels import level_bounds, suggest_levels
 from argus.domain import Direction, Plan, Run, Vessel
+from argus.plain import unit_label
 from argus.recipes.model import Recipe
 from argus.storage.db import Database
 from argus.storage.repos import events_for_run, measurements_for_run, vessels_for_run
@@ -69,20 +70,22 @@ def replicates_needed(
 def replicates_with_reason(sd: float | None, min_effect: float | None, unit: str) -> tuple[int | None, str]:
     """The replicates to suggest and why, in words the Results page shows."""
     if min_effect is None or min_effect <= 0:
-        return None, "unknown: the plan sets no smallest effect to detect"
+        return None, "unknown: the plan doesn't say how big a difference counts as real"
     needed = replicates_needed(sd, min_effect, cap=None)
     if needed is None:
         return (
             None,
-            "unknown: the vessels within each condition gave no spread to work from (one vessel each, or all alike)",
+            "unknown: each condition had one sample (or its samples read the same), so Argus can't tell how much "
+            "samples naturally differ",
         )
-    against = f"{min_effect:g} {unit} against a spread of {sd:.2g} {unit} within conditions"
+    shown = unit_label(unit)
+    against = f"a difference of {min_effect:g} {shown} when samples of one condition differ by about {sd:.2g} {shown}"
     if needed > CAP:
         return (
             CAP,
             f"{needed} per condition would be needed to see {against}; capped at {CAP} to keep one run practical",
         )
-    return needed, f"enough for a two-sample t-test (5 % false alarms, 80 % power) to see {against}"
+    return needed, f"enough to see {against}, 4 times out of 5, with a 1 in 20 chance of a false alarm (a t-test)"
 
 
 def time_to_level_off(fit: Fit, share: float = LEVEL_OFF) -> float | None:
@@ -146,7 +149,7 @@ def _as_number(value: float | str) -> tuple[float, str] | None:
     return (float(match.group(1).replace(",", ".")), match.group(2)) if match else None
 
 
-JUDGED = {"level": "level at the checkpoint", "half_time": "half-way time", "rate": "rate"}
+JUDGED = {"level": "reading at the check time", "half_time": "time to get half-way", "rate": "speed"}
 
 
 def _next_levels(
@@ -155,27 +158,28 @@ def _next_levels(
     """Ax's levels for a numeric factor, from each measured vessel's (level, judged value); the factor's unit; why."""
     conditions = [v.condition for v in vessels if v.condition is not None]
     if not conditions:
-        return [], "", "the vessels have no condition to vary"
+        return [], "", "the samples have no condition to vary"
     numeric = {v.id: n for v in vessels if v.condition is not None and (n := _as_number(v.condition.value))}
     if not numeric:
-        return [], "", f"{conditions[0].factor} isn't numeric, so there are no levels to search"
+        return [], "", f"{conditions[0].factor} is a label, not a number, so there are no in-between values to try"
     # A text condition ("water" as the control) has no level: it stays out of the search.
     unit = next((c.unit for c in conditions if c.unit), None) or next((u for _, u in numeric.values() if u), "")
     tested = [(numeric[v.id][0], judged[v.id]) for v in vessels if v.id in numeric and v.id in judged]
     if len({level for level, _ in tested}) < 2:
-        return [], unit, "at least two tested levels are needed to search for the next ones"
+        return [], unit, "at least two tested values are needed to pick the next ones"
     bounds = level_bounds([level for level, _ in tested])
     minimize = plan is not None and plan.direction is Direction.LOWER
     try:
         levels = suggest_levels(tested, minimize=minimize, bounds=bounds)
     except Exception as error:  # noqa: BLE001 - whatever breaks inside Ax, the rest of the suggestion stands
-        return [], unit, f"the level search failed: {error}"
+        return [], unit, f"the search for values to try failed: {error}"
     goal = "lowest" if minimize else "highest"
     span = f"{bounds[0]:g} to {bounds[1]:g} {unit}".strip()
     return (
         levels,
         unit,
-        f"Ax's picks for the {goal} {JUDGED[quantity]}, searched over {span} from {len(tested)} vessels",
+        f"picked by Ax (Meta's experiment optimiser) for the {goal} {JUDGED[quantity]}, searched over {span} "
+        f"from {len(tested)} samples",
     )
 
 
@@ -219,19 +223,19 @@ def next_run_numbers(db: Database, run: Run, recipe: Recipe, plan: Plan | None) 
     if quantity == "level" and checkpoint is not None and not still_rising:
         hours = checkpoint / 3600
         hours_reason = (
-            "the plan's checkpoint, where the level is judged; this run's readings had levelled off by its end"
+            "the plan's check time, when the reading is judged; this run's readings had levelled off by its end"
         )
     elif hours is not None:
         hours_reason = (
-            f"when the slowest vessel's fitted {recipe.curve} curve reaches {LEVEL_OFF * 100:.0f} % of its plateau, "
-            f"plus {MARGIN * 100:.0f} %"
+            f"when the slowest sample's curve gets {LEVEL_OFF * 100:.0f} % of the way to where it levels off, "
+            f"plus {MARGIN * 100:.0f} % extra time"
         )
     elif not any(f.ok for f in fits.values()):
-        hours_reason = f"unknown: no vessel's readings follow a {recipe.curve} curve"
+        hours_reason = "unknown: no sample's readings follow the expected curve"
     elif any(f.ok and not f.reached for f in fits.values()):
-        hours_reason = f"unknown: a vessel was still rising at the end; run longer than {_hours(last_h)}"
+        hours_reason = f"unknown: a sample was still rising at the end; run longer than {_hours(last_h)}"
     else:
-        hours_reason = f"unknown: a {recipe.curve} curve never levels off"
+        hours_reason = "unknown: this kind of curve never levels off"
 
     levels, levels_unit, levels_reason = _next_levels(vessels, judged, plan, quantity)
     return NextRunNumbers(replicates, replicates_reason, hours, hours_reason, levels, levels_reason, levels_unit)

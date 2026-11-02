@@ -135,7 +135,7 @@ def test_no_spread_means_unknown_replicates():
     assert replicates_needed(0.0, 2.0) is None
     assert replicates_needed(float("nan"), 2.0) is None
     n, reason = replicates_with_reason(None, 2.0, "h")
-    assert n is None and "spread" in reason
+    assert n is None and "naturally differ" in reason
 
 
 def test_run_length_is_when_the_slowest_curve_plateaus():
@@ -278,7 +278,7 @@ def test_a_level_plans_spread_comes_from_the_readings_the_verdict_compared(db):
     groups: dict[str, list[float]] = {}
     for v in vessels_for_run(db, run.id):
         groups.setdefault(str(v.role), []).append(latest[v.id])
-    assert f"spread of {pooled_sd(groups):.2g} mm" in numbers.replicates_reason
+    assert f"differ by about {pooled_sd(groups):.2g} mm" in numbers.replicates_reason
 
 
 def test_a_level_plans_spread_leaves_out_readings_sam_lost_the_object_after(db):
@@ -308,7 +308,7 @@ def test_a_level_plans_spread_leaves_out_readings_sam_lost_the_object_after(db):
         if v.id != a.id:
             groups.setdefault(str(v.role), []).append(latest[v.id])
     numbers = next_run_numbers(db, run, RECIPE, plan)
-    assert f"spread of {pooled_sd(groups):.2g} mm" in numbers.replicates_reason
+    assert f"differ by about {pooled_sd(groups):.2g} mm" in numbers.replicates_reason
 
 
 def test_a_run_length_under_an_hour_reads_in_minutes():
@@ -319,3 +319,15 @@ def test_a_run_length_under_an_hour_reads_in_minutes():
     long = NextRunNumbers(replicates=None, replicates_reason="", hours=4.5, hours_reason="")
     assert _next_refs(short)["next:hours"].display == "2 min"  # not "0.0 h": a dye run is judged at 2 minutes
     assert _next_refs(long)["next:hours"].display == "4.5 h"
+
+
+def test_the_suggestion_counts_samples_in_plain_words():
+    """A reader sees "3 samples per condition" and a test named in words, never "vessels" or "two-sample" (D-95)."""
+    from argus.analyze.next_run import NextRunNumbers
+    from argus.pipeline.next_run import _next_refs
+
+    n, reason = replicates_with_reason(1.0, 2.0, unit="h")  # d = 2: 6 per condition, under the cap
+    numbers = NextRunNumbers(replicates=n, replicates_reason=reason, hours=None, hours_reason="")
+    assert _next_refs(numbers)["next:replicates"].display == f"{n} samples"
+    assert "vessel" not in _next_refs(numbers)["next:replicates"].label
+    assert "two-sample" not in reason and "1 in 20" in reason

@@ -2,6 +2,7 @@
 
 import { playhead } from "@/lib/playhead";
 import { modelName } from "@/lib/models";
+import { chipTitle, withoutLabel } from "@/lib/plain";
 import { formatRunTime } from "@/lib/scale";
 import type { Note, RunEvent, VerdictLevel } from "@/lib/types";
 import { EvidenceChip } from "./EvidenceChip";
@@ -9,27 +10,27 @@ import styles from "./NoteCard.module.css";
 
 const KIND: Record<string, string> = {
   event: "Event",
-  checkpoint: "Checkpoint",
+  checkpoint: "Check-in",
   insight: "Insight",
   observation: "Observation",
-  intervention: "Intervention",
+  intervention: "Your action",
   question: "Question",
 };
 
 const STATUS: Record<VerdictLevel, string> = {
   SUPPORTED: "supported",
   NOT_SUPPORTED: "not supported",
-  INCONCLUSIVE: "inconclusive",
+  INCONCLUSIVE: "unclear",
   TOO_EARLY: "too early to tell",
 };
 
 const EVENT: Record<string, string> = {
-  intervention: "Intervention",
+  intervention: "Your action",
   rule: "Threshold crossed",
   camera_moved: "Camera moved",
-  segment_failed: "Segmentation failed",
+  segment_failed: "SAM couldn't outline this picture",
   missed: "Lost by SAM",
-  quality: "Quality",
+  quality: "Picture problem",
   spend: "Spend cap",
   interrupted: "Interrupted",
 };
@@ -65,7 +66,13 @@ export function NoteCard({ note, span, events, labels, model }: Props) {
   const cited = (b.chips ?? [])
     .filter((chip) => !CONTEXT.some((prefix) => chip.ref.startsWith(prefix)))
     .map((chip) => (
-      <EvidenceChip key={chip.ref} text={chip.display} title={chip.label} t={chip.t} vesselId={chip.vessel_id} />
+      <EvidenceChip
+        key={chip.ref}
+        text={chip.display}
+        title={chipTitle(chip.label)}
+        t={chip.t}
+        vesselId={chip.vessel_id}
+      />
     ));
   const happened = note.evidence
     .map((id) => events.get(id))
@@ -109,22 +116,22 @@ export function NoteCard({ note, span, events, labels, model }: Props) {
 
       {ai ? (
         <div className={styles.sections}>
-          {b.observation && <p className={styles.observation}>{b.observation}</p>}
-          {b.interpretation && <p>{b.interpretation}</p>}
+          {b.observation && <p className={styles.observation}>{withoutLabel(b.observation, "observation")}</p>}
+          {b.interpretation && <p>{withoutLabel(b.interpretation, "interpretation")}</p>}
           {b.hypothesis_status && (
             <p className={styles.line}>
-              <span className={styles.label}>Hypothesis</span> {STATUS[b.hypothesis_status]}
+              <span className={styles.label}>Your idea</span> {STATUS[b.hypothesis_status]}
             </p>
           )}
           {b.confidence && (
             <p className={styles.line}>
               <span className={styles.label}>Confidence</span> {b.confidence}
-              {b.confidence_reason ? ` · ${b.confidence_reason}` : ""}
+              {b.confidence_reason ? ` · ${withoutLabel(b.confidence_reason, "confidence_reason")}` : ""}
             </p>
           )}
           {b.rival_explanations && b.rival_explanations.length > 0 && (
             <p className={styles.line}>
-              <span className={styles.label}>Rivals</span> {b.rival_explanations.join("; ")}
+              <span className={styles.label}>Other possible causes</span> {b.rival_explanations.join("; ")}
             </p>
           )}
           {b.next_step && (

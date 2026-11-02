@@ -10,25 +10,22 @@ import { explanationToShow } from "@/lib/results";
 import type { RunSnapshot } from "@/lib/run-source";
 import type { Check, Plan, Review, Verdict, VerdictLevel } from "@/lib/types";
 import styles from "./VerdictPanel.module.css";
+import { VERDICT_WORDS } from "@/lib/plain";
 
-const WORDS: Record<VerdictLevel, string> = {
-  SUPPORTED: "Supported",
-  NOT_SUPPORTED: "Not supported",
-  INCONCLUSIVE: "Inconclusive",
-  TOO_EARLY: "Too early",
-};
+const WORDS = VERDICT_WORDS;
 
-const RIVAL: Record<string, string> = { ruled_out: "Ruled out", open: "Still open", unclear: "Unclear" };
+const RIVAL: Record<string, string> = { ruled_out: "Ruled out", open: "Not ruled out yet", unclear: "Unclear" };
 
 const FINDING: Record<string, string> = {
-  unit_of_analysis: "Unit of analysis",
-  control_comparison: "Control comparison",
-  measurement_validity: "Measurement validity",
-  confounding: "Confounding",
-  multiple_comparisons: "Multiple comparisons",
+  unit_of_analysis: "What counts as a sample",
+  control_comparison: "Comparing with the control",
+  measurement_validity: "Measurement quality",
+  confounding: "Other causes",
+  multiple_comparisons: "Too many comparisons",
   early_stopping: "Stopped early",
-  plan_drift: "Drift from the plan",
-  over_claiming: "Over-claiming",
+  plan_drift: "Changed from the plan",
+  over_claiming: "Saying too much",
+  plain_words: "Plain words",
   numbers: "Numbers",
 };
 
@@ -38,7 +35,7 @@ function either(levels: VerdictLevel[]): string {
 }
 
 function Mark({ ok }: { ok: Check["ok"] }) {
-  const label = ok === true ? "Passed" : ok === false ? "Failed" : "Open";
+  const label = ok === true ? "Passed" : ok === false ? "Failed" : "Not settled";
   return (
     <span className={`${styles.mark} ${ok === true ? styles.ok : ok === false ? styles.failed : styles.open}`}>
       {label}
@@ -161,7 +158,7 @@ export function VerdictPanel({ snapshot }: Props) {
           }}
         >
           <label className={styles.resolveLabel} htmlFor="rival-reason">
-            Why is “{resolving}” no longer a rival?
+            Why can “{resolving}” be ruled out?
           </label>
           <div className={styles.row}>
             <input
@@ -231,7 +228,7 @@ export function VerdictChecks({ verdict }: { verdict: Verdict }) {
   return (
     <>
       <p className={styles.allowed}>
-        Allowed now: <strong>{either(verdict.allowed)}</strong>
+        What the data can say now: <strong>{either(verdict.allowed)}</strong>
         {verdict.fell_back && <span className={styles.fellBack}>Fell back to Muse Spark</span>}
         {verdict.body.written_by === "code" && <span className={styles.fellBack}>Explanation written by code</span>}
       </p>
@@ -269,7 +266,7 @@ function Body({
 
       {b.rivals.length > 0 && (
         <section className={styles.section}>
-          <h3>Rival explanations</h3>
+          <h3>Other possible causes</h3>
           <ul className={styles.rivals}>
             {b.rivals.map((r) => (
               <li key={r.name}>
@@ -277,8 +274,8 @@ function Body({
                 <span className={styles.rivalStatus}>
                   {resolved.has(r.name)
                     ? readOnly
-                      ? "Resolved by the researcher"
-                      : "Resolved by you"
+                      ? "Ruled out by the researcher"
+                      : "Ruled out by you"
                     : (RIVAL[r.status] ?? r.status)}
                 </span>
                 {r.reason && <span className={styles.rivalReason}>{r.reason}</span>}
@@ -291,7 +288,7 @@ function Body({
             ))}
           </ul>
           {!readOnly && b.rivals.some((r) => resolved.has(r.name)) && (
-            <p className={styles.hint}>A rival you resolved counts from the next verdict: ask again.</p>
+            <p className={styles.hint}>A cause you ruled out counts from the next verdict: ask again.</p>
           )}
         </section>
       )}

@@ -123,7 +123,7 @@ def test_the_note_interval_follows_the_recipe():
 async def test_a_checkpoint_note_is_checked_rendered_and_saved(ctx):
     ctx.reasoner = FakeReasoner([clean_note(observation="C changed by {ref:chg:C:delta_e}.")])
     note = await ctx.notes.write(600.0, "checkpoint", image_bgr=FRAME)
-    assert note.check_status == "passed" and "dE00" in note.body["observation"] and "{ref:" not in str(note.body)
+    assert note.check_status == "passed" and "ΔE" in note.body["observation"] and "{ref:" not in str(note.body)
     assert note.author == "ai" and note.level == "checkpoint" and "chg:C:delta_e" in note.refs
     assert [a.passed for a in note_attempts_for_run(ctx.db, ctx.run.id)] == [True]
     assert notes_for_run(ctx.db, ctx.run.id) == [note]
@@ -139,7 +139,7 @@ async def test_a_note_carries_a_chip_for_each_number_it_cites(ctx):
     c = next(v for v in ctx.vessels if v.label == "C")
     chips = {chip["ref"]: chip for chip in note.body["chips"]}
     assert chips["chg:C:delta_e"]["t"] == 600.0 and chips["chg:C:delta_e"]["vessel_id"] == c.id
-    assert "dE00" in chips["chg:C:delta_e"]["display"] and "Vessel C" in chips["chg:C:delta_e"]["label"]
+    assert "ΔE" in chips["chg:C:delta_e"]["display"] and "Sample C" in chips["chg:C:delta_e"]["label"]
     assert chips["run:t"]["vessel_id"] is None
 
 
@@ -162,7 +162,7 @@ async def test_two_failures_save_a_code_note(ctx):
     ctx.reasoner = FakeReasoner([ReasonError("incomplete", ERROR_CALL), clean_note(observation="Changed by 25.")])
     note = await ctx.notes.write(600.0, "checkpoint", image_bgr=FRAME)
     assert note.check_status == "fallback" and note.body["written_by"] == "code"
-    assert "Vessel C: delta_e" in note.body["observation"]  # from the refs alone
+    assert "Sample C: colour change" in note.body["observation"]  # from the refs alone
     assert model_call_statuses(ctx) == ["error", "ok"]
     assert [a.reasons for a in note_attempts_for_run(ctx.db, ctx.run.id)][0] == ["incomplete"]
 

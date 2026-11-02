@@ -37,16 +37,16 @@ test("the source step needs a camera or a video", () => {
 });
 
 test("the vessels step needs at least one vessel", () => {
-  assert.deepEqual(stepProblems("vessels", stateWith([])), ["Draw at least one vessel."]);
+  assert.deepEqual(stepProblems("vessels", stateWith([])), ["Draw at least one sample."]);
   assert.deepEqual(stepProblems("vessels", stateWith([{ label: "A" }])), []);
 });
 
 test("the roles step needs a role on every vessel and one control", () => {
   assert.deepEqual(stepProblems("roles", stateWith([{ label: "A", role: "treatment" }])), [
-    "Mark at least one vessel as control.",
+    "Mark at least one sample as the control.",
   ]);
   assert.deepEqual(stepProblems("roles", stateWith([{ label: "A", role: "control" }, { label: "B" }])), [
-    "Give vessel B a role.",
+    "Give sample B a role.",
   ]);
   assert.deepEqual(
     stepProblems(
@@ -61,7 +61,7 @@ test("the roles step needs a role on every vessel and one control", () => {
 });
 
 test("the check step needs the card or a ruler found", () => {
-  assert.deepEqual(stepProblems("check", stateWith([{ label: "A" }])), ["Check the frame first."]);
+  assert.deepEqual(stepProblems("check", stateWith([{ label: "A" }])), ["Check the picture first."]);
   const none = { ...PREVIEW, calibration: null };
   assert.equal(stepProblems("check", stateWith([{ label: "A" }], { preview: none })).length, 1);
   assert.deepEqual(stepProblems("check", stateWith([{ label: "A" }], { preview: PREVIEW })), []);

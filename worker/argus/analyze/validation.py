@@ -13,10 +13,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from argus.analyze.agreement import agreement
+from argus.claims.refs import NOISE_WORDS
 from argus.datasets.manifest import ManifestError, load_manifest
 from argus.domain import EventKind, Run, RunStatus
 from argus.measure.uncertainty import format_measurement
 from argus.media.layout import clock_text
+from argus.plain import metric_words
 from argus.recipes.model import Recipe
 from argus.recipes.resolve import recipe_for
 from argus.storage import repos
@@ -63,12 +65,17 @@ def scale(db: Database, run: Run) -> list[str]:
     return [f"{first.card} card · {value} · print check {first.print_scale * 100:.1f} mm of 100 mm"]
 
 
-def noise_floor(db: Database, run: Run) -> list[str]:
+def noise_floor(db: Database, run: Run, metrics: Sequence[str] = ()) -> list[str]:
+    """The latest noise floor per metric: its label names the metric in plain words (D-95), or by id before that."""
+    by_words = {f"{NOISE_WORDS} {metric_words(m)}:": m for m in metrics}
     latest: dict[str, object] = {}
     for row in sorted(repos.derived_for_run(db, run.id), key=lambda d: d.t):
+        if row.kind != "noise_floor":
+            continue
         match = NOISE_LABEL.match(row.label)
-        if row.kind == "noise_floor" and match:
-            latest[match.group(1)] = row
+        metric = match.group(1) if match else next((m for w, m in by_words.items() if row.label.startswith(w)), None)
+        if metric is not None:
+            latest[metric] = row
     return [
         f"{metric}: {row.value:.2g} {row.unit} ({NOISE_METHODS.get(row.method_version, row.method_version)})"
         for metric, row in latest.items()
@@ -151,7 +158,7 @@ def validation_rows(db: Database, recipes: Mapping[str, Recipe], run_ids: Sequen
         recipe = recipe_for(db, recipes, experiment)
         found = {
             "Scale": scale(db, run),
-            "Noise floor": noise_floor(db, run),
+            "Noise floor": noise_floor(db, run, recipe.stored_metrics()),
             "Counting against labels": counting(db, recipe, run),
             "Events caught": events_caught(db, run),
             "Claim checker": claim_checker(db, run),

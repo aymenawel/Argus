@@ -50,7 +50,7 @@ export function Feed({ snapshot }: { snapshot: RunSnapshot }) {
             ? "No notes before this moment."
             : readOnly
               ? "No notes on this run."
-              : "No notes yet. Argus notes what happens and sums up the run at checkpoints; add your own above."}
+              : "No notes yet. Argus writes down what happens and sums up the run every so often; add your own above."}
         </p>
       )}
       {snapshot.rejected > 0 && (

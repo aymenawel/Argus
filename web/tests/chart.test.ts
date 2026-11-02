@@ -38,9 +38,9 @@ test("treatment conditions are told apart by dash and by dot shape; controls sta
     [...groups.values()].map((g) => [g.label, g.dash, g.marker]),
     [
       ["Control: 0 mM", undefined, "circle"],
-      ["Treatment: 50 mM", undefined, "circle"],
-      ["Treatment: 100 mM", "7 4", "square"],
-      ["Treatment: 150 mM", "2 4", "diamond"],
+      ["Test: 50 mM", undefined, "circle"],
+      ["Test: 100 mM", "7 4", "square"],
+      ["Test: 150 mM", "2 4", "diamond"],
     ],
   );
   assert.equal(groups.get(groupKey(vessel("treatment", "100 mM")))?.marker, "square");

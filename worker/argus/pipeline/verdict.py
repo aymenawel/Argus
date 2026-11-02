@@ -16,6 +16,7 @@ from argus.claims.schema import schema_errors
 from argus.config import Settings
 from argus.datasets.manifest import ManifestError, load_manifest
 from argus.domain import Plan, Role, Run, RunMode, RunStatus, Verdict, VerdictDraft, VerdictLevel, Vessel
+from argus.plain import unit_label
 from argus.reason import Reasoner, ReasonError, ReasonResult
 from argus.reason.prompts import critique_task, load_schema, verdict_task
 from argus.recipes.model import Recipe
@@ -98,12 +99,12 @@ def rival_states(db: Database, run: Run, rivals: Sequence[str]) -> dict[str, Lit
     return states
 
 
-CAPPED_AT = "a slow dish, or one where nothing grew, is evidence too, so nothing stronger than Inconclusive is allowed."
+CAPPED_AT = "a slow sample, or one where nothing grew, is evidence too, so nothing stronger than Unclear is allowed."
 PLATEAU_SPREAD = 0.25  # plateaus further apart than this: half-way times or rates on different totals
 # What different totals do to the judged quantity, in words the claim checker accepts (no "half" or "quarter").
 ON_TOTALS = {
-    "half_time": "their half-way times are measured against different totals",
-    "rate": "their rates are partly set by different totals",
+    "half_time": "their times to get half-way are measured against different end points",
+    "rate": "their speeds are partly set by different end points",
 }
 
 
@@ -114,7 +115,7 @@ def _fit_notes(
     with its prompt: the dish's name kept (a name, not a number), every other number left to the refs."""
     fits = vessel_fits(db, run.id, recipe, metric, t)
     notes: list[tuple[str, bool | None, str, str]] = []
-    unknown = "half-way point" if quantity == "half_time" else "rate"
+    unknown = "time to get half-way" if quantity == "half_time" else "speed"
     plateaus = []
     for vessel in judged:
         fit = fits.get(vessel.id)
@@ -122,20 +123,20 @@ def _fit_notes(
             continue
         if not fit.ok:
             why = f"{fit.reason}. Without its value the comparison is incomplete: {CAPPED_AT}"
-            label = f"No fit for {vessel.label}: "
+            label = f"No curve fits sample {vessel.label}: "
             notes.append((f"fit:{vessel.label}", False, label + why, label + without_digits(why)))
         elif not fit.reached:
-            text = f"{vessel.label} was still rising at the end, so its {unknown} isn't known: {CAPPED_AT}"
+            text = f"Sample {vessel.label} was still rising at the end, so its {unknown} isn't known: {CAPPED_AT}"
             notes.append((f"fit:{vessel.label}", False, text, text))
         elif fit.plateau is not None:
             plateaus.append(fit.plateau[0])
     if len(plateaus) >= 2 and min(plateaus) > 0 and max(plateaus) / min(plateaus) - 1 > PLATEAU_SPREAD:
-        shown = "" if unit in ("", "count") else f" {unit}"  # counts print bare, as everywhere
+        shown = "" if unit in ("", "count") else f" {unit_label(unit)}"  # counts print bare, as everywhere
         text = (
-            f"The vessels' plateaus differ by more than {PLATEAU_SPREAD:.0%} ({min(plateaus):.1f} to "
+            f"The samples level off more than {PLATEAU_SPREAD:.0%} apart ({min(plateaus):.1f} to "
             f"{max(plateaus):.1f}{shown}): {ON_TOTALS[quantity]}."
         )
-        notes.append(("plateaus", None, text, f"The vessels' plateaus differ widely: {ON_TOTALS[quantity]}."))
+        notes.append(("plateaus", None, text, f"The samples level off far apart: {ON_TOTALS[quantity]}."))
     return tuple(notes)
 
 

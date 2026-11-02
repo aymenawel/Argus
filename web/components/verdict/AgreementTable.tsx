@@ -34,7 +34,7 @@ export function AgreementTable({ runId, metric, refresh }: Props) {
       <h3>Against {result.source}&apos;s labels</h3>
       <p className={styles.summary}>
         {result.mean_abs_diff === null
-          ? `Argus hasn't measured ${words} on a labelled frame yet.`
+          ? `Argus hasn't measured ${words} on a labelled picture yet.`
           : `Argus vs the labels: off by ${diff(result.mean_abs_diff)} on average · the same in ` +
             `${share(result.exact_share)} of frames.`}
       </p>
@@ -47,7 +47,7 @@ export function AgreementTable({ runId, metric, refresh }: Props) {
               <th scope="col">Same</th>
               <th scope="col">Half-way: Argus</th>
               <th scope="col">Labels</th>
-              <th scope="col">Frames</th>
+              <th scope="col">Pictures</th>
             </tr>
           </thead>
           <tbody>

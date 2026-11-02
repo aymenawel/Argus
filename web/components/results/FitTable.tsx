@@ -1,7 +1,8 @@
-import { formatPair } from "@/lib/chart";
+import { formatDuration, formatPair } from "@/lib/chart";
 import { coverageLines } from "@/lib/misses";
 import type { FitsView } from "@/lib/types";
 import styles from "./FitTable.module.css";
+import { curveWords, roleWord, sentence } from "@/lib/plain";
 
 // Each vessel's fitted half-way time, rate and plateau with ±, or why it has none, and how often its object was found,
 // and how: by name, by pointing SAM at the change, or by code (D-90, D-93). Numbers come from the worker's fits; this
@@ -14,13 +15,13 @@ export function FitTable({ fits }: { fits: FitsView }) {
       <table className={styles.table}>
         <thead>
           <tr>
-            <th scope="col">Vessel</th>
+            <th scope="col">Sample</th>
             <th scope="col">Condition</th>
             <th scope="col">Found</th>
-            <th scope="col">Half-way time</th>
-            <th scope="col">Rate</th>
-            <th scope="col">Plateau</th>
-            <th scope="col">Fit</th>
+            <th scope="col">Time to get half-way</th>
+            <th scope="col">Speed</th>
+            <th scope="col">Levels off at</th>
+            <th scope="col">Curve</th>
           </tr>
         </thead>
         <tbody>
@@ -29,16 +30,16 @@ export function FitTable({ fits }: { fits: FitsView }) {
             const status = !fit
               ? "No readings"
               : !fit.ok
-                ? `No fit: ${fit.reason}`
+                ? `No curve fits: ${fit.reason}`
                 : !fit.reached
                   ? "Still rising at the end"
-                  : `${fit.curve} curve`;
+                  : `${sentence(curveWords(fit.curve))} curve`;
             const [found, how, missed] = coverageLines(v.coverage, span);
             return (
               <tr key={v.vessel_id}>
                 <th scope="row">
                   {v.label}
-                  <span className={styles.role}>{v.role}</span>
+                  <span className={styles.role}>{roleWord(v.role)}</span>
                 </th>
                 <td>{v.condition ? String(v.condition.value) : "—"}</td>
                 <td className="num">
@@ -46,7 +47,7 @@ export function FitTable({ fits }: { fits: FitsView }) {
                   {how && <span className={styles.sub}>{how}</span>}
                   {missed && <span className={styles.sub}>{missed}</span>}
                 </td>
-                <td className="num">{fit?.ok && fit.half_time_h ? formatPair(fit.half_time_h, "h") : "—"}</td>
+                <td className="num">{fit?.ok && fit.half_time_h ? formatDuration(fit.half_time_h) : "—"}</td>
                 <td className="num">{fit?.ok && fit.rate_per_h ? formatPair(fit.rate_per_h, `${unit}/h`) : "—"}</td>
                 <td className="num">{fit?.ok && fit.plateau ? formatPair(fit.plateau, unit) : "—"}</td>
                 <td className={fit?.ok ? styles.ok : styles.refused}>{status}</td>

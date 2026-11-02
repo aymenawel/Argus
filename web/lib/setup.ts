@@ -17,10 +17,10 @@ export type WizardState = {
 };
 
 const PLAN_NEEDS: [keyof PlanDraft, string][] = [
-  ["metric", "Choose the metric the prediction is about."],
-  ["direction", "Say whether the treatment should read higher or lower than the controls."],
-  ["min_effect", "Set the smallest effect that matters: without it, no effect can't be told from a small one."],
-  ["checkpoint_s", "Set the checkpoint: the run time from which a verdict may be given."],
+  ["metric", "Choose what to measure."],
+  ["direction", "Say whether the test sample should read higher or lower than the control."],
+  ["min_effect", "Set the smallest difference that counts: without it, no difference can't be told from a small one."],
+  ["checkpoint_s", "Set the check time: how far into the run Argus may first judge."],
 ];
 
 /** Empty when the step can be left; otherwise what to do, in plain words. */
@@ -33,19 +33,19 @@ export function stepProblems(step: StepId, state: WizardState): string[] {
       return chosen ? [] : ["Choose a camera or a video."];
     }
     case "vessels":
-      return state.vessels.length > 0 ? [] : ["Draw at least one vessel."];
+      return state.vessels.length > 0 ? [] : ["Draw at least one sample."];
     case "roles": {
-      const problems = state.vessels.filter((v) => v.role === null).map((v) => `Give vessel ${v.label} a role.`);
+      const problems = state.vessels.filter((v) => v.role === null).map((v) => `Give sample ${v.label} a role.`);
       if (problems.length === 0 && !state.vessels.some((v) => v.role === "control")) {
-        problems.push("Mark at least one vessel as control.");
+        problems.push("Mark at least one sample as the control.");
       }
       return problems;
     }
     case "check":
-      if (state.preview === null) return ["Check the frame first."];
+      if (state.preview === null) return ["Check the picture first."];
       return state.preview.calibration
         ? []
-        : ["No Argus Card or ruler found: put the card in view at the vessels' height, or mark a ruler."];
+        : ["No Argus Card or ruler found: put the card in view at the samples' height, or mark a ruler."];
     case "plan":
       if (state.plan === null) return ["Write the plan."];
       return PLAN_NEEDS.filter(([field]) => state.plan?.[field] == null).map(([, problem]) => problem);

@@ -131,7 +131,7 @@ async def test_a_verdict_is_drafted_critiqued_checked_and_stored(judged):
     verdict = await judge(db, run, reasoner)
     assert set(verdict.allowed) == {VerdictLevel.SUPPORTED, VerdictLevel.INCONCLUSIVE}
     assert verdict.verdict is VerdictLevel.INCONCLUSIVE and verdict.provisional is True  # the run is still going
-    assert "dE00" in verdict.body["explanation"] and "{ref:" not in verdict.body["explanation"]
+    assert "ΔE" in verdict.body["explanation"] and "{ref:" not in verdict.body["explanation"]
     assert (
         verdict.body["findings"][0]["item"] == "unit_of_analysis"
         and verdict.critique["revised_verdict"] == "INCONCLUSIVE"
@@ -287,7 +287,7 @@ async def test_too_early_is_written_by_code_without_a_model_call(db, exp):
     run = create_run(db, exp.id, RunMode.LIVE, RunSource(kind=SourceKind.WEBCAM, camera_index=0))
     verdict = await judge(db, run, FakeReasoner([]))  # before the checkpoint: the only answer is Too early
     assert verdict.verdict is VerdictLevel.TOO_EARLY and verdict.allowed == [VerdictLevel.TOO_EARLY]
-    assert verdict.body["written_by"] == "code" and "checkpoint" in verdict.body["explanation"]
+    assert verdict.body["written_by"] == "code" and "check time" in verdict.body["explanation"]
     assert model_calls(db, run) == [] and verdict.model_call_ids == []
 
 
@@ -404,7 +404,7 @@ async def test_an_import_recorded_before_the_plan_was_locked_is_not_judged(db, e
     verdict = await judge(db, run, FakeReasoner([]))
     assert verdict.allowed == [VerdictLevel.TOO_EARLY] and verdict.checks[0]["id"] == "plan"
     # The page shows the plan, so the check says it came too late rather than that there was none.
-    assert verdict.checks[0]["text"].startswith("The plan was locked after this run's data began")
+    assert verdict.checks[0]["text"].startswith("The plan was written after this run's data was recorded")
 
 
 @pytest.mark.anyio
@@ -415,7 +415,7 @@ async def test_an_import_without_a_recording_start_says_it_cant_confirm_the_plan
     answers = [verdict_draft("INCONCLUSIVE", explanation="Nothing measured.", refs_used=[]), critique("INCONCLUSIVE")]
     verdict = await judge(db, run, FakeReasoner(answers))
     flag = next(c for c in verdict.checks if c["id"] == "preregistered")
-    assert flag["ok"] is None and "recording" in flag["text"]
+    assert flag["ok"] is None and "filming" in flag["text"]
 
 
 @pytest.mark.anyio
@@ -508,7 +508,7 @@ async def test_published_data_is_judged_retrospectively(db, exp, tmp_path):
     verdict = await judge(db, run, answers())
     assert verdict.allowed == [VerdictLevel.SUPPORTED, VerdictLevel.INCONCLUSIVE]
     flag = next(c for c in verdict.checks if c["id"] == "retrospective")
-    assert flag["ok"] is None and "after" in flag["text"]
+    assert flag["ok"] is None and "Looking back" in flag["text"]
     assert not any(c["id"] == "preregistered" for c in verdict.checks) and verdict.body["retrospective"] is True
 
 

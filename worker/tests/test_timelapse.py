@@ -74,7 +74,7 @@ def test_a_run_without_frames_is_refused(db, tmp_path, settings, recipes):
 def test_a_run_without_readings_has_no_curve_panel(db, tmp_path, settings, recipes):
     run = finished_run(db, tmp_path / "data", readings=False)
     records = load_records(db, settings, recipes, run.id)
-    assert chart_note(records.fits) == "No readings of delta e to draw"
+    assert chart_note(records.fits) == "No readings of colour change to draw"
     image = Drawer(records, settings).run_frame(schedule([f.t for f in records.frames], 0.1)[0])
     assert image.size == (1920, 1080) and image.mode == "RGB"
 

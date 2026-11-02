@@ -77,6 +77,22 @@ def test_noise_floor_names_its_method(db, recipes, run):
     assert results(db, recipes, run, "Noise floor") == ["delta_e: 0.34 dE00 (wobble of all readings)"]
 
 
+def test_a_noise_floor_labelled_in_plain_words_is_found(db, recipes, run):
+    """Since D-95 the label names the metric as people say it ("colour change"), not by its id."""
+    row = DerivedDraft(
+        t=30.0,
+        kind="noise_floor",
+        label="Normal wobble of colour change: how far readings jitter when nothing changes (median over samples)",
+        value=0.13,
+        uncertainty=0.0,
+        unit="dE00",
+        inputs=[],
+        method_version="noise_floor/1",
+    )
+    repos.add_derived(db, run.id, [row])
+    assert results(db, recipes, run, "Noise floor") == ["delta_e: 0.13 dE00 (still period)"]
+
+
 def test_counting_against_labels(db, recipes, run):
     control = next(v for v in repos.vessels_for_run(db, run.id) if v.label == "A")
     labels = [
@@ -91,7 +107,7 @@ def test_counting_against_labels(db, recipes, run):
 
 
 def test_events_caught(db, recipes, run):
-    assert results(db, recipes, run, "Events caught") == ["'Dye added' at t 20 min → change after 1200 s"]
+    assert results(db, recipes, run, "Events caught") == ["'Dye added' at 20 min in → change after 1200 s"]
     repos.add_event(
         db,
         run.id,
@@ -101,7 +117,7 @@ def test_events_caught(db, recipes, run):
         source="researcher",
         detail={"message": "Lid on"},
     )
-    assert results(db, recipes, run, "Events caught")[-1] == "'Lid on' at t 1.7 h → no change detected after it"
+    assert results(db, recipes, run, "Events caught")[-1] == "'Lid on' at 1.7 h in → no change detected after it"
 
 
 def test_claim_checker_counts(db, recipes, run):
@@ -186,4 +202,4 @@ def test_only_interventions_the_researcher_logged_are_timed(db, recipes, run):
         source="quality",
         detail={"flags": ["occluded"]},
     )
-    assert results(db, recipes, run, "Events caught") == ["'Dye added' at t 20 min → change after 1200 s"]
+    assert results(db, recipes, run, "Events caught") == ["'Dye added' at 20 min in → change after 1200 s"]

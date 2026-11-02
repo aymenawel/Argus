@@ -31,13 +31,13 @@ type Load =
 function finding(snapshot: RunSnapshot): string {
   const { view, progress, frames } = snapshot;
   const analyzed = frames.filter((f) => f.analyzed);
-  const count = `${analyzed.length} ${analyzed.length === 1 ? "frame" : "frames"} analyzed`;
+  const count = `${analyzed.length} ${analyzed.length === 1 ? "picture" : "pictures"} measured`;
   const last = analyzed.at(-1)?.t ?? 0;
   if (view.running) {
     if (progress?.stage === "measure" && progress.t != null && progress.t_end != null) {
       return `Analyzing ${formatRunTime(progress.t, progress.t_end)} of ${formatRunTime(progress.t_end)} · ${progress.speed ?? 0}× real time`;
     }
-    if (progress?.stage === "segment") return `Segmenting with SAM 3.1 · ${progress.done} of ${progress.total} clips`;
+    if (progress?.stage === "segment") return `Outlining with SAM 3.1 · ${progress.done} of ${progress.total} clips`;
     if (progress?.stage === "scan" && progress.t != null) {
       return `Reading the video · ${formatRunTime(progress.t)} so far · ${progress.speed ?? 0}× real time`;
     }
@@ -145,7 +145,7 @@ export function RunScreen({ experimentId }: { experimentId?: string } = {}) {
           <div className={styles.message}>
             <p className={styles.messageTitle}>No run yet</p>
             <p className={styles.messageText}>
-              Set up the vessels and lock the plan first, then start the run from the setup.
+              Set up the samples and lock the plan first, then start the run from the setup.
             </p>
             <Link className={styles.setupLink} href={`/experiments/${id}/setup`}>
               Open the setup

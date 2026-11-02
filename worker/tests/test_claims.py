@@ -62,6 +62,14 @@ def test_a_clean_note_passes_and_renders():
     assert body["hypothesis_status"] == "TOO_EARLY" and body["refs_used"] == ["chg:C:delta_e", "ev:1"]
 
 
+def test_a_field_does_not_start_with_its_own_name():
+    """The model sometimes echoes the field's name ("Observation: the glass..."); the page shows the sentence."""
+    note = clean_note(observation="Observation: the glass is clear.", interpretation="interpretation: No change yet.")
+    body = render_note(note, REFS)
+    assert body["observation"] == "The glass is clear." and body["interpretation"] == "No change yet."
+    assert render_note(clean_note(observation="Observations agree."), REFS)["observation"] == "Observations agree."
+
+
 @pytest.mark.parametrize(
     "text, reason",
     [
@@ -164,7 +172,7 @@ def test_the_fallback_says_a_reading_was_outlined_by_code():
     base = refs_table({"m:A:delta_e": "3.7 ± 0.1 dE00"}).get("m:A:delta_e")
     coded = dataclasses.replace(base, label=base.label + CODE_OUTLINED)
     observation = fallback_note("checkpoint", RefTable({"m:A:delta_e": coded}), reason="x")["observation"]
-    assert "3.7 ± 0.1 dE00 now (outlined by code, not SAM)" in observation
+    assert "3.7 ± 0.1 dE00 now (outlined by Argus's own code, not SAM)" in observation
 
 
 @pytest.mark.parametrize(
@@ -192,6 +200,12 @@ def test_inflected_and_derived_quantities_are_rejected(text):
 
 @pytest.mark.parametrize("text", ["The dye unfolded slowly.", "Someone opened the lid.", "One glass changed."])
 def test_ordinary_words_are_not_quantities(text):
+    assert check_note(clean_note(observation=text), REFS, allowed=ALL, evidence=set()) == []
+
+
+@pytest.mark.parametrize("text", ["The area in mm² grew.", "The colour change in ΔE rose.", "Each cm² of agar."])
+def test_a_unit_written_as_people_write_it_is_not_a_number(text):
+    """Pages show mm² and ΔE (D-95), so the model writes them too: the ² of a unit claims no amount."""
     assert check_note(clean_note(observation=text), REFS, allowed=ALL, evidence=set()) == []
 
 

@@ -18,13 +18,13 @@ test("coverage reads as pictures found, how they were found, and misses since th
   const split = { ...c, found: 97, missed_after: 3, by_name: 55, pointed: 30, by_code: 12 };
   assert.deepEqual(coverageLines(split, 86400), [
     "97 of 145 pictures",
-    "55 by name · 30 pointed · 12 by code",
+    "55 by name · 30 by pointing · 12 by code",
     "not found in 3 since 11:12",
   ]);
   const byName = { ...c, by_name: 14, pointed: 0, by_code: 0 }; // all by name: nothing to split (D-93)
   assert.equal(coverageLines(byName, 86400)[1], null);
   const noCode = { ...c, found: 123, by_name: 92, pointed: 31, by_code: 0 }; // a way that found nothing isn't listed
-  assert.equal(coverageLines(noCode, 86400)[1], "92 by name · 31 pointed");
+  assert.equal(coverageLines(noCode, 86400)[1], "92 by name · 31 by pointing");
 });
 
 test("an outline drawn by code is told apart from SAM's", () => {

@@ -101,7 +101,7 @@ def test_import_run_end_to_end_over_the_api(client, experiment, clip):
     areas = [
         m for m in timeline["measurements"] if m["metric"] == "area" and m["vessel_id"] == view["vessels"][0]["id"]
     ]
-    assert len(areas) >= 3 and all("±" in m["display"] and m["display"].endswith("mm2") for m in areas)
+    assert len(areas) >= 3 and all("±" in m["display"] and m["display"].endswith("mm²") for m in areas)
     assert areas[-1]["value"] > areas[0]["value"]
     frame = timeline["frames"][-1]
     image = client.get(f"/api/runs/{run_id}/frames/{frame['id']}.jpg", params={"w": 160})

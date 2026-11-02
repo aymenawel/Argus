@@ -11,12 +11,12 @@ type Tag = NonNullable<Note["tag"]>;
 
 const TAGS: [Tag, string][] = [
   ["observation", "Observation"],
-  ["intervention", "Intervention"],
+  ["intervention", "Something I did"],
   ["question", "Question"],
 ];
 
 // What a researcher does at the bench most often, one click each: each is logged as an intervention.
-const QUICK = ["Added something", "Moved a vessel", "Opened the lid"];
+const QUICK = ["Added something", "Moved a sample", "Opened the lid"];
 
 type Props = { runId: string; span: number; live: boolean };
 
@@ -75,7 +75,7 @@ export function NoteComposer({ runId, span, live }: Props) {
           {follow && live ? "now" : `at ${formatRunTime(t, span)}`}
         </span>
       </div>
-      <div className={styles.quick} aria-label="Log an intervention">
+      <div className={styles.quick} aria-label="Log something you did">
         {QUICK.map((words) => (
           <button key={words} type="button" disabled={busy} onClick={() => save("intervention", words, false)}>
             {words}

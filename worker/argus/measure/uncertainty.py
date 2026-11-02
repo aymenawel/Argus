@@ -8,6 +8,8 @@ from collections.abc import Sequence
 
 from uncertainties import ufloat
 
+from argus.plain import unit_label
+
 NOISE_FACTOR = 3.0  # an effect under 3x the noise floor is "not real yet" (spec §6)
 
 
@@ -47,7 +49,7 @@ def format_pm(value: float, uncertainty: float, unit: str) -> str:
         rounded = round(x, decimals)
         return f"{rounded:.{decimals}f}" if decimals > 0 else str(int(rounded))
 
-    return f"{text(value)} ± {text(uncertainty)} {unit}"
+    return f"{text(value)} ± {text(uncertainty)} {unit_label(unit)}"
 
 
 def format_measurement(value: float, uncertainty: float, unit: str) -> str:
@@ -60,4 +62,11 @@ def format_measurement(value: float, uncertainty: float, unit: str) -> str:
     else:
         digits = 2 - math.floor(math.log10(abs(value)))
         text = f"{round(value, digits):g}" if digits > 0 else str(int(round(value, digits)))
-    return text if unit == "count" else f"{text} {unit}"
+    return text if unit == "count" else f"{text} {unit_label(unit)}"
+
+
+def format_duration(hours: float, uncertainty_h: float) -> str:
+    """A fitted time in hours as the page shows it: under an hour, in minutes ("3.77 ± 0.03 min", not "0.0628 h")."""
+    if hours < 1:
+        return format_measurement(hours * 60, uncertainty_h * 60, "min")
+    return format_measurement(hours, uncertainty_h, "h")

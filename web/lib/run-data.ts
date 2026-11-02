@@ -30,9 +30,9 @@ export function regionAt(vessel: Vessel, events: RunEvent[], t: number): [number
 }
 
 const STOPPED_BY_WORKER = "This run stopped early: the worker stopped while it was running. What it measured is kept.";
-const NO_CARD = "No Argus Card or ruler in view: frames are recorded, but nothing is measured in millimetres.";
+const NO_CARD = "No Argus Card or ruler in view: pictures are recorded, but nothing is measured in millimetres.";
 const SPEND_CAP =
-  "The spend cap was reached: segmentation paused. Frames are still recorded and colour still measured.";
+  "The spending limit was reached: SAM's outlining paused. Pictures are still recorded and colour still measured.";
 
 function interrupted(detail: Record<string, unknown>): string {
   if (detail.reason === "camera_lost") {

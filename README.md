@@ -17,10 +17,11 @@ Results (fitted curves, half-way times, the verdict's checks, the next run, the 
 every page says so. The germination plate is published data (Genze et al. 2020, CC BY 4.0), credited on every page.
 
 The dye run is our own: three glasses of cold, room-temperature and warm water filmed by a webcam for 21 minutes on
-Oct 28, re-analysed from its saved pictures. Argus measured the warm glass at 25.1 ± 0.1 ΔE00 against 4.6 for the
-room-temperature one, with all 12 of its notes passing the claim checker first time. It still refuses a verdict: the
-plan was written the next day, after the footage existed, and a prediction written with the data in view isn't a
-test. The verdict says exactly that, and the next-run suggestion is to lock the plan before filming.
+Oct 28, re-analysed from its saved pictures. Argus measured the warm glass's colour change at 25.12 ± 0.06 ΔE
+against 4.55 ± 0.06 for the room-temperature one, with all 12 of its notes passing the claim checker first time and
+written for someone with no lab training ("the warm glass (C)", "colour change", "normal wobble"). It still refuses
+a verdict: the plan was written the next day, after the footage existed, and a guess made after seeing the result
+isn't a real test. The verdict says exactly that, and the next-run suggestion is to lock the plan before filming.
 
 ![The dye run's highlights reel at 4 minutes: SAM's outlines on the glasses, dye spreading through the warm one, and
 the readings so far](docs/images/dye-run-reel.jpg)
@@ -40,6 +41,9 @@ the readings so far](docs/images/dye-run-reel.jpg)
   plan locked before the run; Muse Wonder explains the verdict, names rival explanations, and a critique checks it.
 - **Next run.** Code sizes the next run (vessels per condition, run length) from this run's spread and fitted curves,
   Ax proposes levels to try, and Muse Wonder explains why. A suggestion: Argus never starts a run by itself.
+- **Plain words.** Everything a person reads is written for someone with no lab training: "the warm glass (C)",
+  "colour change", "normal wobble", "Unclear". The code keeps its scientific names; the pages, notes, verdicts and
+  videos translate them, and the critique flags jargon.
 
 Observations, measurements, AI notes and the researcher's reviews are separate records; nothing overwrites evidence.
 
@@ -84,24 +88,24 @@ Videos and bundles are made from stored records only, with the same fitted curve
 
 ## Validation
 
-How well Argus measured, printed by `uv run python -m argus validation --runs run_9334d302e075 run_ff0b8786cc3c`
+How well Argus measured, printed by `uv run python -m argus validation --runs run_0977e12a8cbb run_d8f8b410078e`
 from the database, pasted unedited. A check with nothing stored behind it says "not measured yet".
 
 | Check | Run | Result |
 |---|---|---|
-| Scale | Rye vs pearl millet (Genze plate, speed) (run_9334d302e075) | dish rims at the dataset's stated 85 mm diameter · 0.145 ± 0.007 mm/px |
-| Noise floor | Rye vs pearl millet (Genze plate, speed) (run_9334d302e075) | germinated_count: 0 count (still period) |
-| Noise floor | Rye vs pearl millet (Genze plate, speed) (run_9334d302e075) | seed_area: 4.1 mm2 (still period) |
-| Counting against labels | Rye vs pearl millet (Genze plate, speed) (run_9334d302e075) | germinated_count: mean absolute error 1.50 count, exact on 35% of 564 paired readings across 6 vessels |
-| Events caught | Rye vs pearl millet (Genze plate, speed) (run_9334d302e075) | not measured yet |
-| Claim checker | Rye vs pearl millet (Genze plate, speed) (run_9334d302e075) | 1 accepted first try, 2 after a retry, 1 written by code; 4 answers rejected: quantity in words ×7 |
-| Models | Rye vs pearl millet (Genze plate, speed) (run_9334d302e075) | SAM 95 of 95 calls succeeded · spend $0.71 |
-| Scale | Dye vs water temperature (phase 3 check) (run_ff0b8786cc3c) | compact card · 0.328 ± 0.003 mm/px · print check 100.0 mm of 100 mm |
-| Noise floor | Dye vs water temperature (phase 3 check) (run_ff0b8786cc3c) | delta_e: 0.13 dE00 (still period) |
-| Counting against labels | Dye vs water temperature (phase 3 check) (run_ff0b8786cc3c) | not measured yet |
-| Events caught | Dye vs water temperature (phase 3 check) (run_ff0b8786cc3c) | not measured yet |
-| Claim checker | Dye vs water temperature (phase 3 check) (run_ff0b8786cc3c) | 12 accepted first try, 0 after a retry, 0 written by code; none rejected |
-| Models | Dye vs water temperature (phase 3 check) (run_ff0b8786cc3c) | SAM 3 of 3 calls succeeded · spend $1.26 |
+| Scale | Rye vs pearl millet (Genze plate, speed) (run_0977e12a8cbb) | dish rims at the dataset's stated 85 mm diameter · 0.145 ± 0.007 mm/px |
+| Noise floor | Rye vs pearl millet (Genze plate, speed) (run_0977e12a8cbb) | seed_area: 4.1 mm2 (still period) |
+| Noise floor | Rye vs pearl millet (Genze plate, speed) (run_0977e12a8cbb) | germinated_count: 0 count (still period) |
+| Counting against labels | Rye vs pearl millet (Genze plate, speed) (run_0977e12a8cbb) | germinated_count: mean absolute error 1.52 count, exact on 35% of 564 paired readings across 6 vessels |
+| Events caught | Rye vs pearl millet (Genze plate, speed) (run_0977e12a8cbb) | not measured yet |
+| Claim checker | Rye vs pearl millet (Genze plate, speed) (run_0977e12a8cbb) | 2 accepted first try, 2 after a retry, 0 written by code; 2 answers rejected: quantity in words ×2 |
+| Models | Rye vs pearl millet (Genze plate, speed) (run_0977e12a8cbb) | SAM 95 of 95 calls succeeded · spend $0.57 |
+| Scale | Dye vs water temperature (phase 3 check) (run_d8f8b410078e) | compact card · 0.328 ± 0.003 mm/px · print check 100.0 mm of 100 mm |
+| Noise floor | Dye vs water temperature (phase 3 check) (run_d8f8b410078e) | delta_e: 0.13 dE00 (still period) |
+| Counting against labels | Dye vs water temperature (phase 3 check) (run_d8f8b410078e) | not measured yet |
+| Events caught | Dye vs water temperature (phase 3 check) (run_d8f8b410078e) | not measured yet |
+| Claim checker | Dye vs water temperature (phase 3 check) (run_d8f8b410078e) | 12 accepted first try, 0 after a retry, 0 written by code; none rejected |
+| Models | Dye vs water temperature (phase 3 check) (run_d8f8b410078e) | SAM 3 of 3 calls succeeded · spend $1.25 |
 
 SAM 3.1 returns at most 16 objects per request, so a dish with more seeds and sprouts than that can be undercounted;
 the run flags it as a quality event at its first frame.

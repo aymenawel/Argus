@@ -11,7 +11,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from argus.claims.checker import unlabelled
 from argus.domain import Note, Run, RunMode
+from argus.plain import metric_words, unit_label
 
 # The app's dark theme (web/styles/tokens.css): a video is dark like a screening room. Checked against the tokens.
 PALETTE = {"ground": "#0d0e10", "text": "#f5f7fa", "muted": "#aab0b9", "accent": "#2dd4bf"}
@@ -73,8 +75,8 @@ def segments(points: Sequence[tuple[float, float]], gap_factor: float = 3.0) -> 
 
 
 def clock_text(t: float, start_time: datetime | None) -> str:
-    """Run time ("t 23.5 h", "t 25 min"), with the time of day ("· 14:25") when the run's start is known."""
-    text = f"t {t / 3600:.1f} h" if t >= 3600 else f"t {t / 60:.0f} min"
+    """Run time ("23.5 h in", "25 min in"), with the time of day ("· 14:25") when the run's start is known."""
+    text = f"{t / 3600:.1f} h in" if t >= 3600 else f"{t / 60:.0f} min in"
     if start_time is not None:
         text += f" · {(start_time + timedelta(seconds=t)):%H:%M}"
     return text
@@ -90,7 +92,7 @@ def axis_time(t: float, span: float) -> str:
 def note_text(note: Note) -> str:
     """A note as stored: an AI note's observation (it passed the claim checker), a researcher's own words."""
     key = "observation" if note.author == "ai" else "text"
-    return str(note.body.get(key) or "")
+    return unlabelled(str(note.body.get(key) or ""), key)
 
 
 def caption_at(notes: Sequence[Note], t: float) -> str | None:
@@ -109,12 +111,12 @@ def source_line(run: Run) -> str:
 
 
 def words(metric: str) -> str:
-    return metric.replace("_", " ")
+    return metric_words(metric)
 
 
 def metric_title(metric: str, unit: str) -> str:
-    """As the Results chart words it: "Delta e in dE00", "Germinated count"."""
-    text = words(metric) if unit == "count" else f"{words(metric)} in {unit}"
+    """As the Results chart words it (D-95): "Colour change (ΔE)", "Sprouted seeds"."""
+    text = words(metric) if unit == "count" else f"{words(metric)} ({unit_label(unit)})"
     return text[:1].upper() + text[1:]
 
 
@@ -157,7 +159,7 @@ def condition_groups(vessels: Sequence[dict]) -> dict[str, Group]:
             continue
         control = vessel["role"] == "control"
         treatments = sum(not g.control for g in groups.values())
-        name = "Control" if control else "Treatment"
+        name = "Control" if control else "Test"
         condition = vessel.get("condition")
         groups[key] = Group(
             label=f"{name}: {condition_value(condition['value'])}" if condition else name,

@@ -6,6 +6,7 @@ import { ApiError, preview as checkSetup } from "@/lib/api";
 import type { FrameRequest, Preview, Setup } from "@/lib/types";
 import { SetupFrame, type Region } from "./SetupFrame";
 import styles from "./Step.module.css";
+import { metricWords } from "@/lib/plain";
 
 type Props = {
   experimentId: string;
@@ -23,7 +24,7 @@ function quality(preview: Preview, label: string): { text: string; ok: boolean }
   if (flags.includes("blurred")) return { text: "Blurry: focus the camera or hold it still", ok: false };
   if (flags.includes(`occluded:${label}`) || flags.includes("occluded"))
     return { text: "Something is in front of it", ok: false };
-  if (flags.includes(`saturated:${label}`)) return { text: "Glare: move the lamp or turn the vessel", ok: false };
+  if (flags.includes(`saturated:${label}`)) return { text: "Glare: move the lamp or turn the sample", ok: false };
   return { text: "Sharp, no glare", ok: true };
 }
 
@@ -52,7 +53,7 @@ export function CheckStep({ experimentId, setup, frame, preview, onPreview, onCh
   return (
     <div className={styles.step}>
       <p className={styles.lead}>
-        Argus measures in millimetres from the Argus Card in view, at the vessels&apos; height. Check the setup to see
+        Argus measures in millimetres from the Argus Card in view, at the samples&apos; height. Check the setup to see
         what it will measure before you start.
       </p>
       <div className={styles.row}>
@@ -88,8 +89,8 @@ export function CheckStep({ experimentId, setup, frame, preview, onPreview, onCh
       <div className={styles.split}>
         <SetupFrame
           src={src}
-          alt="The frame Argus checked"
-          empty="Check the setup to see the frame as Argus sees it."
+          alt="The picture Argus checked"
+          empty="Check the setup to see the picture as Argus sees it."
           regions={regions}
           outlines={outlines}
           ruler={noCard ? points : undefined}
@@ -104,7 +105,7 @@ export function CheckStep({ experimentId, setup, frame, preview, onPreview, onCh
               </p>
             ) : (
               <div className={styles.field}>
-                <p className={styles.bad}>No card in view: put it beside the vessels, or mark a ruler.</p>
+                <p className={styles.bad}>No card in view: put it beside the samples, or mark a ruler.</p>
                 <span className={styles.help}>
                   Click the two ends of a known length on the frame ({points.length} of 2), then type its length.
                 </span>
@@ -142,7 +143,7 @@ export function CheckStep({ experimentId, setup, frame, preview, onPreview, onCh
                       {v.readings.length > 0
                         ? v.readings
                             .filter((r) => !r.metric.endsWith("_a") && !r.metric.endsWith("_b"))
-                            .map((r) => `${r.metric} ${r.display}`)
+                            .map((r) => `${metricWords(r.metric)} ${r.display}`)
                             .join(" · ")
                         : preview.calibration
                           ? "SAM 3.1 found nothing to measure here"

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { conditionGroups, groupKey, linearScale, type Marker, niceTicks } from "@/lib/chart";
+import { conditionGroups, formatDuration, groupKey, linearScale, type Marker, niceTicks } from "@/lib/chart";
+import { curveWords, metricWords, unitLabel } from "@/lib/plain";
 import type { FitsView } from "@/lib/types";
 import styles from "./CurveChart.module.css";
 
@@ -47,7 +48,7 @@ export function CurveChart({ fits, checkpointS }: Props) {
   }, []);
   const H = W < 560 ? 240 : 320;
   const all = fits.vessels.flatMap((v) => [...v.readings, ...(v.fit?.samples ?? [])]);
-  if (all.length === 0) return <p className={styles.empty}>No readings of {fits.metric} yet.</p>;
+  if (all.length === 0) return <p className={styles.empty}>No readings of {metricWords(fits.metric)} yet.</p>;
   const tMax = Math.max(...all.map(([t]) => t), checkpointS ?? 0) / 3600;
   const yMin = Math.min(0, ...all.map(([, y]) => y));
   const yMax = Math.max(...all.map(([, y]) => y));
@@ -65,7 +66,7 @@ export function CurveChart({ fits, checkpointS }: Props) {
         className={styles.chart}
         viewBox={`0 0 ${W} ${H}`}
         role="img"
-        aria-label={`${fits.metric} over time for ${fits.vessels.length} vessels, with each vessel's fitted ${fits.curve} curve`}
+        aria-label={`${metricWords(fits.metric)} over time for ${fits.vessels.length} samples, with each sample's ${curveWords(fits.curve)} curve`}
       >
         {yTicks.map((tick) => (
           <g key={`y${tick}`}>
@@ -84,7 +85,7 @@ export function CurveChart({ fits, checkpointS }: Props) {
           hours
         </text>
         <text className={styles.axis} x={PAD.left - 6} y={PAD.top - 14} textAnchor="end">
-          {fits.unit}
+          {unitLabel(fits.unit)}
         </text>
         {checkpointS != null && checkpointS > 0 && (
           <g>
@@ -96,7 +97,7 @@ export function CurveChart({ fits, checkpointS }: Props) {
               y2={H - PAD.bottom}
             />
             <text className={styles.tick} x={x(checkpointS / 3600) + 4} y={PAD.top + 10}>
-              checkpoint
+              check time
             </text>
           </g>
         )}
@@ -118,7 +119,7 @@ export function CurveChart({ fits, checkpointS }: Props) {
             {v.fit?.ok && v.fit.half_time_h && v.fit.plateau && (
               <circle className={styles.half} cx={x(v.fit.half_time_h[0])} cy={y(v.fit.plateau[0] / 2)} r={4}>
                 <title>
-                  {v.label}: half-way at {v.fit.half_time_h[0].toFixed(1)} h
+                  {v.label}: half-way at {formatDuration([v.fit.half_time_h[0], 0])}
                 </title>
               </circle>
             )}

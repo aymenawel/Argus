@@ -165,7 +165,7 @@ def test_the_critique_sees_the_events_the_draft_cites():
         labels={"ves_c": "C"},
     )
     text = "\n".join(task.variable)
-    assert "evt_1 | intervention (something in front of the vessel) | C" in text
+    assert "evt_1 | a hand or object was at the samples (something in front of the vessel) | C" in text
 
 
 def test_describe_fills_the_recipes_metrics_into_the_schema():
@@ -214,3 +214,24 @@ def test_snapshots_are_jpegs_768_px_on_the_long_side():
     image = np.zeros((1200, 1600, 3), np.uint8)
     decoded = cv2.imdecode(np.frombuffer(snapshot_jpeg(image), np.uint8), cv2.IMREAD_COLOR)
     assert max(decoded.shape[:2]) == 768 and decoded.shape[1] == 768
+
+
+def test_the_cards_use_the_words_a_reader_sees():
+    """The model copies the cards' words into its notes, so the cards use the page's words, not the code's (D-95)."""
+    code_words = (
+        "vessel",
+        "treatment",
+        "treated",
+        "noise floor",
+        "replicate",
+        "checkpoint",
+        "intervention",
+        "segmentation",
+        "plateau",
+        "skeleton",
+    )
+    for recipe in ("seed-germination", "colour-reaction", "foam-height", "general", "colony-spread"):
+        card = load_prompt(f"recipes/{recipe}/method.md").lower()
+        assert [w for w in code_words if w in card] == [], recipe
+    task = load_prompt("routine/note.md").lower()
+    assert [w for w in ("intervention", "segmentation", "rule crossing") if w in task] == []

@@ -52,7 +52,7 @@ export function NextRunCard({ runId, running }: Props) {
             ? "No next run was suggested for this run."
             : running
               ? "The run is still going: the next run is suggested once it has ended."
-              : "No suggestion yet. Argus works out the replicates and run length from this run's spread and curves."}
+              : "No suggestion yet. Argus works out how many samples and how long to run from how this run went."}
         </p>
         <div className={styles.actions}>{button}</div>
         {error && (
@@ -70,7 +70,7 @@ export function NextRunCard({ runId, running }: Props) {
       <p className={styles.label}>Suggested, not measured</p>
       <dl className={styles.numbers}>
         <div>
-          <dt>Vessels per condition</dt>
+          <dt>Samples per condition</dt>
           <dd className="num">{numbers.replicates ?? "Unknown"}</dd>
           <dd className={styles.reason}>{numbers.replicates_reason}</dd>
         </div>
@@ -80,7 +80,7 @@ export function NextRunCard({ runId, running }: Props) {
           <dd className={styles.reason}>{numbers.hours_reason}</dd>
         </div>
         <div>
-          <dt>Levels to try</dt>
+          <dt>Values to try</dt>
           <dd className="num">
             {numbers.levels.length > 0 ? `${numbers.levels.join(", ")} ${numbers.levels_unit}`.trim() : "None"}
           </dd>

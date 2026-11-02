@@ -19,6 +19,7 @@ import numpy as np
 from argus.claims.refs import RefTable
 from argus.config import REPO_ROOT
 from argus.domain import Direction, Experiment, Note, Plan, RunEvent, VerdictLevel
+from argus.plain import event_words, metric_words
 from argus.reason import ReasonTask
 from argus.recipes.model import Recipe
 
@@ -75,26 +76,24 @@ def plan_block(plan: Plan | None) -> str:
         f"Success threshold: {plan.threshold}",
     ]
     if plan.metric and plan.direction:
-        who = f"treatment vessels with condition '{plan.treatment}'" if plan.treatment else "every treatment vessel"
+        who = f"test samples with condition '{plan.treatment}'" if plan.treatment else "every test sample"
+        words = metric_words(plan.metric)
         if plan.quantity == "half_time":  # D-78: judged on the fitted curve, not the readings
             when = "sooner" if plan.direction is Direction.LOWER else "later"
             line = (
-                f"Structured prediction: {who} reaches half its fitted plateau of {plan.metric} {when} than the "
-                f"controls (a {plan.direction.value} half-way time)"
+                f"Structured prediction: {who} gets half-way to where its {words} levels off {when} than the "
+                f"controls (a {plan.direction.value} time to get half-way)"
             )
         elif plan.quantity == "rate":
-            line = (
-                f"Structured prediction: {who} has a {plan.direction.value} fitted rate of {plan.metric} than the "
-                "controls"
-            )
+            line = f"Structured prediction: {who} has a {plan.direction.value} speed of {words} than the controls"
         else:
-            line = f"Structured prediction: {who} reads {plan.direction.value} than the controls on {plan.metric}"
+            line = f"Structured prediction: {who} reads {plan.direction.value} than the controls on {words}"
         if plan.min_effect is not None:
             line += " by at least {ref:plan:min_effect}"
         if plan.checkpoint_s is not None:
-            line += ", judged from {ref:plan:checkpoint} of run time on"
+            line += ", judged from the check time {ref:plan:checkpoint} on"
         lines.append(line + ".")
-    lines.append("Rival explanations: " + ("; ".join(plan.rivals) if plan.rivals else "none listed"))
+    lines.append("Other possible causes: " + ("; ".join(plan.rivals) if plan.rivals else "none listed"))
     return "\n".join(lines)
 
 
@@ -110,12 +109,12 @@ def events_block(events: Sequence[RunEvent], refs: RefTable, labels: Mapping[str
     by_event = {
         e: r.id for r in (refs.get(i) for i in refs.ids()) if r is not None and r.kind == "event" for e in r.evidence
     }
-    lines = ["EVENTS (id | kind | vessel | when)"]
+    lines = ["EVENTS (id | what happened | sample | when)"]
     for event in events:
         when = f"{{ref:{by_event[event.id]}}}" if event.id in by_event else "time not in MEASUREMENTS"
         what = event.detail.get("message") or event.detail.get("rule") or ""
-        vessel = labels.get(event.vessel_id, "all vessels") if event.vessel_id else "all vessels"
-        lines.append(f"{event.id} | {event.kind}{f' ({what})' if what else ''} | {vessel} | {when}")
+        vessel = labels.get(event.vessel_id, "all samples") if event.vessel_id else "all samples"
+        lines.append(f"{event.id} | {event_words(event.kind)}{f' ({what})' if what else ''} | {vessel} | {when}")
     return "\n".join(lines) if len(lines) > 1 else "EVENTS: none"
 
 

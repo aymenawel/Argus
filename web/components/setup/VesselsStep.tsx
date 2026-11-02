@@ -36,7 +36,10 @@ export function VesselsStep({ experimentId, recipe, frame, vessels, onChange }: 
         if (live) setSrc(u);
         else URL.revokeObjectURL(u);
       })
-      .catch((e: unknown) => live && setFrameError(e instanceof ApiError ? e.detail : "No frame from the source."));
+      .catch(
+        (e: unknown) =>
+          live && setFrameError(e instanceof ApiError ? e.detail : "No picture from the camera or video."),
+      );
     return () => {
       live = false;
       if (url) URL.revokeObjectURL(url);
@@ -55,8 +58,8 @@ export function VesselsStep({ experimentId, recipe, frame, vessels, onChange }: 
   return (
     <div className={styles.step}>
       <p className={styles.lead}>
-        Find the vessels with SAM 3.1, then click a dashed region to keep it and a kept one to drop it. Drag on the
-        frame to draw a box around a vessel it missed.
+        Find the samples with SAM 3.1, then click a dashed region to keep it and a kept one to drop it. Drag on the
+        picture to draw a box around a sample it missed.
       </p>
       <div className={styles.row}>
         <label className={styles.field}>
@@ -83,7 +86,7 @@ export function VesselsStep({ experimentId, recipe, frame, vessels, onChange }: 
               .finally(() => setBusy(false));
           }}
         >
-          {busy ? "Looking…" : "Find vessels"}
+          {busy ? "Looking…" : "Find samples"}
         </Button>
       </div>
       {error && (
@@ -93,8 +96,8 @@ export function VesselsStep({ experimentId, recipe, frame, vessels, onChange }: 
       )}
       <SetupFrame
         src={src}
-        alt="A frame from the source"
-        empty={frameError ?? "Getting a frame from the source…"}
+        alt="A picture from the camera or video"
+        empty={frameError ?? "Getting a picture from the camera or video…"}
         regions={regions}
         onRegion={(k) => {
           if (k.startsWith("v:")) drop(k.slice(2));
@@ -111,7 +114,7 @@ export function VesselsStep({ experimentId, recipe, frame, vessels, onChange }: 
           {vessels.map((v) => (
             <li key={`v:${v.label}`} className={styles.item}>
               <span className={styles.badge}>{v.label}</span>
-              <span>Vessel {v.label}</span>
+              <span>Sample {v.label}</span>
               <Button variant="text" onClick={() => drop(v.label)}>
                 Drop
               </Button>

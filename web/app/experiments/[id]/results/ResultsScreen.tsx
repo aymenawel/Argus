@@ -28,6 +28,7 @@ import { useReadOnly } from "@/lib/replay";
 import { explanationToShow } from "@/lib/results";
 import type { Experiment, FitsView, Plan, RecipeDetail, RunView, Verdict } from "@/lib/types";
 import styles from "./page.module.css";
+import { curveWords, metricWords, sentence, unitKey, unitLabel } from "@/lib/plain";
 
 type Load =
   | { state: "loading" }
@@ -36,13 +37,12 @@ type Load =
   | { state: "ready"; experiment: Experiment; recipe: RecipeDetail; runs: RunView[]; plans: Plan[] };
 
 const JUDGED_ON: Record<FitsView["quantity"], string> = {
-  level: "the level at the checkpoint",
-  half_time: "the half-way time",
-  rate: "the rate",
+  level: "how much it changed by the check time",
+  half_time: "how long it took to get half-way",
+  rate: "how fast it changed",
 };
 
-const words = (id: string) => id.replaceAll("_", " ");
-const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+const words = metricWords;
 
 const asApiError = (error: unknown) => (error instanceof ApiError ? error : new ApiError(0, String(error)));
 
@@ -53,7 +53,7 @@ function runLabel(view: RunView, number: number): string {
 
 function finding(fits: FitsView): string {
   const fitted = fits.vessels.filter((v) => v.fit?.ok).length;
-  return `${fitted} of ${fits.vessels.length} vessels follow a ${fits.curve} curve · judged on ${JUDGED_ON[fits.quantity]}`;
+  return `${fitted} of ${fits.vessels.length} samples follow an ${curveWords(fits.curve)} curve · judged on ${JUDGED_ON[fits.quantity]}`;
 }
 
 // One run's results in one place (phase 4): each vessel's readings with its fitted curve, the half-way times and
@@ -234,14 +234,16 @@ export function ResultsScreen({ experimentId }: { experimentId?: string } = {}) 
         ) : (
           <>
             <p className={styles.lead}>
-              {sentence(fits.unit === "count" ? words(fits.metric) : `${words(fits.metric)} in ${fits.unit}`)} per
-              vessel, with each vessel&apos;s fitted {fits.curve} curve. Only this run&apos;s readings are shown: runs
-              are never pooled.
+              {sentence(fits.unit === "count" ? words(fits.metric) : `${words(fits.metric)} (${unitLabel(fits.unit)})`)}{" "}
+              for each sample, with the {curveWords(fits.curve)} curve that best fits its readings. Only this run&apos;s
+              readings are shown: runs are never mixed together.
+              {unitKey(fits.unit) && <> {unitKey(fits.unit)}</>}
             </p>
             {!anyFit && fits.vessels.some((v) => v.readings.length > 0) && (
               <p className={styles.refused} role="status">
-                No vessel&apos;s readings follow a {fits.curve} curve yet
-                {reasons.length > 0 ? ` (${reasons.join("; ")})` : ""}, so there is no half-way time or rate to compare.
+                No sample&apos;s readings follow an {curveWords(fits.curve)} curve yet
+                {reasons.length > 0 ? ` (${reasons.join("; ")})` : ""}, so there is no half-way time or speed to
+                compare.
               </p>
             )}
             <CurveChart fits={fits} checkpointS={plan?.checkpoint_s} />

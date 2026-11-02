@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { ApiError, describe } from "@/lib/api";
 import type { RecipeDetail, RecipeDraft } from "@/lib/types";
 import styles from "./Step.module.css";
+import { metricWords, roleWord } from "@/lib/plain";
 
 type Props = {
   experimentId: string;
@@ -74,7 +75,8 @@ export function DescribeStep({ experimentId, recipe, draft, onDraft }: Props) {
           <p>
             Factor: {draft.factor}
             {draft.factor_unit ? ` (${draft.factor_unit})` : ""} · conditions:{" "}
-            {draft.conditions.map((c) => `${c.value} (${c.role})`).join(", ")} · metric {draft.metric}
+            {draft.conditions.map((c) => `${c.value} (${roleWord(c.role)})`).join(", ")} · measuring{" "}
+            {metricWords(draft.metric)}
           </p>
           {draft.question_for_researcher && <p>Argus asks: {draft.question_for_researcher}</p>}
         </div>

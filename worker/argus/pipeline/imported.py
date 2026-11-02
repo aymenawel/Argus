@@ -117,7 +117,7 @@ def _scan(
             _event(ctx, frame.t, kind, "quality", {"flags": list(report.flags), "blur": round(report.blur, 1)})
             continue
         for vessel_id in sorted(report.occluded_vessels - hands):
-            detail = {"flags": [f"occluded:{vessel_id}"], "message": "something in front of the vessel: not measured"}
+            detail = {"flags": [f"occluded:{vessel_id}"], "message": "something in front of the sample: not measured"}
             _event(ctx, frame.t, EventKind.INTERVENTION, "quality", detail, vessel_id=vessel_id)
         hands = report.occluded_vessels
         if "rebaselined" in report.flags:

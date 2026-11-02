@@ -20,7 +20,10 @@ def after_card_moved(
     """The vessels to measure from now on, and the camera_moved event's detail (with the new regions, if any)."""
     shift = plane_shift(old, new) if camera_moved else None
     if shift is None:
-        return list(vessels), {"message": "card moved: recalibrated"}
+        return list(vessels), {"message": "card moved: the scale was found again"}
     moved = [follow(v, shift) for v in vessels]
     rois = {v.id: [list(point) for point in v.roi] for v in moved}
-    return moved, {"message": "camera moved: recalibrated; the vessel regions follow the card", "rois": rois}
+    return moved, {
+        "message": "camera moved: the scale was found again and the sample outlines follow the card",
+        "rois": rois,
+    }

@@ -34,8 +34,8 @@ export function RolesStep({ setup, suggestions, onChange }: Props) {
   return (
     <div className={styles.step}>
       <p className={styles.lead}>
-        Controls show what happens without the treatment. Give each vessel its role and its condition; at least one must
-        be a control.
+        A control shows what happens when you change nothing; a test sample is the one you changed. Give each sample its
+        role and its condition; at least one must be a control.
       </p>
       <div className={styles.grid}>
         <label className={styles.field}>
@@ -62,12 +62,12 @@ export function RolesStep({ setup, suggestions, onChange }: Props) {
           <option key={v} value={v} />
         ))}
       </datalist>
-      <ul className={styles.list} aria-label="Vessels">
+      <ul className={styles.list} aria-label="Samples">
         {setup.vessels.map((v) => (
           <li key={v.label} className={styles.item}>
             <span className={styles.badge}>{v.label}</span>
             <fieldset className={styles.choices}>
-              <legend className={styles.hidden}>Role of vessel {v.label}</legend>
+              <legend className={styles.hidden}>Role of sample {v.label}</legend>
               {(["control", "treatment"] as const).map((role) => (
                 <label key={role} className={styles.choice}>
                   <input
@@ -76,12 +76,12 @@ export function RolesStep({ setup, suggestions, onChange }: Props) {
                     checked={v.role === role}
                     onChange={() => setVessel(v.label, (x) => ({ ...x, role }))}
                   />
-                  {role === "control" ? "Control" : "Treatment"}
+                  {role === "control" ? "Control" : "Test"}
                 </label>
               ))}
             </fieldset>
             <label className={styles.field}>
-              <span className={styles.hidden}>Condition of vessel {v.label}</span>
+              <span className={styles.hidden}>Condition of sample {v.label}</span>
               <input
                 className={`${styles.input} ${styles.short}`}
                 list="condition-values"

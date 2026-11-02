@@ -2,7 +2,14 @@ import warnings
 
 import pytest
 
-from argus.measure.uncertainty import combined_uncertainty, format_measurement, format_pm, is_real_effect, noise_floor
+from argus.measure.uncertainty import (
+    combined_uncertainty,
+    format_duration,
+    format_measurement,
+    format_pm,
+    is_real_effect,
+    noise_floor,
+)
 
 
 @pytest.mark.parametrize(
@@ -50,9 +57,15 @@ def test_zero_noise_or_scale_error_works_without_warnings():
         (4.6312, 0.3, "mm", "4.6 ± 0.3 mm"),
         (3.0, 0.0, "count", "3"),
         (12.5, 0.0, "mm", "12.5 mm"),
-        (0.0, 0.0, "mm2", "0 mm2"),
+        (0.0, 0.0, "mm2", "0 mm²"),
         (1234.5678, 0.0, "s", "1230 s"),
     ],
 )
 def test_display_strings(v, u, unit, text):
     assert format_measurement(v, u, unit) == text
+
+
+def test_a_time_under_an_hour_reads_in_minutes():
+    """As the page shows it (web/lib/chart.ts formatDuration, D-95): 0.0628 h is 3.77 min."""
+    assert format_duration(0.0628, 0.0005) == "3.77 ± 0.03 min"
+    assert format_duration(21.4, 0.6) == "21.4 ± 0.6 h"

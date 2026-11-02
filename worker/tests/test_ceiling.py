@@ -83,10 +83,10 @@ def test_the_ceiling_table(case, allowed):
 def test_every_ceiling_says_why_in_words():
     _, checks = ceiling(inputs(controls=0))
     control = next(c for c in checks if c.id == "control")
-    assert control.ok is False and "no control vessel" in control.text
+    assert control.ok is False and "no control sample" in control.text
     _, checks = ceiling(inputs(rivals={"temperature": "open"}))
     rival = next(c for c in checks if c.id == "rival:temperature")
-    assert rival.ok is None and "temperature" in rival.text and "open" in rival.text
+    assert rival.ok is None and "temperature" in rival.text and "not ruled out" in rival.text
 
 
 def test_effect_checks_cite_their_refs():
@@ -129,4 +129,4 @@ def test_a_finished_run_that_ended_before_its_checkpoint_says_so():
     assert allowed == {TOO_EARLY}
     assert "ended" in checks[0].text and "47 h" in checks[0].text and "48 h" in checks[0].text
     _, live = ceiling(inputs(t=200.0, running=True))
-    assert "Before the plan's checkpoint" in live[0].text
+    assert "before the plan's check time" in live[0].text

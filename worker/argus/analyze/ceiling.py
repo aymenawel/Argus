@@ -24,6 +24,7 @@ from typing import Literal
 
 from argus.claims.refs import Ref
 from argus.domain import Direction, VerdictLevel
+from argus.plain import metric_words
 
 NOISE_FACTOR = 3.0  # an effect under ~3 × the noise floor is "not real yet" (KB 08)
 K_UNCERTAINTY = 2.0  # within 2 × its own ± (about 95 %) a difference could still be zero, or the smallest effect
@@ -98,6 +99,9 @@ def _effect(ref: Ref, inputs: VerdictInputs) -> Literal["clear", "opposed", "sma
     return "unclear"
 
 
+WOBBLE = "Normal wobble (how much readings jitter when nothing changes)"  # the noise floor, in plain words (D-95)
+
+
 def without_digits(text: str) -> str:
     """A check's words for the model: its numbers are in the refs, never copied from text."""
     return " ".join(word for word in text.split() if not any(c.isdigit() for c in word))
@@ -112,38 +116,37 @@ def _check(id_: str, ok: bool | None, text: str, refs: tuple[str, ...] = (), pro
 
 
 def _vessels(n: int, role: str) -> str:
-    return f"{n} {role} {'vessel' if n == 1 else 'vessels'}"
+    return f"{n} {role} {'sample' if n == 1 else 'samples'}"
 
 
 def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
     """The allowed verdicts and every check behind them, in words."""
     if not inputs.locked:  # a run with no locked plan at all is refused before this (D-67): this one came too late
         text = (
-            "The plan was locked after this run's data began, so it can't be judged against it: "
-            "a prediction written with the data in view isn't a test."
+            "The plan was written after this run's data was recorded, so this data can't test it: "
+            "a guess made after seeing the result isn't a real test."
         )
         return {TOO_EARLY}, [_check("plan", False, text)]
     if inputs.checkpoint_s is not None and inputs.t < inputs.checkpoint_s:
         if inputs.running:
-            text = "Before the plan's checkpoint: a verdict would be too early."
+            text = "It's before the plan's check time, so it's too early to judge."
             prompt = text
         else:  # a finished run will never get there: say so rather than "wait"
             text = (
-                f"The run ended at {_hours(inputs.t)}, before the plan's checkpoint ({_hours(inputs.checkpoint_s)}): "
-                "it can't be judged against this plan."
+                f"The run ended at {_hours(inputs.t)}, before the plan's check time ({_hours(inputs.checkpoint_s)}), "
+                "so it can't be judged against this plan."
             )
-            prompt = "The run ended before the plan's checkpoint: it can't be judged against this plan."
+            prompt = "The run ended before the plan's check time, so it can't be judged against this plan."
         return {TOO_EARLY}, [_check("checkpoint", False, text, ("plan:checkpoint",), prompt=prompt)]
-    metric = inputs.metric or "the plan's metric"
-    checks = [_check("checkpoint", True, "Past the plan's checkpoint.", ("plan:checkpoint",))]
+    metric = metric_words(inputs.metric) if inputs.metric else "the plan's measurement"
+    checks = [_check("checkpoint", True, "Past the plan's check time.", ("plan:checkpoint",))]
     if inputs.retrospective:
         checks.append(
             _check(
                 "retrospective",
                 None,
-                "Retrospective: this is published data, recorded before the plan was written, so the verdict "
-                "re-analyses it after the fact rather than testing a prediction made beforehand. The plan was locked "
-                "before Argus measured it.",
+                "Looking back: this is published data, recorded before the plan was written, so Argus is checking "
+                "old data rather than testing a fresh prediction. The plan was locked before Argus measured it.",
             )
         )
     elif not inputs.recording_start_known:
@@ -151,15 +154,15 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
             _check(
                 "preregistered",
                 None,
-                "The recording's start time wasn't given, so Argus can't confirm the plan was locked before the data "
-                "was recorded. Give the start time when you import to settle it.",
+                "The video's start time wasn't given, so Argus can't confirm the plan was written before filming. "
+                "Give the start time when you import to settle it.",
             )
         )
     named = metric[:1].upper() + metric[1:]  # a check is a sentence: "Area was measured", not "area was measured"
     if inputs.measured:
         measured = f"{named} was measured in this run."
     elif inputs.lost_controls or inputs.lost_treatments:
-        measured = f"{named} was measured, but SAM stopped finding the object in every vessel after its last reading."
+        measured = f"{named} was measured, but SAM stopped finding the object in every sample after its last reading."
     else:
         measured = f"{named} has no readings in this run."
     checks.append(_check("measured", inputs.measured, measured))
@@ -170,9 +173,9 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
             _check(
                 "control",
                 False,
-                f"{inputs.controls} of {_vessels(present, 'control')} have a fitted value; at least "
-                f"{MIN_FITTED_CONTROLS} are needed, since a fit's ± doesn't show how much dishes differ.",
-                prompt="Too few control vessels with a fitted value to show how much dishes differ.",
+                f"{inputs.controls} of {_vessels(present, 'control')} have a fitted curve; at least "
+                f"{MIN_FITTED_CONTROLS} are needed to see how much samples naturally differ.",
+                prompt="Too few control samples with a fitted curve to see how much samples naturally differ.",
             )
         )
     elif inputs.controls:
@@ -181,21 +184,21 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
                 "control",
                 True,
                 f"{_vessels(inputs.controls, 'control')} to compare against.",
-                prompt="There are control vessels to compare against.",
+                prompt="There are control samples to compare against.",
             )
         )
     elif inputs.lost_controls:
         text = (
-            "SAM stopped finding the object in every control vessel after its last reading, so no control is "
-            "measured now and a treatment can't be told from other causes."
+            "SAM stopped finding the object in every control sample after its last reading, so there's nothing "
+            "to compare against and other causes can't be ruled out."
         )
         checks.append(_check("control", False, text))
     else:
         checks.append(
-            _check("control", False, "There is no control vessel, so a treatment can't be told from other causes.")
+            _check("control", False, "There is no control sample, so a change can't be told apart from other causes.")
         )
     enough = inputs.treatments >= MIN_REPLICATES
-    counted = "with a fitted difference from the controls" if fitted else "in the comparison measured"
+    counted = "have a curve to compare with the controls" if fitted else "were measured"
     lost, lost_prompt = "", ""
     if inputs.lost_treatments:
         lost = f" SAM stopped finding the object in {inputs.lost_treatments} of them after its last reading."
@@ -204,19 +207,19 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
         _check(
             "replicates",
             enough,
-            f"{inputs.treatments} of {_vessels(max(inputs.planned, inputs.treatments), 'treatment')} {counted}; "
-            f"at least {MIN_REPLICATES} are needed." + lost,
+            f"{inputs.treatments} of {_vessels(max(inputs.planned, inputs.treatments), 'test')} {counted}; "
+            f"at least {MIN_REPLICATES} are needed, since one sample could be a fluke." + lost,
             prompt=(
-                f"Enough treatment vessels {counted.replace(' measured', '')}."
+                "Enough test samples were measured."
                 if enough
-                else f"Too few treatment vessels {counted.replace(' measured', '')} to count replicates."
+                else "Too few test samples were measured: one sample could be a fluke."
             )
             + lost_prompt,
         )
     )
     if fitted:
-        words = "half-way times" if inputs.quantity == "half_time" else "rates"
-        text = f"Judged on fitted {words}: each carries its fit's ±, in place of a noise floor."
+        words = "time to get half-way" if inputs.quantity == "half_time" else "speed"
+        text = f"Judged on each sample's {words}, from the curve fitted to its readings, each with its own ±."
         checks.append(_check("fits", True, text))
         for id_, ok, note, prompt in inputs.fit_notes:
             checks.append(_check(id_, ok, note, prompt=prompt))
@@ -225,20 +228,22 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
             _check(
                 "noise",
                 True,
-                f"Noise floor: {inputs.noise_display or inputs.noise}.",
+                f"{WOBBLE}: {inputs.noise_display or inputs.noise}.",
                 (f"noise:{inputs.metric}",),
-                prompt=f"Noise floor: {{ref:noise:{inputs.metric}}}.",
+                prompt=f"{WOBBLE}: {{ref:noise:{inputs.metric}}}.",
             )
         )
     else:
-        checks.append(_check("noise", False, "No noise floor yet: too few still readings to judge an effect."))
+        checks.append(
+            _check("noise", False, "Normal wobble not known yet: too few readings before anything changed to judge.")
+        )
     for name, state in inputs.rivals.items():
         resolved = state == "resolved"
         checks.append(
             _check(
                 f"rival:{name}",
                 True if resolved else None,
-                f"Rival explanation '{name}': {'resolved' if resolved else 'open'}.",
+                f"Other possible cause '{name}': {'ruled out' if resolved else 'not ruled out yet'}.",
             )
         )
     if not inputs.registered:
@@ -246,37 +251,37 @@ def ceiling(inputs: VerdictInputs) -> tuple[set[VerdictLevel], list[Check]]:
             _check(
                 "registered",
                 False,
-                f"{metric} never changed by the smallest effect in any vessel compared: Argus may not be seeing it, "
-                "so no difference can't count as evidence of no effect.",
+                f"{named} never changed by the smallest real difference in any sample compared: Argus may not be "
+                "able to see it, so 'no difference' can't count as proof of no effect.",
             )
         )
     verdicts = {}
     words = {
-        "clear": "a clear effect in the predicted direction",
-        "opposed": "a clear effect against the prediction",
-        "small": "smaller than the smallest effect that matters, its ± included",
-        "unclear": "no clear effect, and its ± can't rule out the smallest effect",
+        "clear": "a clear difference in the predicted direction",
+        "opposed": "a clear difference the opposite way from the prediction",
+        "small": "smaller than the smallest difference the plan counts as real, even allowing for its ±",
+        "unclear": "not a clear difference, and its ± is too wide to rule out a real one",
     }
     for label, ref in inputs.effects.items():
         verdicts[label] = _effect(ref, inputs)
         smallest = inputs.min_effect_display or inputs.min_effect
         bar = (
-            f"twice its ± and the smallest effect ({smallest})"
+            f"twice its ± and the smallest real difference ({smallest})"
             if fitted
-            else f"3 × the noise floor, twice its ± and the smallest effect ({smallest})"
+            else f"3 × the normal wobble, twice its ± and the smallest real difference ({smallest})"
         )
         checks.append(
             _check(
                 f"effect:{label}",
                 verdicts[label] == "clear",
-                f"Vessel {label}: {ref.display} against the controls, {words[verdicts[label]]} "
+                f"Sample {label}: {ref.display} compared with the controls, {words[verdicts[label]]} "
                 f"(clear needs more than {bar}).",
                 (ref.id,),
-                prompt=f"Vessel {label}: {{ref:{ref.id}}} against the controls, {words[verdicts[label]]} (judged "
+                prompt=f"Sample {label}: {{ref:{ref.id}}} compared with the controls, {words[verdicts[label]]} (judged "
                 + (
-                    "against its own ± and the smallest effect {ref:plan:min_effect})."
+                    "against its own ± and the smallest real difference {ref:plan:min_effect})."
                     if fitted
-                    else "against the noise floor, its own ± and the smallest effect {ref:plan:min_effect})."
+                    else "against the normal wobble, its own ± and the smallest real difference {ref:plan:min_effect})."
                 ),
             )
         )

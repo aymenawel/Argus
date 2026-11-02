@@ -310,7 +310,7 @@ async def test_a_moved_card_is_recalibrated_and_the_vessels_stay(make_ctx):
     nudged[CARD_AREA] = np.roll(still[CARD_AREA], (8, 12), axis=(0, 1))  # someone pushed the card; the jars stayed
     await live(ctx, watcher, [still] * 6 + [nudged] * 8)
     [moved] = [e for e in events_for_run(ctx.db, ctx.run.id) if e.kind is EventKind.CAMERA_MOVED]
-    assert moved.detail == {"message": "card moved: recalibrated"} and list(ctx.vessels[0].roi) == drawn
+    assert moved.detail == {"message": "card moved: the scale was found again"} and list(ctx.vessels[0].roi) == drawn
     with ctx.db.read() as c:
         # the first calibration, the settled colour reference, and the recalibration after the nudge
         assert c.execute("SELECT COUNT(*) FROM calibrations WHERE run_id=?", (ctx.run.id,)).fetchone()[0] == 3

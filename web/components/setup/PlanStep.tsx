@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { quantityUnit } from "@/lib/recipe";
 import type { Plan, PlanDraft, RecipeDetail, Setup } from "@/lib/types";
 import styles from "./Step.module.css";
+import { metricWords, sentence, unitLabel } from "@/lib/plain";
 
 type Props = {
   plan: PlanDraft;
@@ -46,7 +47,7 @@ export function PlanStep({ plan, locked, recipe, setup, onChange }: Props) {
         </p>
       )}
       <label className={styles.field}>
-        <span className={styles.label}>Hypothesis</span>
+        <span className={styles.label}>Your idea (hypothesis)</span>
         <textarea
           className={styles.textarea}
           value={plan.hypothesis}
@@ -56,7 +57,7 @@ export function PlanStep({ plan, locked, recipe, setup, onChange }: Props) {
       </label>
       <div className={styles.grid}>
         <label className={styles.field}>
-          <span className={styles.label}>Prediction</span>
+          <span className={styles.label}>What you expect to see (prediction)</span>
           <input
             className={styles.input}
             value={plan.prediction}
@@ -69,10 +70,10 @@ export function PlanStep({ plan, locked, recipe, setup, onChange }: Props) {
         </label>
       </div>
 
-      <h3 className={styles.label}>The prediction Argus will judge</h3>
+      <h3 className={styles.label}>How Argus will check it</h3>
       <div className={styles.grid}>
         <label className={styles.field}>
-          <span className={styles.label}>Measurement</span>
+          <span className={styles.label}>What to measure</span>
           <select
             className={styles.select}
             value={plan.metric ?? ""}
@@ -81,13 +82,13 @@ export function PlanStep({ plan, locked, recipe, setup, onChange }: Props) {
             <option value="">Choose…</option>
             {recipe.metrics.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.id} ({m.unit})
+                {sentence(metricWords(m.id))} ({unitLabel(m.unit)})
               </option>
             ))}
           </select>
         </label>
         <label className={styles.field}>
-          <span className={styles.label}>Judged on</span>
+          <span className={styles.label}>Compare</span>
           <select
             className={styles.select}
             value={plan.quantity ?? "level"}
@@ -95,34 +96,35 @@ export function PlanStep({ plan, locked, recipe, setup, onChange }: Props) {
               set({ quantity: e.target.value === "level" ? null : (e.target.value as PlanDraft["quantity"]) })
             }
           >
-            <option value="level">Its level by the checkpoint</option>
-            <option value="half_time">How fast: time to half its final value</option>
-            <option value="rate">Its rate of change</option>
+            <option value="level">How much it changed by the check time</option>
+            <option value="half_time">How fast: time to get half-way to its final value</option>
+            <option value="rate">Its speed of change</option>
           </select>
           <span className={styles.help}>
-            Speed is read off a curve fitted to each vessel, with its ±. Faster means a lower half-way time.
+            Speed comes from a curve drawn through each sample&apos;s readings, with its ±. Faster means it gets
+            half-way sooner.
           </span>
         </label>
         <label className={styles.field}>
-          <span className={styles.label}>Direction</span>
+          <span className={styles.label}>Which way</span>
           <select
             className={styles.select}
             value={plan.direction ?? ""}
             onChange={(e) => set({ direction: (e.target.value || null) as PlanDraft["direction"] })}
           >
             <option value="">Choose…</option>
-            <option value="higher">Treatment higher than control</option>
-            <option value="lower">Treatment lower than control</option>
+            <option value="higher">Test sample higher than the control</option>
+            <option value="lower">Test sample lower than the control</option>
           </select>
         </label>
         <label className={styles.field}>
-          <span className={styles.label}>Which treatment</span>
+          <span className={styles.label}>Which test samples</span>
           <select
             className={styles.select}
             value={plan.treatment ?? ""}
             onChange={(e) => set({ treatment: e.target.value || null })}
           >
-            <option value="">Every treatment vessel</option>
+            <option value="">Every test sample</option>
             {treatments.map((t) => (
               <option key={t} value={t}>
                 {t}
@@ -131,7 +133,7 @@ export function PlanStep({ plan, locked, recipe, setup, onChange }: Props) {
           </select>
         </label>
         <label className={styles.field}>
-          <span className={styles.label}>Smallest effect that matters</span>
+          <span className={styles.label}>Smallest difference that counts</span>
           <input
             className={`${styles.input} num`}
             type="number"
@@ -141,11 +143,11 @@ export function PlanStep({ plan, locked, recipe, setup, onChange }: Props) {
             onChange={(e) => set({ min_effect: e.target.value === "" ? null : Math.max(0, Number(e.target.value)) })}
           />
           <span className={styles.help}>
-            In {unit || "the measurement's unit"}: smaller differences don&apos;t count.
+            In {unit || "the measurement's unit"}: anything smaller is treated as no real difference.
           </span>
         </label>
         <label className={styles.field}>
-          <span className={styles.label}>Checkpoint (h:mm of run time)</span>
+          <span className={styles.label}>Check time (h:mm into the run)</span>
           <input
             className={`${styles.input} num`}
             value={checkpoint}
@@ -155,12 +157,14 @@ export function PlanStep({ plan, locked, recipe, setup, onChange }: Props) {
               set({ checkpoint_s: fromClock(e.target.value) });
             }}
           />
-          <span className={styles.help}>No verdict before it: judging early finds effects that aren&apos;t there.</span>
+          <span className={styles.help}>
+            Argus won&apos;t judge before then: judging too early finds differences that aren&apos;t real.
+          </span>
         </label>
       </div>
 
       <fieldset className={styles.choices}>
-        <legend className={styles.label}>Rival explanations to rule out</legend>
+        <legend className={styles.label}>Other things that could cause a change</legend>
         {rivals.map((r) => (
           <label key={r} className={styles.choice}>
             <input
@@ -184,12 +188,12 @@ export function PlanStep({ plan, locked, recipe, setup, onChange }: Props) {
         }}
       >
         <label className={styles.field}>
-          <span className={styles.hidden}>Another rival explanation</span>
+          <span className={styles.hidden}>Another possible cause</span>
           <input
             className={styles.input}
             value={rival}
             onChange={(e) => setRival(e.target.value)}
-            placeholder="Another rival explanation"
+            placeholder="Another possible cause"
           />
         </label>
         <Button type="submit" disabled={!rival.trim()}>

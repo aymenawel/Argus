@@ -138,7 +138,7 @@ export function SourceStep({ setup, onChange, videoS, onVideoS }: Props) {
                 value={videoS}
                 onChange={(e) => onVideoS(Math.max(0, Number(e.target.value) || 0))}
               />
-              <span className={styles.help}>Seconds into the video: pick a moment where every vessel is in view.</span>
+              <span className={styles.help}>Seconds into the video: pick a moment where every sample is in view.</span>
             </label>
           </div>
         </>

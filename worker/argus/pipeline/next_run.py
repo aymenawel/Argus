@@ -53,7 +53,7 @@ def _next_refs(numbers: NextRunNumbers) -> dict[str, Ref]:
     if numbers.replicates is not None:
         n = numbers.replicates
         refs["next:replicates"] = Ref(
-            "next:replicates", "vessels per condition next run", n, 0.0, "vessels", f"{n} vessels", "next", None, None
+            "next:replicates", "samples per condition next run", n, 0.0, "samples", f"{n} samples", "next", None, None
         )
     if numbers.hours is not None:
         h = numbers.hours
@@ -105,7 +105,7 @@ def _pairs(numbers: NextRunNumbers, refs: RefTable) -> list[tuple[str, str]]:
 
 def _code_body(numbers: NextRunNumbers, refs: RefTable, reason: str) -> dict[str, str]:
     """The suggestion from code's own numbers, when no checked model answer is available."""
-    replicates = f"{numbers.replicates} vessels per condition" if numbers.replicates is not None else "Replicates"
+    replicates = f"{numbers.replicates} samples per condition" if numbers.replicates is not None else "Repeat samples"
     hours_ref = refs.get("next:hours")
     hours = f"Run for {hours_ref.display}" if hours_ref is not None else "Run length"
     shown = (refs.get(f"next:level:{i}") for i in range(1, len(numbers.levels) + 1))
@@ -113,7 +113,7 @@ def _code_body(numbers: NextRunNumbers, refs: RefTable, reason: str) -> dict[str
     parts = [
         f"{replicates}: {numbers.replicates_reason}.",
         f"{hours}: {numbers.hours_reason}.",
-        f"Levels to try: {levels}; {numbers.levels_reason}." if levels else f"Levels: {numbers.levels_reason}.",
+        f"Values to try: {levels}; {numbers.levels_reason}." if levels else f"Values to try: {numbers.levels_reason}.",
     ]
     return {"why": " ".join(parts), "change": "", "watch_for": "", "written_by": "code", "code_reason": reason}
 

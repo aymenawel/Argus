@@ -20,14 +20,14 @@ export function outlineCaption(items: DetectionOutline[]): string {
 }
 
 /** "14 of 145 pictures"; when some were found by pointing SAM at the change or by code, how ("55 by name · 30
- *  pointed · 12 by code"); and, when the object was lost after it was found, "not found in 131 since 11:12". A run
+ *  by pointing · 12 by code"); and, when the object was lost after it was found, "not found in 131 since 11:12". A run
  *  from before SAM's answers were kept, or a bundle published before then, has no coverage: "—". */
 export function coverageLines(c: Coverage | null | undefined, span: number): [string, string | null, string | null] {
   if (!c) return ["—", null, null];
   const found = `${c.found} of ${c.asked} pictures`;
   const ways: [number, string][] = [
     [c.by_name ?? 0, "by name"],
-    [c.pointed ?? 0, "pointed"],
+    [c.pointed ?? 0, "by pointing"],
     [c.by_code ?? 0, "by code"],
   ];
   const how =

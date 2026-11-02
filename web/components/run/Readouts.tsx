@@ -8,13 +8,17 @@ import { linearScale } from "@/lib/scale";
 import type { MeasurementRow, Vessel } from "@/lib/types";
 import { useReadings } from "./RunFrame";
 import styles from "./Readouts.module.css";
+import { roleWord, sentence } from "@/lib/plain";
 
 type Props = { snapshot: RunSnapshot; mainMetric: string };
 
+// "Test: warm", as the chart's legend says it: the factor's name ("water temperature") is the experiment's, not
+// the sample's, and pushed the condition out of a narrow card.
 function condition(v: Vessel): string {
-  if (!v.condition) return v.role === "control" ? "Control" : "Treatment";
-  const { factor, value, unit } = v.condition;
-  return `${factor} ${value}${unit ? ` ${unit}` : ""}`;
+  const role = sentence(roleWord(v.role));
+  if (!v.condition) return role;
+  const { value, unit } = v.condition;
+  return `${role}: ${value}${unit ? ` ${unit}` : ""}`;
 }
 
 /** The main measurement's course up to t, as a tiny line (the shape, not a number). */
@@ -57,7 +61,7 @@ export function Readouts({ snapshot, mainMetric }: Props) {
             onClick={() => playhead.selectVessel(on ? null : v.id)}
           >
             <span className={styles.key}>
-              <span>Vessel {v.label}</span>
+              <span>Sample {v.label}</span>
               <span className={styles.condition}>{condition(v)}</span>
             </span>
             <span className={`${styles.value} num`}>{value ? value.display : "—"}</span>

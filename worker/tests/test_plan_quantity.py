@@ -78,8 +78,8 @@ def test_the_prompts_state_a_fitted_prediction_in_its_own_terms():
 
     assert "reads lower than the controls" in block("level")
     half = block("half_time")
-    assert "half-way time" in half and "sooner" in half and "reads lower" not in half
-    assert "fitted rate" in block("rate")
+    assert "time to get half-way" in half and "sooner" in half and "reads lower" not in half
+    assert "speed of" in block("rate")
 
 
 @pytest.mark.parametrize("name", ["setup/describe.md", "setup/recipe.md"])

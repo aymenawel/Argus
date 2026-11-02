@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { ApiError, lockPlan, startRun } from "@/lib/api";
 import type { Plan, PlanDraft, Setup } from "@/lib/types";
 import styles from "./Step.module.css";
+import { metricWords, roleWord } from "@/lib/plain";
 
 type Props = {
   experimentId: string;
@@ -43,16 +44,17 @@ export function StartStep({ experimentId, setup, plan, locked, saving, unit, onL
             : `${source?.paths.length ?? 0} video file(s) · time ×${setup.time_scale}`}
         </li>
         <li className={styles.item}>
-          <strong>Vessels</strong>
+          <strong>Samples</strong>
           {setup.vessels
-            .map((v) => `${v.label} ${v.role ?? "?"}${v.condition ? ` (${v.condition.value})` : ""}`)
+            .map((v) => `${v.label} ${v.role ? roleWord(v.role) : "?"}${v.condition ? ` (${v.condition.value})` : ""}`)
             .join(" · ")}
         </li>
         <li className={styles.item}>
           <strong>Prediction</strong>
-          {plan.treatment ?? "every treatment vessel"} reads {plan.direction} than the controls on {plan.metric}
-          {plan.min_effect !== null ? `, by at least ${plan.min_effect} ${unit}` : ""}, from{" "}
-          {plan.checkpoint_s !== null ? `${inWords(plan.checkpoint_s)} of run time` : "?"}
+          {plan.treatment ?? "every test sample"} reads {plan.direction} than the controls on{" "}
+          {plan.metric ? metricWords(plan.metric) : "?"}
+          {plan.min_effect !== null ? `, by at least ${plan.min_effect} ${unit}` : ""}, checked from{" "}
+          {plan.checkpoint_s !== null ? `${inWords(plan.checkpoint_s)} into the run` : "?"}
         </li>
       </ul>
 

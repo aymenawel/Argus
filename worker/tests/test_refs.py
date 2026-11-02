@@ -125,7 +125,7 @@ def test_latest_reading_change_and_difference_carry_their_uncertainty(db, two_by
     measured = hypot(0.05, 0.05) / 2
     assert diff.value == pytest.approx(25.6 - statistics.mean(controls))
     assert diff.uncertainty == pytest.approx(hypot(0.06, hypot(spread, measured)))
-    assert diff.display.endswith("dE00") and "diff:A:delta_e" not in refs  # controls get no difference
+    assert diff.display.endswith("ΔE") and "diff:A:delta_e" not in refs  # controls get no difference
     stored = {d.id: d for d in derived_for_run(db, run.id)}
     assert set(diff.evidence) <= set(stored) and stored[diff.evidence[0]].kind == "difference"
     assert stored[change.evidence[0]].inputs == [
@@ -152,10 +152,11 @@ def test_plan_values_events_and_time_are_refs(db, two_by_two):
     )
     add_event(db, run.id, vessel_id=None, t_start=130.0, kind=EventKind.CHANGE, source="watcher", detail={})
     refs = build_refs(db, run.id, 600.0, recipe=COLOUR, plan=PLAN)
-    assert refs.get("plan:min_effect").display == "5 dE00" and refs.get("plan:checkpoint").display == "5:00"
+    assert refs.get("plan:min_effect").display == "5 ΔE" and refs.get("plan:checkpoint").display == "5:00"
     assert refs.get("run:t").display == "10:00"
     events = [refs.get(i) for i in refs.ids() if i.startswith("ev:")]
     assert [e.display for e in events] == ["2:05"]  # watcher changes are too many to cite one by one
+    assert events[0].label == "Time a set threshold was crossed"  # never "the rule event" (D-95)
     assert events[0].evidence[0].startswith("evt_")
 
 
@@ -229,10 +230,10 @@ def test_a_control_lost_after_its_last_reading_is_left_out_of_the_mean(db, two_b
     lost = refs.get("m:A:delta_e")
     assert lost.kind == "last_reading" and lost.value == 4.0
     assert lost.label == (
-        "Vessel A (control, room): delta_e at its last reading, before SAM stopped finding the liquid"
+        "Sample A (control, room): colour change at its last reading, before SAM stopped finding the liquid"
     )
     change = refs.get("chg:A:delta_e").label
-    assert change == "Vessel A (control, room): delta_e change from its first reading to its last"
+    assert change == "Sample A (control, room): how far colour change moved from its first reading to its last"
     assert refs.get("diff:C:delta_e").value == pytest.approx(25.6 - 5.0)  # B alone
     assert refs.get("m:B:delta_e").kind == "measurement"
 
@@ -268,7 +269,7 @@ def test_the_missed_event_ref_names_the_concept_and_vessel(db, two_by_two):
     missed(db, run, vessels[0], t=650.0)
     refs = build_refs(db, run.id, 700.0, recipe=COLOUR, plan=PLAN)
     [event] = [refs.get(i) for i in refs.ids() if i.startswith("ev:")]
-    assert event.label == "Time SAM stopped finding the liquid in Vessel A (control, room)" and event.t == 650.0
+    assert event.label == "Time SAM stopped finding the liquid in Sample A (control, room)" and event.t == 650.0
 
 
 def test_a_lost_control_is_not_counted_as_measured(db, two_by_two):
@@ -299,7 +300,7 @@ def test_a_lost_treatment_is_named_in_the_replicates_check(db, two_by_two):
     refs = build_refs(db, run.id, 700.0, recipe=COLOUR, plan=PLAN)
     _, checks = ceiling(verdict_inputs(db, run, refs, plan=PLAN, t=700.0, recipe=COLOUR))
     replicates = next(c for c in checks if c.id == "replicates")
-    assert replicates.text.startswith("1 of 2 treatment vessels") and "SAM stopped finding" in replicates.text
+    assert replicates.text.startswith("1 of 2 test samples") and "SAM stopped finding" in replicates.text
 
 
 def test_a_flickering_vessel_takes_one_event_ref_not_all_of_them(db, two_by_two):
@@ -387,4 +388,4 @@ def test_the_verdict_checks_read_as_sentences(db, two_by_two):
     _, checks = ceiling(verdict_inputs(db, run, refs, plan=PLAN, t=700.0, recipe=COLOUR))
     assert all(c.text[0].isupper() or c.text[0].isdigit() for c in checks), [c.text for c in checks]
     assert not [c.text for c in checks if "(s)" in c.text]
-    assert any(c.text.startswith("2 control vessels to compare against") for c in checks)
+    assert any(c.text.startswith("2 control samples to compare against") for c in checks)

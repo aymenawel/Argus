@@ -6,7 +6,7 @@ Use these words consistently in code, UI and docs.
 | --- | --- |
 | **Experiment** | One configured study with a locked plan, a recipe and one or more runs |
 | **Run** | One period of watching (one Ax round when optimizing) |
-| **Vessel** | One jar, well, pot, dish or region being measured; has a role: control, treatment or replicate |
+| **Vessel** | One jar, well, pot, dish or region being measured; has a role: control, treatment or replicate. On screen it is a **sample**, and a treatment a **test** sample (D-95) |
 | **Replicate** | An independent vessel under the same condition. Repeated frames of one vessel are **not** replicates |
 | **Recipe** | Config for an experiment type: SAM concepts, measurements, curve, events, watcher preset, method card |
 | **Method card** | Short prompt file per recipe, loaded only for that recipe |
@@ -46,3 +46,7 @@ Use these words consistently in code, UI and docs.
 | **Half-way time** | When a vessel's fitted curve reaches half its plateau, in hours with ±; "not reached" when that is after the last reading |
 | **Plateau** | The level a fitted growth curve levels off at |
 | **Next run** | Argus's suggestion after a run: vessels per condition, run length and, for a numeric factor, levels to try; computed in code, explained by the model, never started by Argus (D-80) |
+
+## Plain words on screen (D-95)
+
+The code and these docs keep the terms above; pages, notes, verdicts and videos say: sample (vessel), test sample (treatment), colour change in ΔE (delta_e in dE00), normal wobble (noise floor), check time (checkpoint), other possible causes (rival explanations), repeat samples (replicates), levels off at (plateau), S-shaped curve (logistic), time to get half-way (half-way time), speed (rate), Unclear (Inconclusive), a hand or object at the samples (intervention), a set threshold crossed (rule event), a picture SAM couldn't outline (failed segmentation). The maps are `worker/argus/plain.py` and `web/lib/plain.ts`.

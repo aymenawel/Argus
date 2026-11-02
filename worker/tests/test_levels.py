@@ -116,7 +116,7 @@ def test_ax_suggests_levels_inside_the_bounds():
 def test_a_categorical_factor_gets_no_levels(db):
     run, plan = run_with(db, {"A": "rye", "B": "pearl millet", "C": "pearl millet"}, {"A": 20, "B": 30, "C": 31})
     numbers = next_run_numbers(db, run, RECIPE, plan)
-    assert numbers.levels == [] and "isn't numeric" in numbers.levels_reason
+    assert numbers.levels == [] and "not a number" in numbers.levels_reason
 
 
 def test_a_numeric_factor_gets_three_levels_inside_the_bounds(db):
@@ -136,7 +136,7 @@ def test_a_failing_level_search_says_why(db, monkeypatch):
     monkeypatch.setattr(next_run, "suggest_levels", broken)
     run, plan = run_with(db, {"A": 20.0, "B": 30.0, "C": 40.0}, {"A": 20, "B": 30, "C": 25})
     numbers = next_run_numbers(db, run, RECIPE, plan)
-    assert numbers.levels == [] and numbers.levels_reason == "the level search failed: no model fitted"
+    assert numbers.levels == [] and numbers.levels_reason == "the search for values to try failed: no model fitted"
     assert numbers.hours is not None or numbers.hours_reason  # the rest of the suggestion stands
 
 

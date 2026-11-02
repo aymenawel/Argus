@@ -57,6 +57,7 @@
               "early_stopping",
               "plan_drift",
               "over_claiming",
+              "plain_words",
               "numbers"
             ]
           },

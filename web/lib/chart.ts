@@ -1,4 +1,5 @@
 // Scales and ticks for the Results page's plain SVG charts (no chart library, spec phase 4 §5).
+import { unitLabel } from "./plain.ts";
 
 /** Maps [d0, d1] onto [r0, r1] (r0 > r1 for a y axis that grows upward); an empty domain maps to r0. */
 export function linearScale(domain: [number, number], range: [number, number]): (x: number) => number {
@@ -24,13 +25,18 @@ export function niceTicks(min: number, max: number, count: number): number[] {
 /** "21.4 ± 0.6 h": the ± rounded to one significant digit (two when it starts with 1), the value to the same place
  * (KB 08); a ± of 0 shows the value as given. */
 export function formatPair([value, uncertainty]: [number, number], unit: string): string {
-  if (!(uncertainty > 0)) return `${Number(value.toPrecision(6))} ${unit}`;
+  if (!(uncertainty > 0)) return `${Number(value.toPrecision(6))} ${unitLabel(unit)}`;
   const exponent = Math.floor(Math.log10(uncertainty));
   const leading = uncertainty / 10 ** exponent;
   const place = leading < 2 ? exponent - 1 : exponent; // the decimal position to round both numbers to
   const round = (x: number) => Math.round(x / 10 ** place) * 10 ** place;
   const decimals = Math.max(0, -place);
-  return `${round(value).toFixed(decimals)} ± ${round(uncertainty).toFixed(decimals)} ${unit}`;
+  return `${round(value).toFixed(decimals)} ± ${round(uncertainty).toFixed(decimals)} ${unitLabel(unit)}`;
+}
+
+/** A time in hours with its ±, in minutes when it is under an hour: "3.77 ± 0.03 min", not "0.0628 ± 0.0005 h". */
+export function formatDuration([hours, uncertainty]: [number, number]): string {
+  return hours < 1 ? formatPair([hours * 60, uncertainty * 60], "min") : formatPair([hours, uncertainty], "h");
 }
 
 export type Marker = "circle" | "square" | "diamond";
@@ -52,7 +58,7 @@ export function conditionGroups(vessels: Grouped[]): Map<string, SeriesGroup> {
     if (groups.has(key)) continue;
     const control = v.role === "control";
     const treatments = [...groups.values()].filter((g) => !g.control).length;
-    const name = control ? "Control" : "Treatment";
+    const name = control ? "Control" : "Test";
     groups.set(key, {
       label: v.condition ? `${name}: ${v.condition.value}` : name,
       control,

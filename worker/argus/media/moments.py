@@ -14,7 +14,7 @@ from dataclasses import dataclass, field, replace
 from typing import Literal
 
 from argus.domain import EventKind
-from argus.measure.uncertainty import format_measurement
+from argus.measure.uncertainty import format_duration
 from argus.media.layout import condition_groups, group_key, note_text
 from argus.media.records import RunRecords
 
@@ -25,19 +25,19 @@ PRE_S, POST_S = 2.0, 3.0
 MIN_S, MAX_S = 30.0, 60.0
 RANK: dict[str, int] = {"intervention": 0, "quality": 0, "half_way": 1, "checkpoint": 2, "change": 3}
 KIND_WORDS = {
-    "intervention": "Intervention",
-    "quality": "Quality flag",
+    "intervention": "Researcher's action",
+    "quality": "Picture problem",
     "half_way": "Half-way",
-    "checkpoint": "Checkpoint",
+    "checkpoint": "Check-in",
     "change": "Change",
 }
 VERDICT_WORDS = {
     "SUPPORTED": "Supported",
     "NOT_SUPPORTED": "Not supported",
-    "INCONCLUSIVE": "Inconclusive",
+    "INCONCLUSIVE": "Unclear",
     "TOO_EARLY": "Too early",
 }
-QUALITY = {EventKind.QUALITY: "Quality flag", EventKind.CAMERA_MOVED: "Camera moved"}
+QUALITY = {EventKind.QUALITY: "Picture problem", EventKind.CAMERA_MOVED: "Camera moved"}
 
 
 @dataclass(frozen=True)
@@ -91,7 +91,7 @@ def collect_moments(records: RunRecords) -> list[Moment]:
         fitted.sort(key=lambda v: v["fit"]["half_time_h"][0])
         vessel = fitted[(len(fitted) - 1) // 2]  # the lower median: a vessel's own fit, no new number
         value, uncertainty = vessel["fit"]["half_time_h"]
-        caption = f"Half-way: {vessel['label']} ({group.label}) · {format_measurement(value, uncertainty, 'h')}"
+        caption = f"Sample {vessel['label']} ({group.label}) got half-way in {format_duration(value, uncertainty)}"
         moments.append(Moment(value * 3600, "half_way", caption))
 
     if records.verdict is not None:

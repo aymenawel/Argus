@@ -68,9 +68,9 @@ def test_gaps_in_readings_stay_gaps():
 @pytest.mark.parametrize(
     "t, start, text",
     [
-        (84600.0, None, "t 23.5 h"),
-        (1500.0, None, "t 25 min"),
-        (1500.0, datetime(2026, 11, 2, 14, 0, tzinfo=UTC), "t 25 min · 14:25"),
+        (84600.0, None, "23.5 h in"),
+        (1500.0, None, "25 min in"),
+        (1500.0, datetime(2026, 11, 2, 14, 0, tzinfo=UTC), "25 min in · 14:25"),
     ],
 )
 def test_clock_text(t, start, text):
@@ -82,6 +82,11 @@ def test_the_caption_is_the_stored_note_in_effect():
     assert caption_at(notes, 5) is None
     assert caption_at(notes, 20) == "Glass B darkened."
     assert caption_at(notes, 60) == "Dye added"
+
+
+def test_a_caption_does_not_start_with_the_field_name():
+    """Notes saved before the worker dropped the model's echoed field name still carry it (D-95)."""
+    assert caption_at([note(10, "ai", {"observation": "observation: Glass B darkened."})], 20) == "Glass B darkened."
 
 
 def test_the_palette_matches_the_web_tokens():
@@ -112,4 +117,4 @@ def test_condition_labels_read_like_the_results_legend():
         {"role": "control", "condition": None},
         {"role": "treatment", "condition": {"factor": "salt", "value": 2.5, "unit": "g/L"}},
     ]
-    assert [g.label for g in condition_groups(vessels).values()] == ["Control", "Treatment: 40", "Treatment: 2.5"]
+    assert [g.label for g in condition_groups(vessels).values()] == ["Control", "Test: 40", "Test: 2.5"]

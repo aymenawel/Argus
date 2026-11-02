@@ -6,7 +6,7 @@ import styles from "./Stepper.module.css";
 export const STEP_NAMES: Record<StepId, string> = {
   describe: "Describe",
   source: "Source",
-  vessels: "Vessels",
+  vessels: "Samples",
   roles: "Roles",
   check: "Check",
   plan: "Plan",

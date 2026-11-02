@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from argus.claims.refs import CODE_OUTLINED, RefTable
+from argus.plain import metric_words
 
 
 def fallback_note(level: str, refs: RefTable, *, reason: str) -> dict:
@@ -16,7 +17,7 @@ def fallback_note(level: str, refs: RefTable, *, reason: str) -> dict:
         now = "at its last reading, before SAM stopped finding it" if lost else "now"
         coded = latest is not None and latest.label.endswith(CODE_OUTLINED)  # SAM found nothing; code drew it (D-93)
         parts = (
-            [f"{latest.display} {now}" + (" (outlined by code, not SAM)" if coded else "")]
+            [f"{latest.display} {now}" + (" (outlined by Argus's own code, not SAM)" if coded else "")]
             if latest is not None
             else []
         )
@@ -24,7 +25,7 @@ def fallback_note(level: str, refs: RefTable, *, reason: str) -> dict:
             parts.append(
                 f"{change.display} {'from its first reading to its last' if lost else 'since its first reading'}"
             )
-        sentences.append(f"Vessel {label}: {metric} " + ", ".join(parts) + ".")
+        sentences.append(f"Sample {label}: {metric_words(metric)} " + ", ".join(parts) + ".")
     return {
         "level": level,
         "observation": " ".join(sentences) if sentences else "No readings yet.",

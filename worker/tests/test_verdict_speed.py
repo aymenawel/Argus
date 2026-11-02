@@ -113,7 +113,7 @@ async def test_clearly_faster_treatments_allow_supported(db, exp):
     )
     verdict = await judge(db, run)
     assert VerdictLevel.SUPPORTED in verdict.allowed
-    assert check(verdict, "fits")["ok"] is True and "half-way times" in check(verdict, "fits")["text"]
+    assert check(verdict, "fits")["ok"] is True and "time to get half-way" in check(verdict, "fits")["text"]
     assert check(verdict, "noise") is None
     assert check(verdict, "effect:C")["ok"] is True and "h" in check(verdict, "effect:C")["text"]
 
@@ -142,7 +142,7 @@ async def test_very_different_plateaus_are_named(db, exp):
     run = run_with(db, exp, {"A": logistic(10, 22), "B": logistic(10, 22), "C": logistic(5, 14), "D": logistic(10, 14)})
     verdict = await judge(db, run)
     plateaus = check(verdict, "plateaus")
-    assert plateaus is not None and plateaus["ok"] is None and "plateaus differ" in plateaus["text"]
+    assert plateaus is not None and plateaus["ok"] is None and "level off more than" in plateaus["text"]
 
 
 @pytest.mark.anyio
@@ -164,7 +164,9 @@ def test_the_smallest_effect_is_in_the_judged_quantitys_unit(db, exp, quantity, 
     ref = refs.get("plan:min_effect")
     assert ref is not None and ref.unit == unit
     if unit != "count":  # a count prints bare
-        assert ref.display.endswith(f" {unit}")
+        from argus.plain import unit_label
+
+        assert ref.display.endswith(f" {unit_label(unit)}")  # as people write it (D-95)
 
 
 @pytest.mark.anyio
@@ -181,7 +183,7 @@ async def test_a_dish_with_no_half_way_time_caps_the_verdict(db, exp, label, cur
     verdict = await judge(db, run_with(db, exp, curves))
     assert verdict.allowed == [VerdictLevel.INCONCLUSIVE]
     named = check(verdict, f"fit:{label}")
-    assert named is not None and named["ok"] is False and "Inconclusive" in named["text"]
+    assert named is not None and named["ok"] is False and "Unclear" in named["text"]
 
 
 def test_the_noise_floor_does_not_judge_fitted_effects():
@@ -251,11 +253,11 @@ async def test_the_model_is_told_which_dish_has_no_fit(db, exp):
     reasoner = answers()
     await run_verdict(db, EventBroker(), SETTINGS, run, recipe=RECIPE, reasoner=reasoner)
     checks = next(block for block in reasoner.tasks[0].variable if block.startswith("CHECKS"))
-    assert "No fit for pg1-1" in checks
+    assert "No curve fits sample pg1-1" in checks
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize(("quantity", "words"), [("half_time", "half-way times"), ("rate", "rates")])
+@pytest.mark.parametrize(("quantity", "words"), [("half_time", "times to get half-way"), ("rate", "speeds")])
 async def test_the_plateau_note_names_the_judged_quantity_and_unit(db, exp, quantity, words):
     curves = {"A": logistic(10, 22), "B": logistic(10, 22), "C": logistic(5, 14), "D": logistic(10, 14)}
     run = run_with(db, exp, curves, quantity=quantity, unit="mm")
@@ -264,7 +266,7 @@ async def test_the_plateau_note_names_the_judged_quantity_and_unit(db, exp, quan
     text = check(verdict, "plateaus")["text"]
     assert words in text and " mm)" in text
     checks = next(block for block in reasoner.tasks[0].variable if block.startswith("CHECKS"))
-    line = next(line for line in checks.splitlines() if "plateaus" in line)
+    line = next(line for line in checks.splitlines() if "level off" in line)
     assert words in line and not any(c.isdigit() for c in line)
     assert all(word not in line for word in ("quarter", "halves")), line  # words the claim checker rejects
 
@@ -275,8 +277,8 @@ async def test_controls_without_a_fit_are_not_called_missing(db, exp):
     flat = np.zeros_like(TIMES_H)
     verdict = await judge(db, run_with(db, exp, {"A": flat, "B": flat, "C": logistic(10, 14), "D": logistic(10, 14)}))
     control, replicates = check(verdict, "control")["text"], check(verdict, "replicates")["text"]
-    assert "no control vessel" not in control.lower() and "2 control" in control and "fitted" in control
-    assert "fitted" in replicates and "measured" not in replicates
+    assert "no control sample" not in control.lower() and "2 control" in control and "fitted" in control
+    assert "curve" in replicates and "measured" not in replicates
     assert verdict.allowed == [VerdictLevel.INCONCLUSIVE]
 
 

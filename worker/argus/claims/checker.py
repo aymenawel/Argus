@@ -19,6 +19,7 @@ from argus.domain import VerdictLevel
 TOKEN = re.compile(r'\{ref:([^{}"\n]+)\}')
 # Model and product names carry digits that are not claims; they are taken out before the digit check.
 MODEL_NAMES = ("Muse Wonder 1.0", "Muse Spark 1.3", "muse-wonder-1.0", "muse-spark-1.3", "SAM 3.1", "sam-3.1")
+SQUARED_UNIT = re.compile(r"(?<=[mc]m)²")  # mm², cm²: a unit as the pages write it (D-95), not an amount
 NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
 VESSEL_REFS = ("m:", "chg:", "diff:")  # ref ids that carry a vessel's label: m:<label>:<metric>
 COUNTING = (
@@ -98,6 +99,7 @@ def check_text_fields(data: dict, fields: Sequence[str], refs: RefTable) -> list
                 bare = bare.replace(name, " ")
             for label in names:  # a whole vessel label only: "pg1-23" is not "pg1-2"
                 bare = label.sub(" ", bare)
+            bare = SQUARED_UNIT.sub(" ", bare)
             for number in NUMBER.findall(bare):
                 reasons.append(f"number outside a ref in {path}: '{number}'")
             for char in sorted({c for c in bare if c.isnumeric() and not c.isascii()}):  # ½, Ⅲ, other scripts' digits
@@ -135,11 +137,21 @@ def render(text: str, refs: RefTable) -> str:
     return TOKEN.sub(display, text)
 
 
+def unlabelled(text: str, name: str) -> str:
+    """The model sometimes starts a field with the field's own name ("Observation: the glass..."): the stored note keeps
+    the sentence (the raw answer stays in the note attempts)."""
+    label = re.match(rf"\s*{name.replace('_', '[ _]')}\s*:\s*", text, re.IGNORECASE)
+    if label is None:
+        return text
+    rest = text[label.end() :]
+    return rest[:1].upper() + rest[1:]
+
+
 def render_note(data: dict, refs: RefTable) -> dict:
     """A checked note's body as it is stored and shown: every text field rendered."""
     body = dict(data)
     for name in ("observation", "interpretation", "confidence_reason", "next_step", "question_for_researcher"):
         if isinstance(body.get(name), str):
-            body[name] = render(body[name], refs)
+            body[name] = render(unlabelled(body[name], name), refs)
     body["rival_explanations"] = [render(r, refs) for r in body.get("rival_explanations") or []]
     return body

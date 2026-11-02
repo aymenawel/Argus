@@ -236,7 +236,11 @@ async def segment_with_retries(
             if refused:
                 if not ctx.cap_reported:
                     ctx.cap_reported = True
-                    detail = {"spent_usd": round(spent, 4), "cap_usd": cap, "message": "segmentation paused: spend cap"}
+                    detail = {
+                        "spent_usd": round(spent, 4),
+                        "cap_usd": cap,
+                        "message": "SAM's outlining paused: the spending limit was reached",
+                    }
                     await ctx.event(t, EventKind.SPEND, "pipeline", detail)
                     ctx.publish("spend", {"t": t, "spent_usd": round(spent, 4), "cap_usd": cap})
                 return Skipped("cap")
@@ -494,7 +498,7 @@ async def analyze_frame(
         if not ctx.calibration_reported:
             ctx.calibration_reported = True
             problem = ctx.calibration_problem or "no Argus Card or ruler in view"
-            detail = {"message": f"{problem}: frames are recorded but not measured until a scale is found"}
+            detail = {"message": f"{problem}: pictures are recorded but not measured until a scale is found"}
             await ctx.event(t, EventKind.NO_CALIBRATION, "pipeline", detail, frame_ids=[frame_id])
         await asyncio.to_thread(mark_frame_analyzed, ctx.db, frame_id)
         ctx.publish("frame_analyzed", {"frame_id": frame_id, "t": t, "quality_flags": list(quality_flags)})

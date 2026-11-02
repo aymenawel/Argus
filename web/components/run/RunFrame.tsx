@@ -26,7 +26,7 @@ export function useReadings(snapshot: RunSnapshot, mainMetric: string, t: number
 
 function calibrationText(snapshot: RunSnapshot): string {
   const cal = snapshot.view.calibration;
-  if (!cal) return "No calibration";
+  if (!cal) return "No scale yet";
   const name = cal.card === "ruler" ? "Ruler" : cal.card === "dish" ? "Dish rim" : "Card";
   return `${name} · ${(1 / cal.mm_per_px).toFixed(2)} px/mm ± ${(cal.rel_uncertainty * 100).toFixed(1)}%`;
 }
@@ -81,7 +81,7 @@ export function RunFrame({ snapshot, source, mainMetric }: Props) {
             onLoad={(e) => setSize(originalSize(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight))}
           />
         ) : (
-          <p className={styles.empty}>No analyzed frame yet</p>
+          <p className={styles.empty}>No picture measured yet</p>
         )}
 
         {size && (
@@ -125,7 +125,7 @@ export function RunFrame({ snapshot, source, mainMetric }: Props) {
                 // label sat on the dish above and seemed to name it.
                 style={{ left: `${left}%`, top: `max(48px, calc(${top}% + 8px))` }}
                 aria-pressed={on}
-                aria-label={`Vessel ${v.label}${value ? `, ${value.display}` : ""}`}
+                aria-label={`Sample ${v.label}${value ? `, ${value.display}` : ""}`}
                 onClick={() => playhead.selectVessel(on ? null : v.id)}
               >
                 <b>{v.label}</b>

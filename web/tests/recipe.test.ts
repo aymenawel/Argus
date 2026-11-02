@@ -107,5 +107,5 @@ test("the smallest effect is in the unit of what the plan compares", () => {
   assert.equal(quantityUnit(null, "count"), "count");
   assert.equal(quantityUnit("level", "mm"), "mm");
   assert.equal(quantityUnit("half_time", "count"), "h");
-  assert.equal(quantityUnit("rate", "count"), "count/h");
+  assert.equal(quantityUnit("rate", "count"), "count per hour");
 });

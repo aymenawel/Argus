@@ -17,6 +17,7 @@ from argus.analyze.next_run import pooled_sd
 from argus.analyze.noise import noise_floor, wobble_floor
 from argus.domain import DerivedDraft, Measurement, Plan, Role, RunEvent, Vessel
 from argus.measure.uncertainty import format_measurement
+from argus.plain import event_words, metric_words, role_word
 from argus.recipes.model import Recipe
 from argus.segment.change import CODE
 from argus.storage.db import Database
@@ -33,6 +34,7 @@ NOTABLE = frozenset(
 )
 # Rule 3 of the scientific rules quotes "outlined by code": a reading taken on the change since the start, not on SAM,
 # and anything computed from such readings (a change, a difference, a fit, a noise floor).
+NOISE_WORDS = "Normal wobble of"  # a noise floor's label starts so (D-95); validation finds it by these words
 CODE_OUTLINED = ", outlined by code from the change since the start, not by SAM"
 CODE_INPUTS = ", partly from readings outlined by code, not by SAM"
 MAX_EVENT_REFS = 20
@@ -81,11 +83,11 @@ def _quadrature(*values: float) -> float:
 
 def _vessel_label(vessel: Vessel) -> str:
     condition = f", {vessel.condition.value}" if vessel.condition else ""
-    return f"Vessel {vessel.label} ({vessel.role.value}{condition})"
+    return f"Sample {vessel.label} ({role_word(vessel.role)}{condition})"
 
 
 # A plan judged on a fitted quantity (D-78): its per-vessel ref, its difference ref, its words.
-FITTED = {"half_time": ("t50", "dt50", "half-way time"), "rate": ("rate", "drate", "rate")}
+FITTED = {"half_time": ("t50", "dt50", "time to get half-way"), "rate": ("rate", "drate", "speed")}
 
 
 def _fitted(
@@ -110,7 +112,7 @@ def _fitted(
         draft = DerivedDraft(
             t=t,
             kind="fit",
-            label=f"{_vessel_label(vessel)}: {metric} {words} (fitted {curve} curve)",
+            label=f"{_vessel_label(vessel)}: {metric_words(metric)}, {words} (from the curve fitted to its readings)",
             value=pair[0],
             uncertainty=pair[1],
             unit="h" if quantity == "half_time" else f"{last.unit}/h",
@@ -139,7 +141,7 @@ def _fitted(
         difference = DerivedDraft(
             t=t,
             kind="difference",
-            label=f"{_vessel_label(vessel)}: {metric} {words} minus the controls' mean",
+            label=f"{_vessel_label(vessel)}: {metric_words(metric)}, {words}, minus the controls' average",
             value=mine.value - mean,
             uncertainty=_quadrature(max(mine.uncertainty, between), u_mean),
             unit=mine.unit,
@@ -174,7 +176,8 @@ def _measurement_ref(
 ) -> Ref:
     """A vessel's latest reading: of now, or (`lost`) its last before SAM stopped finding that concept (D-91); and
     (`coded`) measured on an outline code drew from the change since the start, SAM having found nothing (D-93)."""
-    now = f"{metric} now" if lost is None else f"{metric} at its last reading, before SAM stopped finding the {lost}"
+    words = metric_words(metric)
+    now = f"{words} now" if lost is None else f"{words} at its last reading, before SAM stopped finding the {lost}"
     return Ref(
         id=f"m:{vessel.label}:{metric}",
         label=f"{_vessel_label(vessel)}: {now}" + (CODE_OUTLINED if coded else ""),
@@ -223,7 +226,7 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
                 change = DerivedDraft(
                     t=t,
                     kind="change",
-                    label=f"{_vessel_label(vessel)}: {metric} change {since}",
+                    label=f"{_vessel_label(vessel)}: how far {metric_words(metric)} moved {since}",
                     value=last.value - first.value,
                     uncertainty=_quadrature(last.uncertainty, first.uncertainty),
                     unit=last.unit,
@@ -253,7 +256,7 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
                 difference = DerivedDraft(
                     t=t,
                     kind="difference",
-                    label=f"{_vessel_label(vessel)}: {metric} minus the controls' mean",
+                    label=f"{_vessel_label(vessel)}: {metric_words(metric)} minus the controls' average",
                     value=mine.value - mean,
                     uncertainty=_quadrature(mine.uncertainty, u_mean),
                     unit=mine.unit,
@@ -265,8 +268,8 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
             noise = DerivedDraft(
                 t=t,
                 kind="noise_floor",
-                label=f"Noise floor of {metric} (median over vessels"
-                + (", some from the wobble of all their readings)" if wobbled else ")"),
+                label=f"{NOISE_WORDS} {metric_words(metric)}: how far readings jitter when nothing changes (median over"
+                + (" samples, some from the wobble of all their readings)" if wobbled else " samples)"),
                 value=statistics.median(f for f, _ in floors),
                 uncertainty=0.0,
                 unit=next(iter(latest.values())).unit,
@@ -312,9 +315,9 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
     ][-MAX_EVENT_REFS:]
     names = {v.id: _vessel_label(v) for v in vessels}
     for n, event in enumerate(notable, start=1):
-        label = f"Time of the {event.kind} event"
+        label = f"Time {event_words(event.kind)}"
         if event.kind == "missed":
-            where = names.get(event.vessel_id, "a vessel")
+            where = names.get(event.vessel_id, "a sample")
             label = f"Time SAM stopped finding the {event.detail.get('concept')} in {where}"
         refs[f"ev:{n}"] = Ref(
             id=f"ev:{n}",
@@ -338,7 +341,7 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
         if plan.min_effect is not None:
             refs["plan:min_effect"] = Ref(
                 id="plan:min_effect",
-                label="The plan's smallest effect that matters",
+                label="The smallest difference the plan counts as real",
                 value=plan.min_effect,
                 uncertainty=0.0,
                 unit=unit,
@@ -350,7 +353,7 @@ def build_refs(db: Database, run_id: str, t: float, *, recipe: Recipe, plan: Pla
         if plan.checkpoint_s is not None:
             refs["plan:checkpoint"] = Ref(
                 id="plan:checkpoint",
-                label="The plan's checkpoint (run time)",
+                label="The plan's check time (run time)",
                 value=plan.checkpoint_s,
                 uncertainty=0.0,
                 unit="s",

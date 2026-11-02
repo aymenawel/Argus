@@ -7,7 +7,7 @@ import pytest
 
 from argus.config import REPO_ROOT, load_settings
 from argus.domain import Plan, Verdict, VerdictLevel
-from argus.measure.uncertainty import format_measurement
+from argus.measure.uncertainty import format_duration
 from argus.media.moments import (
     END_S,
     MIN_S,
@@ -62,7 +62,7 @@ def test_moments_come_only_from_stored_records(records):
     assert ("change", "Change detected: B") in [(x.kind, x.caption) for x in moments]
     stored = {e.detail.get("message") for e in records.events} | {n.body.get("text") for n in records.notes}
     for moment in moments:
-        assert moment.caption in stored or moment.caption.startswith(("Change detected: ", "Half-way: ")), moment
+        assert moment.caption in stored or moment.caption.startswith(("Change detected: ", "Sample ")), moment
 
 
 def test_half_way_moments_name_the_median_vessel_of_each_condition(records):
@@ -71,7 +71,7 @@ def test_half_way_moments_name_the_median_vessel_of_each_condition(records):
     value, uncertainty = fit["half_time_h"]
     half_way = [x for x in collect_moments(records) if x.kind == "half_way"]
     assert (
-        Moment(value * 3600, "half_way", f"Half-way: B (Treatment: 40) · {format_measurement(value, uncertainty, 'h')}")
+        Moment(value * 3600, "half_way", f"Sample B (Test: 40) got half-way in {format_duration(value, uncertainty)}")
         in half_way
     )
 
@@ -136,9 +136,9 @@ def test_title_and_end_cards(records):
         f"Prediction: {DRAFT.prediction}",
         "Plan locked Nov 2, 2026",
     ]
-    assert end_lines(judged) == ["Verdict: Inconclusive", "A check that failed."]
+    assert end_lines(judged) == ["Verdict: Unclear", "A check that failed."]
     open_only = replace(records, verdict=verdict(records, checks[:2]))
-    assert end_lines(open_only) == ["Verdict: Inconclusive", "A check still open."]
+    assert end_lines(open_only) == ["Verdict: Unclear", "A check still open."]
 
 
 def test_a_hand_in_view_is_a_quality_moment(db, records):
