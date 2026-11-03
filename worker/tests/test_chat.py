@@ -10,7 +10,7 @@ from argus.pipeline.chat import ChatRefused, ask_chat
 from argus.reason import ReasonError
 from argus.recipes.loader import load_all
 from argus.storage import repos
-from tests.api_client import logged_functions
+from tests.api_client import api_client, logged_functions
 from tests.reasoning import FakeReasoner, call
 from tests.records import finished_run
 
@@ -127,3 +127,47 @@ async def test_the_last_six_messages_are_the_history(db, tmp_path):
     await ask(db, tmp_path, reasoner, run=run)
     history = next(part for part in reasoner.tasks[0].variable if part.startswith("CONVERSATION SO FAR"))
     assert "Question a?" not in history and "Question b?" in history and "Question g?" in history
+
+
+CLEAN = {"answer": "Glass B changed by {ref:m:B:delta_e}.", "refs_used": ["m:B:delta_e"]}
+
+
+def test_chat_over_the_api(db, tmp_path):
+    run = finished_run(db, tmp_path / "data")
+    with api_client(db, tmp_path, reasoner=FakeReasoner([CLEAN])) as client:
+        assert client.get(f"/api/runs/{run.id}/chat").json() == []
+        made = client.post(f"/api/runs/{run.id}/chat", json={"t": 6600, "question": "  What now?  "})
+        assert made.status_code == 201
+        body = made.json()
+        assert body["question"] == "What now?" and body["check_status"] == "passed" and "{ref:" not in body["answer"]
+        assert [m["id"] for m in client.get(f"/api/runs/{run.id}/chat").json()] == [body["id"]]
+    assert logged_functions(db) == ["chat"]
+
+
+@pytest.mark.parametrize("question", ["   ", "x" * 501])
+def test_a_blank_or_long_question_is_refused(db, tmp_path, question):
+    run = finished_run(db, tmp_path / "data")
+    reasoner = FakeReasoner([CLEAN])
+    with api_client(db, tmp_path, reasoner=reasoner) as client:
+        assert client.post(f"/api/runs/{run.id}/chat", json={"t": 0, "question": question}).status_code == 422
+    assert reasoner.calls == 0
+
+
+def test_chat_without_a_key_is_503(db, tmp_path):
+    run = finished_run(db, tmp_path / "data")
+    with api_client(db, tmp_path) as client:
+        made = client.post(f"/api/runs/{run.id}/chat", json={"t": 0, "question": "What now?"})
+    assert made.status_code == 503 and "MODEL_API_KEY" in made.json()["detail"]
+
+
+def test_an_unknown_run_is_404(db, tmp_path):
+    with api_client(db, tmp_path, reasoner=FakeReasoner([CLEAN])) as client:
+        assert client.get("/api/runs/run_nope/chat").status_code == 404
+        assert client.post("/api/runs/run_nope/chat", json={"t": 0, "question": "Hi?"}).status_code == 404
+
+
+def test_the_spending_limit_is_409(db, tmp_path):
+    run = finished_run(db, tmp_path / "data")
+    with api_client(db, tmp_path, reasoner=FakeReasoner([]), env={"RUN_SPEND_CAP_USD": "0.005"}) as client:
+        made = client.post(f"/api/runs/{run.id}/chat", json={"t": 0, "question": "What now?"})
+    assert made.status_code == 409 and made.json()["detail"] == "This run has reached its spending limit"

@@ -158,6 +158,7 @@ def _build(
     writer.record(run_path, keep=public_run_view)
     timeline = writer.record(f"{run_path}/timeline")
     notes = writer.record(f"{run_path}/notes")
+    writer.record(f"{run_path}/chat")  # questions asked in the app, shown read-only (D-97)
     verdict = writer.record(f"{run_path}/verdict")
     writer.record(f"{run_path}/reviews")
     writer.record(f"{run_path}/fits")

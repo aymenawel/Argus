@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from argus.api.cameras import register_camera_routes
+from argus.api.chat import register_chat_routes
 from argus.api.events import EventBroker, event_stream
 from argus.api.media import register_media_routes
 from argus.api.next_run import register_next_run_routes
@@ -244,6 +245,7 @@ def create_app(
     register_run_routes(app, db=db, settings=settings, jobs=jobs, hub=hub)
     register_setup_routes(app, db=db, broker=broker, jobs=jobs, hub=hub, recipes=recipes)
     register_note_routes(app, db=db, broker=broker, settings=settings, jobs=jobs, recipes=recipes)
+    register_chat_routes(app, db=db, broker=broker, settings=settings, jobs=jobs, recipes=recipes)
     register_preference_routes(app, db=db, settings=settings)
     register_results_routes(app, db=db, recipes=recipes)
     register_next_run_routes(app, db=db, settings=settings, jobs=jobs, recipes=recipes)

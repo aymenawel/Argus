@@ -229,3 +229,17 @@ def test_a_recording_is_dated_when_it_was_recorded_not_when_argus_imported_it(db
     run = finished_run(db, tmp_path / "data", start_time=filmed)
     manifest = json.loads((export(db, settings, recipes, run, tmp_path) / "manifest.json").read_text("utf-8"))
     assert datetime.fromisoformat(manifest["recorded"]) == filmed
+
+
+def test_the_bundle_keeps_the_chat(db, tmp_path, settings, recipes):
+    """The demo shows the questions asked in the app, saved and read-only (D-97)."""
+    from argus.domain import ChatMessageDraft
+
+    run = finished_run(db, tmp_path / "data")
+    saved = ChatMessageDraft(
+        t=60.0, question="What now?", answer="Glass B is darker.", body={}, check_status="passed", model_call_id=None
+    )
+    repos.add_chat_message(db, run.id, saved)
+    bundle = export(db, settings, recipes, run, tmp_path)
+    chat = json.loads((bundle / "api" / "runs" / run.id / "chat.json").read_text(encoding="utf-8"))
+    assert [m["question"] for m in chat] == ["What now?"]
