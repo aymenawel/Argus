@@ -89,9 +89,10 @@ function RunCard({ run }: { run: BundleIndexEntry }) {
     <Link className={styles.card} href={`/replay/${run.run_id}`}>
       <span className={styles.cover}>
         {cover && (
-          // A bundled frame, served as it is; next/image would only add a resizing hop.
+          // A bundled frame, served as it is (next/image would only add a resizing hop), loaded at once: the covers
+          // are the first thing on the page.
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={cover} alt="" loading="lazy" />
+          <img src={cover} alt="" />
         )}
       </span>
       <span className={styles.cardText}>

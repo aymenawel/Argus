@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { ReplayRun } from "../ReplayRun";
 import styles from "../../page.module.css";
 
-export const metadata: Metadata = { title: "Replay · Argus" };
+export const metadata: Metadata = { title: "Argus · demo" };
 
 // The run id comes from the URL at request time, so the client screen sits in a Suspense boundary.
 export default function ReplayResultsPage() {

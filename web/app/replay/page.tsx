@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { ReplayIndex } from "./ReplayIndex";
 import styles from "./page.module.css";
 
-export const metadata: Metadata = { title: "Replay · Argus" };
+export const metadata: Metadata = { title: "Argus · demo" };
 
 export default function ReplayPage() {
   return (
