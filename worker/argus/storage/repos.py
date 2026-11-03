@@ -11,6 +11,8 @@ from typing import Any
 from argus.domain import (
     Calibration,
     CalibrationDraft,
+    ChatMessage,
+    ChatMessageDraft,
     Derived,
     DerivedDraft,
     Detection,
@@ -760,6 +762,7 @@ NOTE_JSON = ("body", "refs", "evidence")
 ATTEMPT_JSON = ("raw", "reasons")
 VERDICT_JSON = ("allowed", "checks", "body", "draft", "critique", "refs", "model_call_ids")
 NEXT_RUN_JSON = ("numbers", "body", "refs", "model_call_ids")
+CHAT_JSON = ("body",)
 
 
 def add_derived(db: Database, run_id: str, drafts: Sequence[DerivedDraft]) -> list[Derived]:
@@ -813,6 +816,21 @@ def add_note_attempt(db: Database, run_id: str, draft: NoteAttemptDraft) -> Note
     with db.write() as c:
         _insert(c, "note_attempts", attempt, ATTEMPT_JSON)
     return attempt
+
+
+def add_chat_message(db: Database, run_id: str, draft: ChatMessageDraft) -> ChatMessage:
+    message = ChatMessage(**draft.model_dump(), id=new_id("chat"), run_id=run_id)
+    with db.write() as c:
+        _insert(c, "chat_messages", message, CHAT_JSON)
+    return message
+
+
+def chat_for_run(db: Database, run_id: str, limit: int | None = None) -> list[ChatMessage]:
+    """The run's questions and answers in the order they were asked; `limit` keeps the newest."""
+    with db.read() as c:
+        rows = c.execute("SELECT * FROM chat_messages WHERE run_id=? ORDER BY rowid", (run_id,)).fetchall()
+    messages = [_load(ChatMessage, r, CHAT_JSON) for r in rows]
+    return messages[-limit:] if limit else messages
 
 
 def note_attempts_for_run(db: Database, run_id: str) -> list[NoteAttempt]:

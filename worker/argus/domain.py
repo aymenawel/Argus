@@ -384,6 +384,22 @@ class NoteAttempt(NoteAttemptDraft):
     run_id: str
 
 
+class ChatMessageDraft(Record):
+    """A researcher's question about the moment at t and Argus's checked answer (D-97)."""
+
+    t: float = Field(ge=0)
+    question: str
+    answer: str  # rendered: numbers as their displays, never raw {ref} tokens
+    body: dict[str, Any]  # the model's answer with its tokens, refs_used and the evidence chips
+    check_status: Literal["passed", "fallback"]
+    model_call_id: str | None
+
+
+class ChatMessage(ChatMessageDraft):
+    id: str
+    run_id: str
+
+
 class VerdictDraft(Record):
     t: float = Field(ge=0)
     provisional: bool
