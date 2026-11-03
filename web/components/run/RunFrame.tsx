@@ -134,22 +134,56 @@ export function RunFrame({ snapshot, source, mainMetric }: Props) {
             );
           })}
 
-        <div className={`${styles.hud} ${styles.topLeft}`}>
-          <Badge source={run.mode} provenance={provenance} />
-          <span className={styles.hudText}>{sourceNote}</span>
-        </div>
-        <div className={`${styles.hud} ${styles.topRight}`}>
-          <span className={`${styles.hudText} num`}>{calibrationText(snapshot)}</span>
-        </div>
         <div className={`${styles.hud} ${styles.bottomLeft}`}>
-          <span className={`${styles.hudText} num`}>{formatRunTime(frame?.t ?? t, span)}</span>
+          <span className={`${styles.hudText} num`}>
+            {formatRunTime(frame?.t ?? t, span)} <span className={styles.hudFaint}>/ {formatRunTime(span)}</span>
+          </span>
         </div>
-        <div className={`${styles.hud} ${styles.bottomRight}`}>
-          <span className={`${styles.hudText} num`}>{outlineCaption(shown)}</span>
-        </div>
+        {/* What the picture is and how it was measured, one tap away instead of spread over it (D-98). */}
+        <details className={`${styles.hud} ${styles.topRight} ${styles.info}`}>
+          <summary className={styles.infoButton} aria-label="About this picture">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 11v6M12 7.5v.01" strokeLinecap="round" />
+            </svg>
+          </summary>
+          <dl className={styles.infoPanel}>
+            <div>
+              <dt>Source</dt>
+              <dd>
+                <Badge source={run.mode} provenance={provenance} /> {sourceNote}
+              </dd>
+            </div>
+            <div>
+              <dt>Scale</dt>
+              <dd className="num">{calibrationText(snapshot)}</dd>
+            </div>
+            <div>
+              <dt>Outlines</dt>
+              <dd className="num">{outlineCaption(shown)}</dd>
+            </div>
+            {thinned && (
+              <div>
+                <dt>Pictures</dt>
+                <dd>{thinned}</dd>
+              </div>
+            )}
+            <div>
+              <dt>Spent</dt>
+              <dd className="num">${snapshot.view.spend_usd.toFixed(2)} on AI</dd>
+            </div>
+          </dl>
+        </details>
       </div>
       {provenance && <Credit provenance={provenance} />}
-      {thinned && <p className={styles.credit}>{thinned}</p>}
     </>
   );
 }

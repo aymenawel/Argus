@@ -157,12 +157,12 @@
   padding: 0 11px;
   display: inline-flex;
   align-items: center;
+  gap: 0.3em; /* a flex box drops the space between "4:12" and "/ 20:52" */
   border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.94);
-  color: #0b1220;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  background: rgba(11, 12, 13, 0.72);
+  color: #ffffff;
   font-size: var(--fs-xs);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -200,4 +200,69 @@
   color: inherit;
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.hudFaint {
+  opacity: 0.6;
+}
+
+/* The ⓘ: a quiet round button on the picture, its panel floating under it. */
+.info {
+  display: block;
+}
+
+.infoButton {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.94);
+  color: #111412;
+  cursor: pointer;
+  list-style: none;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.infoButton::-webkit-details-marker {
+  display: none;
+}
+
+.infoButton:hover,
+.info[open] .infoButton {
+  background: #ffffff;
+}
+
+.infoButton:focus-visible {
+  outline: 2px solid #2dd4bf;
+  outline-offset: 2px;
+}
+
+.infoPanel {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(320px, calc(100vw - 48px));
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-tile);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-float);
+  font-size: var(--fs-sm);
+  line-height: 18px;
+}
+
+.infoPanel dt {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+
+.infoPanel dd {
+  margin: 2px 0 0;
 }

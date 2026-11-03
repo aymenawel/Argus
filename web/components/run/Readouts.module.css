@@ -1,9 +1,15 @@
 /* Readout tiles (canvas .strip): one per vessel, the value at the playhead. */
 .strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); /* a few vessels share the row: no value cut off */
+  grid-template-columns: repeat(var(--columns, 3), minmax(0, 1fr)); /* set from the count so the rows end together */
   gap: 8px;
   padding: 8px 0 0;
+}
+
+@media (max-width: 720px) {
+  .strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .cell {
@@ -14,7 +20,8 @@
   padding: 12px 14px 10px;
   border: 0;
   border-radius: var(--r-tile);
-  background: var(--raised);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border);
   color: inherit;
   text-align: left;
   cursor: pointer;
@@ -67,7 +74,7 @@
 
 .spark polyline {
   fill: none;
-  stroke: var(--accent);
+  stroke: var(--faint);
   stroke-width: 1.6;
   vector-effect: non-scaling-stroke;
 }
@@ -76,4 +83,13 @@
   .strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* The sample that moved most: the data hue on its edge and its line. */
+.lead {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.lead .spark polyline {
+  stroke: var(--accent);
 }

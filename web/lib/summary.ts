@@ -36,7 +36,16 @@ export function argusLine({ samples, metric, unit, verdict, checkTime }: LineInp
   if (measured.length === 0) return { lead: "Argus is watching. Nothing measured yet.", detail, level };
 
   const change = (s: (typeof measured)[number]) => s.latest[0] - (s.first ?? s.latest[0]);
-  const most = measured.reduce((best, s) => (change(s) > change(best) ? s : best));
+  const top = Math.max(...measured.map(change));
+  const tied = measured.filter((s) => Math.abs(change(s) - top) < 1e-9);
+  if (tied.length > 1) {
+    // A tie is said as one: no sample is singled out that the readings don't single out.
+    const labels = tied.map((s) => s.label);
+    const names = `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`;
+    const value = reading(tied[0].latest, metric, unit);
+    return { lead: `Samples ${names} changed the most: ${value} each.`, detail, level };
+  }
+  const most = tied[0];
   const control = most.role === "control" ? undefined : measured.find((s) => s.role === "control");
   const against = control
     ? `, against ${reading(control.latest, metric, unit)} for the control (${control.label})`

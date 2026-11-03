@@ -73,3 +73,21 @@ test("the checks are counted in words, zero groups left out", () => {
   assert.equal(checkCounts([{ ok: true }, { ok: true }]), "2 passed");
   assert.equal(checkCounts([]), "No checks yet");
 });
+
+test("samples that tie for the most change are named together", () => {
+  const seeds = [
+    { label: "sc1-1", role: "control" as const, condition: "rye", first: 0, latest: [8, 0] as [number, number] },
+    { label: "sc1-2", role: "control" as const, condition: "rye", first: 0, latest: [9, 0] as [number, number] },
+    {
+      label: "pg1-2",
+      role: "treatment" as const,
+      condition: "pearl millet",
+      first: 0,
+      latest: [9, 0] as [number, number],
+    },
+  ];
+  assert.equal(
+    line({ samples: seeds, metric: "germinated_count", unit: "count" }).lead,
+    "Samples sc1-2 and pg1-2 changed the most: 9 sprouted seeds each.",
+  );
+});

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { playhead } from "@/lib/playhead";
 import { modelName } from "@/lib/models";
 import { chipTitle, withoutLabel } from "@/lib/plain";
@@ -57,12 +58,23 @@ function Check() {
 // One note: who wrote it, when, whether the claim checker passed it, its sections and the evidence behind it.
 export function NoteCard({ note, span, events, labels, model }: Props) {
   const ai = note.author === "ai";
+  // The main sentence first; what it may mean, the confidence, other causes and the suggestion behind More (D-98).
+  const [open, setOpen] = useState(false);
   const kind = note.level ?? note.tag;
   const when =
     note.t_end !== null
       ? `${formatRunTime(note.t, span)}–${formatRunTime(note.t_end, span)}`
       : formatRunTime(note.t, span);
   const b = note.body;
+  const hasMore = Boolean(
+    b.interpretation ||
+    b.hypothesis_status ||
+    b.confidence ||
+    b.rival_explanations?.length ||
+    b.next_step ||
+    b.question_for_researcher ||
+    (note.check_status === "fallback" && b.reason),
+  );
   const cited = (b.chips ?? [])
     .filter((chip) => !CONTEXT.some((prefix) => chip.ref.startsWith(prefix)))
     .map((chip) => (
@@ -117,6 +129,23 @@ export function NoteCard({ note, span, events, labels, model }: Props) {
       {ai ? (
         <div className={styles.sections}>
           {b.observation && <p className={styles.observation}>{withoutLabel(b.observation, "observation")}</p>}
+          {hasMore && (
+            <button
+              type="button"
+              className={styles.more}
+              aria-expanded={open}
+              onClick={() => setOpen((shown) => !shown)}
+            >
+              {open ? "Less" : "More"}
+            </button>
+          )}
+        </div>
+      ) : (
+        <p className={styles.text}>{b.text}</p>
+      )}
+
+      {ai && open && (
+        <div className={styles.sections}>
           {b.interpretation && <p>{withoutLabel(b.interpretation, "interpretation")}</p>}
           {b.hypothesis_status && (
             <p className={styles.line}>
@@ -142,8 +171,6 @@ export function NoteCard({ note, span, events, labels, model }: Props) {
           {b.question_for_researcher && <p className={styles.question}>{b.question_for_researcher}</p>}
           {note.check_status === "fallback" && b.reason && <p className={styles.reason}>Why: {b.reason}.</p>}
         </div>
-      ) : (
-        <p className={styles.text}>{b.text}</p>
       )}
 
       {(cited.length > 0 || happened.length > 0) && (

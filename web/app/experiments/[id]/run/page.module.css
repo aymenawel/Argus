@@ -2,13 +2,26 @@
   margin-top: 18px;
 }
 
-/* The frame and its readouts, with the notes beside them on wide screens and below them under 1100 px. */
-.workspace {
-  display: grid;
-  gap: 12px;
-  margin-top: 18px;
+.argus {
+  margin-top: 16px;
 }
 
+/* The picture, its sample cards and the timeline, with the notes and Ask Argus beside them on wide screens and below
+   them under 1100 px (D-98). */
+.workspace {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.stage > .panel,
 .workspace > .panel {
   margin-top: 0;
 }
@@ -56,21 +69,23 @@
   white-space: nowrap;
 }
 
+/* The screen's one primary action: near-black, like the references' selected pills (D-98). */
 .resultsLink {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   height: var(--control-h);
-  padding: 0 16px;
+  padding: 0 18px;
   border-radius: var(--r-pill);
-  background: var(--surface);
-  box-shadow: var(--shadow-tile);
-  color: var(--text);
-  font-weight: 500;
+  background: var(--primary-bg);
+  color: var(--primary-ink);
+  font-weight: 600;
   white-space: nowrap;
+  transition: opacity var(--dur-fast) var(--ease-out);
 }
 
 .resultsLink:hover {
-  background: var(--raised);
+  opacity: 0.88;
 }
 
 .notice {

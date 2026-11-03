@@ -1,23 +1,26 @@
 "use client";
 
-import { Fragment, type KeyboardEvent, type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { markEnd } from "@/lib/misses";
 import { playhead, usePlayhead } from "@/lib/playhead";
-import { byVessel } from "@/lib/run-data";
 import type { RunSnapshot, RunSource } from "@/lib/run-source";
 import { formatRunTime, linearScale } from "@/lib/scale";
-import type { FrameRow, MeasurementRow, RunEvent } from "@/lib/types";
-import { useReadings } from "./RunFrame";
+import type { FrameRow, RunEvent } from "@/lib/types";
 import styles from "./Timeline.module.css";
 
-type Props = { snapshot: RunSnapshot; source: RunSource; mainMetric: string };
+type Props = { snapshot: RunSnapshot; source: RunSource };
 
 // Tick steps in seconds; the first that fits the ruler (at most 8 ticks) is used.
 const STEPS = [10, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 10800, 21600, 43200, 86400];
-const MARKED = new Set<RunEvent["kind"]>(["change", "intervention", "camera_moved", "segment_failed", "missed"]);
-const LANE_W = 1000;
-const LANE_H = 40;
+// The events worth a dot on the track, in the page's words (D-95); a watcher's "change" is too frequent to mark.
+const MARKED: Partial<Record<RunEvent["kind"], string>> = {
+  intervention: "A hand or object at the samples",
+  rule: "A set threshold was crossed",
+  camera_moved: "The camera moved",
+  segment_failed: "SAM couldn't outline a picture",
+  missed: "SAM lost sight of something",
+};
+const PLAY_STEPS = 200; // a run plays through in about 20 seconds, whatever its length
 
 function nearest(frames: FrameRow[], t: number): FrameRow | null {
   let best: FrameRow | null = null;
@@ -27,22 +30,11 @@ function nearest(frames: FrameRow[], t: number): FrameRow | null {
   return best;
 }
 
-function lanePoints(rows: MeasurementRow[], tEnd: number): string {
-  if (rows.length === 0) return "";
-  const values = rows.map((r) => r.value);
-  const low = Math.min(...values);
-  const high = Math.max(...values);
-  const x = linearScale([0, tEnd], [0, LANE_W]);
-  const y = linearScale([low, high === low ? low + 1 : high], [LANE_H - 6, 6]);
-  return rows.map((r) => `${x(r.t).toFixed(1)},${y(r.value).toFixed(1)}`).join(" ");
-}
-
-export function Timeline({ snapshot, source, mainMetric }: Props) {
+export function Timeline({ snapshot, source }: Props) {
   const t = usePlayhead((p) => p.t);
   const follow = usePlayhead((p) => p.follow);
-  const selected = usePlayhead((p) => p.selectedVesselId);
-  const reading = useReadings(snapshot, mainMetric, t);
   const track = useRef<HTMLDivElement>(null);
+  const [playing, setPlaying] = useState(false);
   const [width, setWidth] = useState(0);
   const dragging = useRef(false);
 
@@ -50,7 +42,6 @@ export function Timeline({ snapshot, source, mainMetric }: Props) {
   const newest = analyzed.at(-1)?.t ?? 0;
   const tEnd = Math.max(newest, snapshot.progress?.t_end ?? 0, 1);
   const percent = linearScale([0, tEnd], [0, 100]);
-  const laneX = linearScale([0, tEnd], [0, LANE_W]);
   const maxTicks = Math.max(2, Math.min(8, Math.floor(width / 64))); // labels need about 64 px each
   const step = STEPS.find((s) => tEnd / s <= maxTicks) ?? STEPS[STEPS.length - 1];
   const ticks = Array.from({ length: Math.floor(tEnd / step) + 1 }, (_, i) => i * step);
@@ -72,12 +63,23 @@ export function Timeline({ snapshot, source, mainMetric }: Props) {
     );
   }, [analyzed, width]);
 
-  const series = useMemo(
-    () => byVessel(snapshot.measurements, new Set([mainMetric, `${mainMetric}_l`])),
-    [snapshot.measurements, mainMetric],
-  );
+  const marks = snapshot.events.filter((e) => e.kind in MARKED);
 
-  const marks = snapshot.events.filter((e) => MARKED.has(e.kind));
+  // Rewatching like a video: each step moves the playhead to the next measured picture a little further on.
+  useEffect(() => {
+    if (!playing) return;
+    const id = window.setInterval(() => {
+      const next = analyzed.find((f) => f.t >= playhead.get().t + tEnd / PLAY_STEPS);
+      if (next) playhead.setT(next.t);
+      else setPlaying(false);
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [playing, analyzed, tEnd]);
+
+  function togglePlay() {
+    if (!playing && t >= newest - 1e-6 && analyzed.length > 0) playhead.setT(analyzed[0].t);
+    setPlaying((on) => !on);
+  }
 
   function scrubTo(clientX: number) {
     const rect = track.current?.getBoundingClientRect();
@@ -115,8 +117,21 @@ export function Timeline({ snapshot, source, mainMetric }: Props) {
   return (
     <div className={styles.timeline}>
       <div className={styles.controls}>
-        <span className={`${styles.clock} num`}>
-          {formatRunTime(t, tEnd)} <span className={styles.faint}>/ {formatRunTime(tEnd)}</span>
+        <span className={styles.play}>
+          <button
+            type="button"
+            className={styles.playButton}
+            onClick={togglePlay}
+            aria-label={playing ? "Pause" : "Play the run"}
+            disabled={analyzed.length < 2}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              {playing ? <path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" /> : <path d="M8 5.5v13l10.5-6.5z" />}
+            </svg>
+          </button>
+          <span className={`${styles.clock} num`}>
+            {formatRunTime(t, tEnd)} <span className={styles.faint}>/ {formatRunTime(tEnd)}</span>
+          </span>
         </span>
         {snapshot.view.running && !follow && (
           <Button variant="text" onClick={playhead.followLive}>
@@ -126,7 +141,6 @@ export function Timeline({ snapshot, source, mainMetric }: Props) {
       </div>
 
       <div className={styles.grid}>
-        <div className={styles.label} />
         <div
           ref={track}
           className={styles.ruler}
@@ -149,7 +163,19 @@ export function Timeline({ snapshot, source, mainMetric }: Props) {
           ))}
         </div>
 
-        <div className={styles.label}>Frames</div>
+        <div className={styles.events}>
+          {marks.map((e) => (
+            <button
+              key={e.id}
+              type="button"
+              className={`${styles.dot} ${styles[e.kind] ?? ""}`}
+              style={{ left: `${percent(e.t_start)}%` }}
+              title={`${MARKED[e.kind]} · ${formatRunTime(e.t_start, tEnd)}`}
+              aria-label={`${MARKED[e.kind]} at ${formatRunTime(e.t_start, tEnd)}`}
+              onClick={() => playhead.setT(e.t_start)}
+            />
+          ))}
+        </div>
         <div className={styles.film}>
           {thumbs.map((frame) => (
             // eslint-disable-next-line @next/next/no-img-element
@@ -163,40 +189,6 @@ export function Timeline({ snapshot, source, mainMetric }: Props) {
             />
           ))}
         </div>
-
-        {snapshot.view.vessels.map((v) => {
-          const on = v.id === selected;
-          const own = marks.filter((e) => e.vessel_id === v.id || e.vessel_id === null);
-          return (
-            <Fragment key={v.id}>
-              <div className={styles.label}>
-                <b>{v.label}</b>
-                <span className="num">{reading(v)?.display ?? "—"}</span>
-              </div>
-              <button
-                type="button"
-                className={`${styles.lane} ${on ? styles.selected : ""}`}
-                aria-pressed={on}
-                aria-label={`Vessel ${v.label} over time`}
-                onClick={() => playhead.selectVessel(on ? null : v.id)}
-              >
-                <svg viewBox={`0 0 ${LANE_W} ${LANE_H}`} preserveAspectRatio="none" aria-hidden="true">
-                  {own.map((e) => (
-                    <rect
-                      key={e.id}
-                      className={`${styles.mark} ${styles[e.kind] ?? ""}`}
-                      x={laneX(e.t_start)}
-                      y={4}
-                      width={Math.max(4, laneX(markEnd(e, tEnd)) - laneX(e.t_start))}
-                      height={LANE_H - 8}
-                    />
-                  ))}
-                  <polyline className={styles.line} points={lanePoints(series.get(v.id) ?? [], tEnd)} />
-                </svg>
-              </button>
-            </Fragment>
-          );
-        })}
 
         <div className={styles.playheadLayer} aria-hidden="true">
           <div className={styles.playhead} style={{ left: `${percent(Math.min(t, tEnd))}%` }}>

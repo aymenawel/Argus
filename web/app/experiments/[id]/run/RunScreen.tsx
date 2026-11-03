@@ -3,20 +3,19 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { VerdictPanel } from "@/components/verdict/VerdictPanel";
+import { ArgusLine } from "@/components/run/ArgusLine";
 import { Readouts } from "@/components/run/Readouts";
 import { RunFrame } from "@/components/run/RunFrame";
 import { SidePanel } from "@/components/run/SidePanel";
 import { Timeline } from "@/components/run/Timeline";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Panel } from "@/components/ui/Panel";
 import { ApiError, errorText, getExperiment, getExperimentRecipeDetail, getRuns, stopRun } from "@/lib/api";
 import { homeLink, resultsHref } from "@/lib/links";
 import { playhead } from "@/lib/playhead";
 import { runNotice } from "@/lib/run-data";
-import { useReadOnly } from "@/lib/replay";
+import { isReplay, useReadOnly } from "@/lib/replay";
 import { LiveSource, type RunSnapshot } from "@/lib/run-source";
 import { formatRunTime } from "@/lib/scale";
 import type { Experiment } from "@/lib/types";
@@ -43,8 +42,12 @@ function finding(snapshot: RunSnapshot): string {
     }
     return view.run.mode === "live" ? `Watching live · ${count}` : "Starting the import";
   }
-  if (view.run.status === "finished") return `Finished · ${count} over ${formatRunTime(last)}`;
-  return `Stopped at ${formatRunTime(last)} · ${count}`;
+  const source =
+    view.run.mode === "live" ? "live camera" : view.run.source.provenance ? "published data" : "imported video";
+  const samples = `${view.vessels.length} ${view.vessels.length === 1 ? "sample" : "samples"}`;
+  const state = view.run.status === "finished" ? "Finished" : "Stopped";
+  const recorded = isReplay() ? "Recorded run · nothing here is live · " : ""; // the demo says what it is (D-98)
+  return `${recorded}${state} · ${source} · ${formatRunTime(last)} · ${samples}`;
 }
 
 /** `experimentId` is given by the replay's routes, whose URL names the run instead. */
@@ -169,10 +172,8 @@ export function RunScreen({ experimentId }: { experimentId?: string } = {}) {
         actions={
           view && (
             <>
-              <Badge source={view.run.mode} provenance={view.run.source.provenance} />
-              <span className={`${styles.spend} num`}>Spend ${view.spend_usd.toFixed(2)}</span>
               <Link className={styles.resultsLink} href={resultsHref(id, view.run.id)}>
-                Results
+                See results <span aria-hidden="true">→</span>
               </Link>
               {view.running && !readOnly && (
                 <Button
@@ -197,33 +198,35 @@ export function RunScreen({ experimentId }: { experimentId?: string } = {}) {
           {problem}
         </p>
       )}
+      {ready && load.state === "ready" && (
+        <div className={styles.argus}>
+          <ArgusLine snapshot={snapshot} mainMetric={load.mainMetric} />
+        </div>
+      )}
       <div className={styles.workspace}>
-        <Panel className={styles.panel}>
-          {ready && load.state === "ready" ? (
-            <>
-              <RunFrame snapshot={snapshot} source={load.source} mainMetric={load.mainMetric} />
-              <Readouts snapshot={snapshot} mainMetric={load.mainMetric} />
-            </>
-          ) : (
-            <div className={styles.placeholder} aria-busy="true" />
+        <div className={styles.stage}>
+          <Panel className={styles.panel}>
+            {ready && load.state === "ready" ? (
+              <>
+                <RunFrame snapshot={snapshot} source={load.source} mainMetric={load.mainMetric} />
+                <Readouts snapshot={snapshot} mainMetric={load.mainMetric} />
+              </>
+            ) : (
+              <div className={styles.placeholder} aria-busy="true" />
+            )}
+          </Panel>
+          {ready && load.state === "ready" && (
+            <Panel className={styles.panel}>
+              <Timeline snapshot={snapshot} source={load.source} />
+            </Panel>
           )}
-        </Panel>
+        </div>
         {ready && (
           <Panel className={styles.feedPanel}>
             <SidePanel snapshot={snapshot} />
           </Panel>
         )}
       </div>
-      {ready && load.state === "ready" && (
-        <Panel title="Timeline" className={styles.timelinePanel}>
-          <Timeline snapshot={snapshot} source={load.source} mainMetric={load.mainMetric} />
-        </Panel>
-      )}
-      {ready && (
-        <Panel title="Verdict" className={styles.timelinePanel}>
-          <VerdictPanel snapshot={snapshot} />
-        </Panel>
-      )}
     </>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { type CSSProperties, useMemo } from "react";
 import { playhead, usePlayhead } from "@/lib/playhead";
 import { byVessel } from "@/lib/run-data";
 import type { RunSnapshot } from "@/lib/run-source";
@@ -47,8 +47,23 @@ export function Readouts({ snapshot, mainMetric }: Props) {
     [snapshot.measurements, mainMetric],
   );
 
+  // The samples whose reading moved most over the run carry the data hue (D-98), all of them when they tie; the
+  // others stay grey.
+  const change = (rows: MeasurementRow[]) => (rows.length > 1 ? rows[rows.length - 1].value - rows[0].value : 0);
+  const changes = new Map(snapshot.view.vessels.map((v) => [v.id, change(series.get(v.id) ?? [])]));
+  const top = Math.max(0, ...changes.values());
+  const leads = new Set([...changes].filter(([, by]) => top > 0 && Math.abs(by - top) < 1e-9).map(([id]) => id));
+  // Rows that end together: up to four across, and six as three and three rather than four and two.
+  const count = snapshot.view.vessels.length;
+  const columns = count <= 4 ? count : Math.ceil(count / Math.ceil(count / 4));
+
   return (
-    <div className={styles.strip} role="group" aria-label="Readouts at the playhead">
+    <div
+      className={styles.strip}
+      role="group"
+      aria-label="Readouts at the playhead"
+      style={{ "--columns": columns } as CSSProperties}
+    >
       {snapshot.view.vessels.map((v) => {
         const value = reading(v);
         const on = v.id === selected;
@@ -56,7 +71,7 @@ export function Readouts({ snapshot, mainMetric }: Props) {
           <button
             key={v.id}
             type="button"
-            className={`${styles.cell} ${on ? styles.selected : ""}`}
+            className={`${styles.cell} ${leads.has(v.id) ? styles.lead : ""} ${on ? styles.selected : ""}`}
             aria-pressed={on}
             onClick={() => playhead.selectVessel(on ? null : v.id)}
           >
