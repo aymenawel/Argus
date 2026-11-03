@@ -189,7 +189,7 @@ export function RunFrame({ snapshot, source, mainMetric }: Props) {
 }
 
 // Published data is credited under every frame of it, with its licence and DOI (D-70).
-function Credit({ provenance: p }: { provenance: Provenance }) {
+export function Credit({ provenance: p }: { provenance: Provenance }) {
   return (
     <p className={styles.credit}>
       Published data: {p.credit},{" "}

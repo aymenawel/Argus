@@ -8,6 +8,7 @@ import { FitTable } from "@/components/results/FitTable";
 import { NextRunCard } from "@/components/results/NextRunCard";
 import { VideosCard } from "@/components/results/VideosCard";
 import { ArgusSays, firstSentence } from "@/components/run/ArgusLine";
+import { Credit } from "@/components/run/RunFrame";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Panel } from "@/components/ui/Panel";
@@ -249,6 +250,7 @@ export function ResultsScreen({ experimentId }: { experimentId?: string } = {}) 
           provisional={verdict?.provisional}
           retrospective={Boolean(verdict?.body.retrospective)}
         />
+        {view.run.source.provenance && <Credit provenance={view.run.source.provenance} />}
       </div>
 
       <Panel title="Curves" meta={pickers} className={styles.panel}>

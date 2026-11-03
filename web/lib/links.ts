@@ -12,5 +12,5 @@ export function resultsHref(experimentId: string, runId: string): string {
 
 /** The first link of every page's crumb. */
 export function homeLink(): { href: string; label: string } {
-  return isReplay() ? { href: "/replay", label: "Replays" } : { href: "/", label: "Experiments" };
+  return isReplay() ? { href: "/replay", label: "Experiments" } : { href: "/", label: "Experiments" };
 }

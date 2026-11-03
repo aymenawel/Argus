@@ -50,7 +50,7 @@ const SETTINGS: NavItem = {
 };
 
 // The public replay (D-83) offers only its runs and the source code.
-const REPLAY: NavItem = { href: "/replay", label: "Replays", icon: MAIN[0].icon };
+const REPLAY: NavItem = { href: "/replay", label: "Experiments", icon: MAIN[0].icon };
 const SOURCE = "https://github.com/aymenawel/Argus";
 const SOURCE_ICON = svg(
   <>
@@ -88,6 +88,11 @@ function RailNav({ pathname }: { pathname: string | null }) {
         <RailLink key={item.href} item={item} pathname={pathname} />
       ))}
       <div className={styles.bottom}>
+        {isReplay() && (
+          <span className={styles.demo} title="A read-only demo of recorded runs: nothing here is live">
+            Demo
+          </span>
+        )}
         {isReplay() ? (
           <a
             href={SOURCE}

@@ -36,19 +36,54 @@
 
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 12px;
-  margin: 18px 0 0;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); /* a few runs share the row edge to edge */
+  gap: 16px;
+  margin: 20px 0 0;
   padding: 0;
   list-style: none;
 }
 
+/* One run: its last measured picture on top, then its title, where it came from and its verdict (D-98). */
 .card {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 14px;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  color: inherit;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.card:hover {
+  border-color: var(--control);
+}
+
+.card:hover .cover img {
+  transform: scale(1.02);
+}
+
+.cover {
+  display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--sunk);
+}
+
+.cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+.cardText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px 0;
 }
 
 .cardTitle {
@@ -61,18 +96,22 @@
   color: var(--muted);
 }
 
-.links {
-  display: flex;
-  gap: 16px;
-  margin-top: 4px;
+.verdict {
+  padding: 10px 16px 16px;
 }
 
-.links a {
-  color: var(--accent-ink);
+.source {
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-h);
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
   font-weight: 600;
+  white-space: nowrap;
 }
 
-.links a:hover {
-  text-decoration: underline;
-  text-underline-offset: 2px;
+.source:hover {
+  background: var(--raised);
 }

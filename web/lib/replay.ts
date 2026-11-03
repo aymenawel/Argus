@@ -95,6 +95,17 @@ export function getReplayIndex(): Promise<BundleIndex> {
   return fetchJson<BundleIndex>("/bundles/index.json");
 }
 
+/** A run's cover for the demo's list: its last measured picture, as the bundle keeps it (null when it has none). */
+export async function getCover(runId: string): Promise<string | null> {
+  if (!safe(runId)) return null;
+  const manifest = await fetchJson<BundleManifest>(`/bundles/${runId}/manifest.json`);
+  const timeline = await fetchJson<{ frames: { id: string; t: number; analyzed: boolean }[] }>(
+    `/bundles/${runId}/api/runs/${runId}/timeline.json`,
+  );
+  const last = timeline.frames.filter((f) => f.analyzed).at(-1);
+  return last ? replayFrameUrl(manifest, last.id) : null;
+}
+
 /** A thinned bundle keeps some frames; every frame id points at the kept frame shown in its place. */
 export function replayFrameUrl(manifest: BundleManifest, frameId: string): string {
   return `/bundles/${manifest.run_id}/frames/${manifest.frame_map[frameId] ?? frameId}.jpg`;
