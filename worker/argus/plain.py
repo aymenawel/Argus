@@ -17,6 +17,14 @@ UNIT_WORDS = {"dE00": "ΔE", "mm2": "mm²", "Lab": "L*a*b*"}
 
 ROLE_WORDS = {Role.CONTROL: "control", Role.TREATMENT: "test"}
 
+# A verdict as the page names it: the stored level keeps its code name (INCONCLUSIVE reads "Unclear").
+VERDICT_WORDS = {
+    "SUPPORTED": "Supported",
+    "NOT_SUPPORTED": "Not supported",
+    "INCONCLUSIVE": "Unclear",
+    "TOO_EARLY": "Too early",
+}
+
 
 def metric_words(metric: str) -> str:
     return METRIC_WORDS.get(metric, metric.replace("_", " "))

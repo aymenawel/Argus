@@ -17,6 +17,7 @@ from argus.domain import EventKind
 from argus.measure.uncertainty import format_duration
 from argus.media.layout import condition_groups, group_key, note_text
 from argus.media.records import RunRecords
+from argus.plain import VERDICT_WORDS
 
 Kind = Literal["intervention", "quality", "half_way", "checkpoint", "change"]
 
@@ -30,12 +31,6 @@ KIND_WORDS = {
     "half_way": "Half-way",
     "checkpoint": "Check-in",
     "change": "Change",
-}
-VERDICT_WORDS = {
-    "SUPPORTED": "Supported",
-    "NOT_SUPPORTED": "Not supported",
-    "INCONCLUSIVE": "Unclear",
-    "TOO_EARLY": "Too early",
 }
 QUALITY = {EventKind.QUALITY: "Picture problem", EventKind.CAMERA_MOVED: "Camera moved"}
 

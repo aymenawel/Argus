@@ -19,7 +19,7 @@ import numpy as np
 from argus.claims.refs import RefTable
 from argus.config import REPO_ROOT
 from argus.domain import ChatMessage, Direction, Experiment, Note, Plan, RunEvent, Verdict, VerdictLevel
-from argus.plain import event_words, metric_words
+from argus.plain import VERDICT_WORDS, event_words, metric_words
 from argus.reason import ReasonTask
 from argus.recipes.model import Recipe
 
@@ -198,7 +198,8 @@ def chat_task(
         task += "\n\nYour previous answer was rejected: " + "; ".join(rejected) + ". Fix exactly these."
     said = "VERDICT: none yet"
     if verdict is not None:
-        said = f"VERDICT: {verdict.verdict} ({NUMBER.sub('[n]', str(verdict.body.get('explanation') or ''))})"
+        level = VERDICT_WORDS[str(verdict.verdict)]
+        said = f"VERDICT: {level} ({NUMBER.sub('[n]', str(verdict.body.get('explanation') or ''))})"
     return ReasonTask(
         function="chat",
         experiment_id=experiment_id or (plan.experiment_id if plan else "none"),
@@ -209,7 +210,7 @@ def chat_task(
             events_block(events, refs, labels),
             notes_block(notes),
             history_block(history),
-            "ALLOWED VERDICTS NOW: " + ", ".join(allowed),
+            "ALLOWED VERDICTS NOW: " + ", ".join(VERDICT_WORDS.get(a, a) for a in allowed),
             said,
             f"MOMENT ASKED ABOUT: {t_display}",
             task,

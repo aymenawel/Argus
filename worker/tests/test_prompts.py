@@ -262,7 +262,7 @@ def test_a_chat_task_puts_the_question_last_and_masks_old_answers():
     text = "\n".join(task.variable)
     assert task.function == "chat" and task.variable[-1] == "QUESTION: Why is C orange?"
     assert "Glass C is at [n] ΔE." in text and "25.1" not in text
-    assert "MOMENT ASKED ABOUT: 4:12" in text and "ALLOWED VERDICTS NOW: TOO_EARLY" in text
+    assert "MOMENT ASKED ABOUT: 4:12" in text and "ALLOWED VERDICTS NOW: Too early" in text  # the page's words
     assert task.stable == note_task("event", COLOUR, PLAN, refs_at(10.0), [], []).stable
 
 
