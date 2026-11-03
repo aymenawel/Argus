@@ -53,6 +53,7 @@
 - Typed or voice notes (Muse Voice Transcribe), pinned to the exact frame or any timeline point
 - Tags: **Observation**, **Intervention**, **Question**; AI answers questions and links interventions to what follows ("bubbling rose 40% within 10 min of your sugar addition at 3:15 PM")
 - Quick-tap buttons (added water, moved jar, opened lid)
+- **Calm screens (Nov 3, D-98):** the Run screen leads with one Argus line built by code (the sample that changed most, the verdict's reason), the picture as hero, an editor-style timeline with Play; Results leads with the verdict; details fold behind More, Why and ⓘ. The public link is the same app in a demo mode
 - **Ask Argus (built Nov 3, D-97):** a tab beside the notes on the Run screen. Ask about the moment on screen, live or rewatching; Argus answers from that moment's picture, readings, events, notes, plan and the run's last six questions, every number a checked ref, in plain words. The public demo shows the saved questions read-only
 - AI asks questions when unclear ("The plant moved out of frame at 2:00 AM. Intentional?"), batched and rate-limited so it doesn't nag
 
