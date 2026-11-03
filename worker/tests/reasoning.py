@@ -32,7 +32,7 @@ class FakeReasoner:
     """Answers in order: a dict becomes a result, a ReasonError is raised, a ReasonResult is returned as it is."""
 
     def __init__(self, answers=()):
-        self.answers, self.tasks = list(answers), []
+        self.answers, self.tasks, self.images = list(answers), [], []
 
     @property
     def calls(self) -> int:
@@ -40,6 +40,7 @@ class FakeReasoner:
 
     async def __call__(self, task: ReasonTask, *, tier, schema, schema_name, images=()):
         self.tasks.append(task)
+        self.images.append(tuple(images))
         answer = self.answers.pop(0)
         if isinstance(answer, Exception):
             if isinstance(answer, ReasonError):
