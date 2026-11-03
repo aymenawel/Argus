@@ -14,7 +14,7 @@
 - [x] **Q-07 Smart plug:** no (Oct 27, D-44). Plug control moves to Later.
 - [x] **Q-08 USB HDMI capture card:** no (Oct 27, D-44). The XA50 is used for recordings only.
 - [ ] **Q-12 Fast live experiment** for the live demo moment and the multi-round Ax loop (D-42). Undecided. Claude's suggestion: household iodine clock (vitamin C, 2% iodine tincture, 3% hydrogen peroxide, starch): a sharp color switch at a predictable time, rounds of a few minutes, Ax tunes amounts to hit a target time. Alternative: yeast foam height (~30 min per round)
-- [ ] **Q-13 Demo video tooling:** undecided. Aymen will use AI tools and wants Claude to render motion graphics (logo sting, overlays, title cards) for a professional edit; formats to be chosen with the animation-tool research
+- [x] **Q-13 Demo video tooling:** decided Nov 3 (D-96): Claude builds the whole video with HyperFrames and an AI voice; details in `13-demo-and-pitch.md`
 - [ ] **Q-15 UI direction** (canvas https://claude.ai/artifact/2JeEMitFwx3e3egzNbptwg): v1 data-terminal style was too boxy (Aymen, Oct 28); v2 "soft instrument" (D-50) plus the view catalog (D-49) is on the canvas. Awaiting approval and a typeface pick: Inter, Manrope or Plus Jakarta Sans
 - [ ] **Q-16 Animation tools:** recommended Motion (MIT) for UI motion plus CSS/SVG for pulses and outlines; HyperFrames (Apache-2.0) for demo-video motion graphics; skip GSAP in the app, Lottie, Rive, React Spring. Awaiting Aymen's pick
 - [ ] **Q-17 Frontend dependencies not in `11`:** Tailwind CSS v4, Radix UI primitives, lucide-react icons, d3-scale/d3-shape, openapi-typescript (dev). Awaiting approval

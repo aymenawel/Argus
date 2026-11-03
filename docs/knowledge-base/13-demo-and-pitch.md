@@ -62,6 +62,23 @@ Judges and voters don't have the hardware. Publish a read-only page for one fini
 - Show only features built during the hackathon; say so in the video and README.
 - Protect the last two days for recording and editing; never cut demo time.
 
+## Making the video [decided Nov 3, D-96; storyboard waits for Aymen's idea]
+
+- **Who and how:** Claude builds the whole video in code with HyperFrames (Apache-2.0; its Claude Code skills are installed). Narration is an AI voice made locally (`npx hyperframes tts`); Aymen approves a short sample first.
+- **Footage:** real Argus runs (the dye run, the Genze seed plate, the E. coli swarms with their CC BY credit) plus professional experiment footage found online to show the idea. Online footage only with a reuse licence (Pexels, Pixabay, Wikimedia Commons CC BY/CC0, NASA public domain), credited at the end. Footage Argus didn't analyse never carries Argus's outlines or numbers unless Argus really ran on it (an import works on any video, ~$0.50–1.50 each) or the shot says "Illustration".
+- **Screens:** sharp captures of the real replay pages (headless Chrome) with camera moves through them, zooming into the part that matters; never a redrawn, made-up dashboard. Plan B for live motion: obs-mcp (below).
+- **Sound and mix:** small sounds only on things that matter (a tick when a check passes, the counter while a number rolls, a chime on the last card), none on cards sliding in, about 20 dB under the voice. The voice at least 12 LU over music and effects; master at −14 LUFS, true peak under −1 dB.
+- **Workflow:** a base cut first, then fix one moment at a time; say the moment by the words spoken, not by seconds.
+
+### Resources reviewed (Nov 3)
+
+| Resource | Verdict |
+| --- | --- |
+| Motion Graphics with Claude Code, PDF + starter kit (Damiano Caudullo) | **Use as a guide.** A HyperFrames tutorial. Its 9 sounds (made in code, "no licence to worry about") and its OFL fonts are copied to `data/video-kit/` (git-ignored, not redistributed). Take the method (PROMPT 10: build around real screenshots; Fix 06: move through the real screens). Skip its four styles: the video matches Argus's own look so judges recognise the app |
+| [showheyohtaki/motion-prompt](https://github.com/showheyohtaki/motion-prompt) | **Skip for now.** 192 named effects with Canvas code (MIT); HyperFrames' own animation skill and ~450 registry blocks cover this. Open it only to find a name for a specific effect |
+| [royshil/obs-mcp](https://github.com/royshil/obs-mcp) | **Plan B.** Lets Claude start and stop OBS recording and switch scenes (GPL-2.0, a tool, not shipped). OBS is installed; Aymen would enable OBS's WebSocket server and set its password himself, add the server to the Claude config and restart. The recorded window must be in front |
+| [prompt-motion.com](https://prompt-motion.com/) | **Inspiration only.** A gallery of motion clips made with Claude, with their prompts (Product UI, Charts, Diagrams). Aymen can point at 2–3 clips whose feel he likes |
+
 ## Start a long experiment today
 
 Slow features need real footage by demo day. Run the chosen **salt-stress germination dose-response** (3 salt levels × 2 jars, side view) on the **Canon XA50 in fast motion** on AC power; full protocol in `20-demo-experiment-germination.md`. Show it in the video as a **labeled replay** ("recorded Oct 27–30, analyzed by Argus, 600× speed") plus one short genuinely live moment. Argus analyzes it later through Import video with the time-scale factor. Record only raw footage early; all analysis shown must come from hackathon code. Optional second run on the webcam: yeast fermentation or salt crystals.
