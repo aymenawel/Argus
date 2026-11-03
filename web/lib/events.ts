@@ -15,6 +15,7 @@ export const EVENT_TYPES = [
   "note",
   "note_rejected",
   "verdict",
+  "chat",
 ] as const;
 
 /**

@@ -1,5 +1,6 @@
 import type {
   Agreement,
+  ChatMessage,
   DetectionOutline,
   Experiment,
   FitsView,
@@ -195,6 +196,22 @@ export function postNote(
   note: { t: number; tag: NonNullable<Note["tag"]>; text: string },
 ): Promise<Note> {
   return request(`${runPath(runId)}/notes`, send("POST", note));
+}
+
+// ---- Ask Argus (D-97) ----
+
+/** The run's questions and answers; a demo bundle made before chat existed has none. */
+export async function getChat(runId: string): Promise<ChatMessage[]> {
+  try {
+    return await request<ChatMessage[]>(`${runPath(runId)}/chat`);
+  } catch (error) {
+    if (isReplay() && error instanceof ApiError && error.status === 404) return [];
+    throw error;
+  }
+}
+
+export function askChat(runId: string, t: number, question: string): Promise<ChatMessage> {
+  return request(`${runPath(runId)}/chat`, send("POST", { t, question }));
 }
 
 export function getVerdict(runId: string): Promise<Verdict | null> {

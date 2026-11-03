@@ -316,6 +316,18 @@ export type NextRun = {
 /** `models`: each AI note's model call id -> the model that wrote it. */
 export type NotesView = { notes: Note[]; rejected: number; models?: Record<string, string> };
 
+/** Ask Argus (D-97): a question about the moment at t and Argus's checked answer, saved and never edited. */
+export type ChatMessage = {
+  id: string;
+  run_id: string;
+  t: number;
+  question: string;
+  answer: string; // rendered by the worker: numbers come from refs, never from the model
+  body: { answer?: string; refs_used?: string[]; chips?: NoteBody["chips"] };
+  check_status: "passed" | "fallback"; // fallback: written by code from the readings
+  model_call_id: string | null;
+};
+
 /** Where everyday model calls run (GET /api/preferences/reasoning, D-77); keys never leave the worker. */
 export type ReasoningOption = {
   id: "meta" | "baseten";
