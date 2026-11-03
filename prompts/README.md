@@ -8,6 +8,7 @@ All model prompts live here, never inline in code (decision D-07 in `docs/knowle
 | `deep/verdict-critique.md` | Verdicts, next-run suggestions, final report | deep only | Output validated against a JSON schema |
 | `recipes/<recipe>/method.md` | Calls for that recipe only | both | Short method card (under 250 words): what is measured, typical curve, what counts as a real change, recipe-specific rivals and their checks |
 | `routine/note.md` | Event and checkpoint notes | routine | `<<LEVEL>>` is replaced by the note's level; output `schemas/note.json` (v2) |
+| `routine/chat.md` | Ask Argus: a question about the moment on screen (D-97) | routine | Sent after the blocks and the conversation so far; the QUESTION follows it; output `schemas/chat_answer.json` |
 | `deep/verdict.md` | The verdict draft | deep | Output `schemas/verdict.json`; code computed the allowed verdicts and the checks |
 | `setup/describe.md` | The setup wizard's plan draft | routine | Output `schemas/recipe_draft.json` with the recipe's metrics filled into `metric` |
 

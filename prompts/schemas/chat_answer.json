@@ -1,0 +1,10 @@
+{
+  "$comment": "Ask Argus answer (D-97): the answer cites numbers only as {ref:<id>} tokens from the call's MEASUREMENTS block, and refs_used lists them. The claim checker rejects any digit or quantity word outside a token before the answer is saved.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["answer", "refs_used"],
+  "properties": {
+    "answer": {"type": "string", "description": "At most four short plain sentences about the moment asked about. Every number as a {ref:<id>} token."},
+    "refs_used": {"type": "array", "items": {"type": "string"}, "description": "Every ref id cited in the answer."}
+  }
+}

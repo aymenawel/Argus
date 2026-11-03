@@ -235,3 +235,39 @@ def test_the_cards_use_the_words_a_reader_sees():
         assert [w for w in code_words if w in card] == [], recipe
     task = load_prompt("routine/note.md").lower()
     assert [w for w in ("intervention", "segmentation", "rule crossing") if w in task] == []
+
+
+def chat(question: str, answer: str):
+    from argus.domain import ChatMessage
+
+    return ChatMessage(
+        id="chat_1",
+        run_id="run_1",
+        t=60.0,
+        question=question,
+        answer=answer,
+        body={},
+        check_status="passed",
+        model_call_id=None,
+    )
+
+
+def test_a_chat_task_puts_the_question_last_and_masks_old_answers():
+    from argus.reason.prompts import chat_task
+
+    history = [chat("How far has C moved?", "Glass C is at 25.1 ΔE.")]
+    task = chat_task(
+        COLOUR, PLAN, refs_at(10.0), [], [], history, "Why is C orange?", t_display="4:12", allowed=["TOO_EARLY"]
+    )
+    text = "\n".join(task.variable)
+    assert task.function == "chat" and task.variable[-1] == "QUESTION: Why is C orange?"
+    assert "Glass C is at [n] ΔE." in text and "25.1" not in text
+    assert "MOMENT ASKED ABOUT: 4:12" in text and "ALLOWED VERDICTS NOW: TOO_EARLY" in text
+    assert task.stable == note_task("event", COLOUR, PLAN, refs_at(10.0), [], []).stable
+
+
+def test_the_chat_prompt_uses_plain_words():
+    prompt = load_prompt("routine/chat.md")
+    assert "{ref:" in prompt and "rule 12" in prompt
+    assert [w for w in ("vessel", "treatment", "noise floor") if w in prompt.lower()] == []
+    assert load_schema("chat_answer")["required"] == ["answer", "refs_used"]

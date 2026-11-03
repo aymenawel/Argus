@@ -18,7 +18,7 @@ import numpy as np
 
 from argus.claims.refs import RefTable
 from argus.config import REPO_ROOT
-from argus.domain import Direction, Experiment, Note, Plan, RunEvent, VerdictLevel
+from argus.domain import ChatMessage, Direction, Experiment, Note, Plan, RunEvent, Verdict, VerdictLevel
 from argus.plain import event_words, metric_words
 from argus.reason import ReasonTask
 from argus.recipes.model import Recipe
@@ -163,6 +163,57 @@ def note_task(
             notes_block(notes),
             "ALLOWED VERDICTS NOW: " + ", ".join(allowed),
             task,
+        ),
+    )
+
+
+def history_block(history: Sequence[ChatMessage]) -> str:
+    """The run's last questions and answers, numbers masked: what the researcher already asked, never a source."""
+    if not history:
+        return "CONVERSATION SO FAR: none"
+    lines = ["CONVERSATION SO FAR (numbers masked as [n]; cite current values only from MEASUREMENTS)"]
+    lines += [f"- Q: {NUMBER.sub('[n]', m.question)} / A: {NUMBER.sub('[n]', m.answer)}" for m in history]
+    return "\n".join(lines)
+
+
+def chat_task(
+    recipe: Recipe,
+    plan: Plan | None,
+    refs: RefTable,
+    events: Sequence[RunEvent],
+    notes: Sequence[Note],
+    history: Sequence[ChatMessage],
+    question: str,
+    *,
+    t_display: str,
+    allowed: Sequence[str],
+    verdict: Verdict | None = None,
+    rejected: Sequence[str] = (),
+    experiment_id: str | None = None,
+    labels: Mapping[str, str] | None = None,
+) -> ReasonTask:
+    """Ask Argus (D-97): the researcher's question about the moment at t, after everything Argus knows by then."""
+    task = load_prompt("routine/chat.md")
+    if rejected:
+        task += "\n\nYour previous answer was rejected: " + "; ".join(rejected) + ". Fix exactly these."
+    said = "VERDICT: none yet"
+    if verdict is not None:
+        said = f"VERDICT: {verdict.verdict} ({NUMBER.sub('[n]', str(verdict.body.get('explanation') or ''))})"
+    return ReasonTask(
+        function="chat",
+        experiment_id=experiment_id or (plan.experiment_id if plan else "none"),
+        prompt_version=prompt_version(recipe),
+        stable=_stable(recipe, plan),
+        variable=(
+            measurements_block(refs),
+            events_block(events, refs, labels),
+            notes_block(notes),
+            history_block(history),
+            "ALLOWED VERDICTS NOW: " + ", ".join(allowed),
+            said,
+            f"MOMENT ASKED ABOUT: {t_display}",
+            task,
+            f"QUESTION: {question}",
         ),
     )
 
