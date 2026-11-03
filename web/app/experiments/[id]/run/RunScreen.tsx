@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { Feed } from "@/components/feed/Feed";
 import { VerdictPanel } from "@/components/verdict/VerdictPanel";
 import { Readouts } from "@/components/run/Readouts";
 import { RunFrame } from "@/components/run/RunFrame";
+import { SidePanel } from "@/components/run/SidePanel";
 import { Timeline } from "@/components/run/Timeline";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Badge } from "@/components/ui/Badge";
@@ -209,8 +209,8 @@ export function RunScreen({ experimentId }: { experimentId?: string } = {}) {
           )}
         </Panel>
         {ready && (
-          <Panel title="Notes" className={styles.feedPanel}>
-            <Feed snapshot={snapshot} />
+          <Panel className={styles.feedPanel}>
+            <SidePanel snapshot={snapshot} />
           </Panel>
         )}
       </div>

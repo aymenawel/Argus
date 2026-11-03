@@ -1,0 +1,192 @@
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+}
+
+/* The conversation scrolls on its own; the box stays put under it. */
+.scroll {
+  flex: 1;
+  min-height: 0;
+  max-height: 560px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+
+@media (min-width: 1100px) {
+  .scroll {
+    max-height: none;
+  }
+}
+
+.saved {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.empty {
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.exchange {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.question {
+  align-self: flex-end;
+  max-width: 85%;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--r-tile) var(--r-tile) 4px var(--r-tile);
+  background: var(--primary-bg);
+  color: var(--primary-ink);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+.answer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 92%;
+  padding: 10px 12px;
+  border-radius: var(--r-tile) var(--r-tile) var(--r-tile) 4px;
+  background: var(--raised);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+.answer p {
+  margin: 0;
+}
+
+.meta {
+  color: var(--faint);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.looking {
+  margin: 10px 0 0;
+  color: var(--accent-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.suggestion {
+  min-height: 30px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.suggestion:hover {
+  border-color: var(--accent);
+}
+
+.suggestion:focus-visible,
+.send:focus-visible,
+.input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.input {
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--control);
+  border-radius: var(--r-small);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  resize: none;
+}
+
+.send {
+  height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--r-small);
+  background: var(--primary-bg);
+  color: var(--primary-ink);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.error {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--neg);
+  font-size: var(--fs-xs);
+}
+
+.hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
