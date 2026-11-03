@@ -5,13 +5,13 @@ import { readTheme, setTheme, subscribeTheme, type ThemeChoice } from "@/lib/the
 import styles from "./ThemeSwitch.module.css";
 
 const OPTIONS: { value: ThemeChoice; label: string }[] = [
-  { value: "system", label: "System" },
   { value: "light", label: "Light" },
   { value: "dark", label: "Dark" },
+  { value: "system", label: "System" },
 ];
 
-// The server always renders "System"; React swaps in the saved choice right after hydration.
-const serverChoice = (): ThemeChoice => "system";
+// The server always renders "Light", the default; React swaps in the saved choice right after hydration.
+const serverChoice = (): ThemeChoice => "light";
 
 export function ThemeSwitch() {
   const choice = useSyncExternalStore(subscribeTheme, readTheme, serverChoice);

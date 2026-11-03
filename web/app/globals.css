@@ -47,6 +47,17 @@ textarea {
   outline-offset: 2px;
 }
 
+/* The browser's own surfaces take the palette too (D-98). */
+::selection {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+html {
+  scrollbar-color: var(--control) transparent;
+  caret-color: var(--accent);
+}
+
 .num {
   font-variant-numeric: tabular-nums;
 }

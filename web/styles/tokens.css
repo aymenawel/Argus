@@ -1,5 +1,7 @@
-/* Argus design tokens, v2 "soft instrument" (spec §9.1; canvas Foundations board).
-   Light by default; dark when chosen, or when the system prefers dark and nothing was chosen. */
+/* Argus design tokens, v3 "clean lab" (D-98). Light is the default: a light grey canvas, white panels with a 1px
+   edge, ink text, near-black selected pills, and one teal kept for the data (outlines, the sample that moved, chart
+   lines) and focus. Dark ("instrument", true neutrals) when chosen, or when "System" is chosen and the system is dark.
+   Resting panels carry no shadow: a 1px border or a tone step separates surfaces; shadows are for what floats. */
 
 :root {
   --font: var(--font-inter), system-ui, sans-serif;
@@ -8,14 +10,14 @@
   --fs-body: 14px;
   --fs-section: 16px;
   --fs-lead: 18px;
-  --fs-title: 26px;
+  --fs-title: 24px;
   --r-card: 20px;
   --r-tile: 14px;
   --r-media: 16px;
   --r-small: 10px;
   --r-pill: 999px;
-  --gap: 12px;
-  --pad: 22px;
+  --gap: 16px;
+  --pad: 20px;
   --control-h: 36px;
   --dur-fast: 150ms;
   --dur: 220ms;
@@ -28,57 +30,57 @@
 :root,
 :root[data-theme="light"] {
   color-scheme: light;
-  --ground: #eceff2;
+  --ground: #f2f3f1;
   --surface: #ffffff;
-  --raised: #f4f6f8;
-  --active: #e5e9ed;
-  --sunk: #e9edf1;
-  --border: #e3e7ec;
-  --rule: #eef1f4;
-  --control: #d3d9e0;
-  --text: #0b1220;
-  --muted: #535e6e;
-  --faint: #66717f;
-  --accent: #0fa3a3;
-  --accent-ink: #0b7d7d;
-  --accent-tint: #dbf3f1;
-  --accent-soft: #b9e8e3;
-  --primary-bg: #0b1220;
+  --raised: #f6f7f5;
+  --active: #ebecea;
+  --sunk: #eef0ed;
+  --border: #e3e5e1;
+  --rule: #eeefec;
+  --control: #d2d5d0;
+  --text: #111412;
+  --muted: #545b57;
+  --faint: #676d69;
+  --accent: #0f9f94;
+  --accent-ink: #0b6f68;
+  --accent-tint: #e2f3f0;
+  --accent-soft: #bde5df;
+  --primary-bg: #16181a;
   --primary-ink: #ffffff;
   --pill-on: #ffffff;
-  --focus: #0b7d7d; /* accent-ink: the brand teal is under 3:1 on the light ground */
-  --pos: #1f7a4d;
-  --pos-bg: #dcf6e6;
+  --focus: #0b6f68;
+  --pos: #247b50;
+  --pos-bg: #dcf5e5;
   --neg: #b4232a;
-  --neg-bg: #fdebe8;
+  --neg-bg: #ffedea;
   --warn: #8a4b08;
-  --warn-bg: #fff3d6;
-  --grid: #e6eaee;
+  --warn-bg: #fff4d6;
+  --grid: #e7e8e5;
   --frame: #0b0b0c;
-  --shadow-tile: 0 1px 2px rgba(11, 18, 32, 0.07), 0 0 0 1px rgba(11, 18, 32, 0.03);
-  --shadow-float: 0 10px 30px rgba(11, 18, 32, 0.14);
+  --shadow-tile: 0 1px 2px rgba(17, 20, 18, 0.08);
+  --shadow-float: 0 12px 32px rgba(17, 20, 18, 0.14);
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --ground: #0d0e10;
-  --surface: #17181b;
-  --raised: #1f2125;
-  --active: #2a2c31;
-  --sunk: #121316;
-  --border: #26282d;
-  --rule: #222429;
-  --control: #3a3d43;
-  --text: #f5f7fa;
-  --muted: #aab0b9;
-  --faint: #9097a1;
+  --ground: #0b0c0d;
+  --surface: #141516;
+  --raised: #1b1c1e;
+  --active: #26272a;
+  --sunk: #101112;
+  --border: #232427;
+  --rule: #1d1e20;
+  --control: #3a3c40;
+  --text: #f4f5f6;
+  --muted: #b4b8bc;
+  --faint: #959b9f;
   --accent: #2dd4bf;
   --accent-ink: #5eead4;
-  --accent-tint: #123330;
-  --accent-soft: #1d4d47;
-  --primary-bg: #f5f7fa;
-  --primary-ink: #0b0b0c;
-  --pill-on: #2a2c31;
+  --accent-tint: #0f2a27;
+  --accent-soft: #164640;
+  --primary-bg: #f4f5f6;
+  --primary-ink: #0b0c0d;
+  --pill-on: #26272a;
   --focus: #2dd4bf;
   --pos: #4ade80;
   --pos-bg: #12291b;
@@ -86,33 +88,33 @@
   --neg-bg: #2c171c;
   --warn: #f5b544;
   --warn-bg: #2b2211;
-  --grid: #26282d;
+  --grid: #26272a;
   --frame: #000000;
-  --shadow-tile: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-tile: 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.5);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
+  :root[data-theme="system"] {
     color-scheme: dark;
-    --ground: #0d0e10;
-    --surface: #17181b;
-    --raised: #1f2125;
-    --active: #2a2c31;
-    --sunk: #121316;
-    --border: #26282d;
-    --rule: #222429;
-    --control: #3a3d43;
-    --text: #f5f7fa;
-    --muted: #aab0b9;
-    --faint: #9097a1;
+    --ground: #0b0c0d;
+    --surface: #141516;
+    --raised: #1b1c1e;
+    --active: #26272a;
+    --sunk: #101112;
+    --border: #232427;
+    --rule: #1d1e20;
+    --control: #3a3c40;
+    --text: #f4f5f6;
+    --muted: #b4b8bc;
+    --faint: #959b9f;
     --accent: #2dd4bf;
     --accent-ink: #5eead4;
-    --accent-tint: #123330;
-    --accent-soft: #1d4d47;
-    --primary-bg: #f5f7fa;
-    --primary-ink: #0b0b0c;
-    --pill-on: #2a2c31;
+    --accent-tint: #0f2a27;
+    --accent-soft: #164640;
+    --primary-bg: #f4f5f6;
+    --primary-ink: #0b0c0d;
+    --pill-on: #26272a;
     --focus: #2dd4bf;
     --pos: #4ade80;
     --pos-bg: #12291b;
@@ -120,9 +122,9 @@
     --neg-bg: #2c171c;
     --warn: #f5b544;
     --warn-bg: #2b2211;
-    --grid: #26282d;
+    --grid: #26272a;
     --frame: #000000;
-    --shadow-tile: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+    --shadow-tile: 0 1px 2px rgba(0, 0, 0, 0.5);
     --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.5);
   }
 }
