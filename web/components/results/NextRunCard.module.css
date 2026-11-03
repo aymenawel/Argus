@@ -84,3 +84,29 @@
   color: var(--neg);
   font-size: var(--fs-sm);
 }
+
+.change {
+  font-size: var(--fs-body);
+  line-height: 21px;
+}
+
+.why summary {
+  color: var(--accent-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.why summary::-webkit-details-marker {
+  display: none;
+}
+
+.why summary:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.why[open] summary {
+  margin-bottom: 10px;
+}

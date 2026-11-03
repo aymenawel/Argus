@@ -119,3 +119,81 @@
     animation: none;
   }
 }
+
+.argus {
+  margin-top: 16px;
+}
+
+/* The way back to the picture: secondary, so the page keeps one primary thing (D-98). */
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--control-h);
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.backLink:hover {
+  background: var(--raised);
+}
+
+/* The checks and the next run side by side on wide screens: the two answers after the chart. */
+.pair {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.pair > .panel {
+  margin-top: 0;
+}
+
+@media (min-width: 1100px) {
+  .pair {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    align-items: start;
+  }
+}
+
+/* A section folded to its one line; the full detail one tap away. */
+.fold summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 10px 12px;
+  border-radius: var(--r-tile);
+  background: var(--raised);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.fold summary:hover {
+  background: var(--active);
+}
+
+.foldHint {
+  color: var(--accent-ink);
+  font-size: var(--fs-sm);
+}
+
+.fold[open] .foldHint {
+  display: none;
+}
+
+.foldBody {
+  padding-top: 12px;
+}

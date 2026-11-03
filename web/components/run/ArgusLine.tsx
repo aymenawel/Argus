@@ -4,12 +4,13 @@ import { Mark } from "@/components/brand/Mark";
 import { VerdictChip } from "@/components/ui/VerdictChip";
 import { byVessel } from "@/lib/run-data";
 import type { RunSnapshot } from "@/lib/run-source";
+import type { VerdictLevel } from "@/lib/types";
 import { argusLine } from "@/lib/summary";
 import styles from "./ArgusLine.module.css";
 
 type Props = { snapshot: RunSnapshot; mainMetric: string; checkTime?: string | null };
 
-const firstSentence = (text: string) => {
+export const firstSentence = (text: string) => {
   const end = text.search(/\.\s/);
   return end === -1 ? text : text.slice(0, end + 1);
 };
@@ -42,21 +43,38 @@ export function ArgusLine({ snapshot, mainMetric, checkTime = null }: Props) {
   });
 
   return (
+    <ArgusSays
+      lead={said.lead}
+      detail={said.detail}
+      level={said.level}
+      provisional={verdict?.provisional}
+      retrospective={Boolean(verdict?.body.retrospective)}
+      watching={snapshot.view.running}
+    />
+  );
+}
+
+type SaysProps = {
+  lead: string;
+  detail?: string | null;
+  level?: VerdictLevel | null;
+  provisional?: boolean;
+  retrospective?: boolean;
+  watching?: boolean;
+};
+
+/** The line's look, for any screen that leads with what Argus found (Run, Results). */
+export function ArgusSays({ lead, detail, level, provisional, retrospective, watching = false }: SaysProps) {
+  return (
     <section className={styles.line} aria-label="What Argus sees">
       <span className={styles.mark}>
-        <Mark state={snapshot.view.running ? "watching" : "resting"} size={30} />
+        <Mark state={watching ? "watching" : "resting"} size={30} />
       </span>
       <div className={styles.words}>
-        <p className={styles.lead}>{said.lead}</p>
-        {said.detail && <p className={styles.detail}>{said.detail}</p>}
+        <p className={styles.lead}>{lead}</p>
+        {detail && <p className={styles.detail}>{detail}</p>}
       </div>
-      {said.level && verdict && (
-        <VerdictChip
-          level={said.level}
-          provisional={verdict.provisional}
-          retrospective={Boolean(verdict.body.retrospective)}
-        />
-      )}
+      {level && <VerdictChip level={level} provisional={provisional} retrospective={retrospective} />}
     </section>
   );
 }

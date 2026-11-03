@@ -7,10 +7,10 @@ import { CurveChart } from "@/components/results/CurveChart";
 import { FitTable } from "@/components/results/FitTable";
 import { NextRunCard } from "@/components/results/NextRunCard";
 import { VideosCard } from "@/components/results/VideosCard";
+import { ArgusSays, firstSentence } from "@/components/run/ArgusLine";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Panel } from "@/components/ui/Panel";
-import { VerdictChip } from "@/components/ui/VerdictChip";
 import { AgreementTable } from "@/components/verdict/AgreementTable";
 import { VerdictChecks, judgedPlan } from "@/components/verdict/VerdictPanel";
 import {
@@ -24,8 +24,9 @@ import {
   getVerdict,
 } from "@/lib/api";
 import { homeLink, runHref } from "@/lib/links";
-import { useReadOnly } from "@/lib/replay";
+import { isReplay, useReadOnly } from "@/lib/replay";
 import { explanationToShow } from "@/lib/results";
+import { checkCounts } from "@/lib/summary";
 import type { Experiment, FitsView, Plan, RecipeDetail, RunView, Verdict } from "@/lib/types";
 import styles from "./page.module.css";
 import { curveWords, metricWords, sentence, unitKey, unitLabel } from "@/lib/plain";
@@ -220,9 +221,35 @@ export function ResultsScreen({ experimentId }: { experimentId?: string } = {}) 
     </span>
   );
 
+  const status = `${isReplay() ? "Recorded run · nothing here is live · " : ""}${runLabel(view, runs.length - index)}`;
+  const says = verdict
+    ? firstSentence(verdict.body.explanation || verdict.checks.find((c) => c.ok === false)?.text || "")
+    : verdict === null
+      ? "No verdict on this run yet."
+      : "Reading the verdict…";
+
   return (
     <>
-      <PageHeader crumb={crumb} title={title} finding={fits ? finding(fits) : runLabel(view, runs.length - index)} />
+      <PageHeader
+        crumb={crumb}
+        title={title}
+        finding={status}
+        actions={
+          <Link className={styles.backLink} href={runHref(id, view.run.id)}>
+            <span aria-hidden="true">←</span> Back to the run
+          </Link>
+        }
+      />
+
+      <div className={styles.argus}>
+        <ArgusSays
+          lead={says}
+          detail={fits ? finding(fits) : null}
+          level={verdict?.verdict ?? null}
+          provisional={verdict?.provisional}
+          retrospective={Boolean(verdict?.body.retrospective)}
+        />
+      </div>
 
       <Panel title="Curves" meta={pickers} className={styles.panel}>
         {fitsError ? (
@@ -235,8 +262,7 @@ export function ResultsScreen({ experimentId }: { experimentId?: string } = {}) 
           <>
             <p className={styles.lead}>
               {sentence(fits.unit === "count" ? words(fits.metric) : `${words(fits.metric)} (${unitLabel(fits.unit)})`)}{" "}
-              for each sample, with the {curveWords(fits.curve)} curve that best fits its readings. Only this run&apos;s
-              readings are shown: runs are never mixed together.
+              for each sample, with the {curveWords(fits.curve)} curve that best fits its readings.
               {unitKey(fits.unit) && <> {unitKey(fits.unit)}</>}
             </p>
             {!anyFit && fits.vessels.some((v) => v.readings.length > 0) && (
@@ -251,46 +277,56 @@ export function ResultsScreen({ experimentId }: { experimentId?: string } = {}) 
         )}
       </Panel>
 
+      <div className={styles.pair}>
+        <Panel title="What Argus checked" className={styles.panel}>
+          {verdict === undefined ? (
+            <p className={styles.none}>Reading the verdict…</p>
+          ) : verdict === null && readOnly ? (
+            <p className={styles.none}>No verdict was asked for this run.</p>
+          ) : verdict === null ? (
+            <p className={styles.none}>
+              No verdict on this run yet.{" "}
+              <Link className={styles.inlineLink} href={`/experiments/${id}/run`}>
+                Ask for one on the run page
+              </Link>
+              {plan ? "." : ", after locking a plan before the run."}
+            </p>
+          ) : (
+            // A few checks read at once; a long list folds to its count (D-98).
+            <details className={styles.fold} open={verdict.checks.length <= 3}>
+              <summary>
+                <span className="num">{checkCounts(verdict.checks)}</span>
+                <span className={styles.foldHint}>Show the checks</span>
+              </summary>
+              <div className={styles.foldBody}>
+                <VerdictChecks verdict={verdict} />
+                {explanationToShow(verdict) && <p className={styles.explanation}>{verdict.body.explanation}</p>}
+              </div>
+            </details>
+          )}
+        </Panel>
+
+        <Panel title="Next run" className={styles.panel}>
+          <NextRunCard runId={view.run.id} running={view.running} />
+        </Panel>
+      </div>
+
       {fits && (
-        <Panel title="Fitted values" className={styles.panel}>
-          <FitTable fits={fits} />
+        <Panel title="Numbers" className={styles.panel}>
+          <details className={styles.fold}>
+            <summary>
+              <span>Each sample&apos;s fitted curve, with its ±</span>
+              <span className={styles.foldHint}>Show the numbers</span>
+            </summary>
+            <div className={styles.foldBody}>
+              <FitTable fits={fits} />
+              {view.run.source.provenance && plan?.metric && (
+                <AgreementTable runId={view.run.id} metric={plan.metric} refresh={view.run.id} />
+              )}
+            </div>
+          </details>
         </Panel>
       )}
-
-      <Panel title="Verdict" className={styles.panel}>
-        {verdict === undefined ? (
-          <p className={styles.none}>Reading the verdict…</p>
-        ) : verdict === null && readOnly ? (
-          <p className={styles.none}>No verdict was asked for this run.</p>
-        ) : verdict === null ? (
-          <p className={styles.none}>
-            No verdict on this run yet.{" "}
-            <Link className={styles.inlineLink} href={`/experiments/${id}/run`}>
-              Ask for one on the run page
-            </Link>
-            {plan ? "." : ", after locking a plan before the run."}
-          </p>
-        ) : (
-          <>
-            <div className={styles.verdictTop}>
-              <VerdictChip
-                level={verdict.verdict}
-                provisional={verdict.provisional}
-                retrospective={verdict.body.retrospective ?? false}
-              />
-            </div>
-            <VerdictChecks verdict={verdict} />
-            {explanationToShow(verdict) && <p className={styles.explanation}>{verdict.body.explanation}</p>}
-          </>
-        )}
-        {view.run.source.provenance && plan?.metric && (
-          <AgreementTable runId={view.run.id} metric={plan.metric} refresh={view.run.id} />
-        )}
-      </Panel>
-
-      <Panel title="Next run" className={styles.panel}>
-        <NextRunCard runId={view.run.id} running={view.running} />
-      </Panel>
 
       <Panel title="Videos" className={styles.panel}>
         <VideosCard runId={view.run.id} />

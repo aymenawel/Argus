@@ -72,19 +72,16 @@ export function NextRunCard({ runId, running }: Props) {
         <div>
           <dt>Samples per condition</dt>
           <dd className="num">{numbers.replicates ?? "Unknown"}</dd>
-          <dd className={styles.reason}>{numbers.replicates_reason}</dd>
         </div>
         <div>
           <dt>Run length</dt>
           <dd className="num">{numbers.hours !== null ? runLength(numbers.hours) : "Unknown"}</dd>
-          <dd className={styles.reason}>{numbers.hours_reason}</dd>
         </div>
         <div>
           <dt>Values to try</dt>
           <dd className="num">
             {numbers.levels.length > 0 ? `${numbers.levels.join(", ")} ${numbers.levels_unit}`.trim() : "None"}
           </dd>
-          <dd className={styles.reason}>{numbers.levels_reason}</dd>
         </div>
       </dl>
       {body.safety.map((warning) => (
@@ -92,21 +89,32 @@ export function NextRunCard({ runId, running }: Props) {
           {warning}
         </p>
       ))}
-      <div className={styles.text}>
-        <p>{body.why}</p>
-        {body.change && (
+      {body.change && <p className={styles.change}>{body.change}</p>}
+      {/* The reasoning behind the three numbers, one tap away (D-98). */}
+      <details className={styles.why}>
+        <summary>Why these numbers</summary>
+        <div className={styles.text}>
           <p>
-            <strong>Change: </strong>
-            {body.change}
+            <strong>Samples: </strong>
+            {numbers.replicates_reason}
           </p>
-        )}
-        {body.watch_for && (
           <p>
-            <strong>Watch for: </strong>
-            {body.watch_for}
+            <strong>Run length: </strong>
+            {numbers.hours_reason}
           </p>
-        )}
-      </div>
+          <p>
+            <strong>Values: </strong>
+            {numbers.levels_reason}
+          </p>
+          <p>{body.why}</p>
+          {body.watch_for && (
+            <p>
+              <strong>Watch for: </strong>
+              {body.watch_for}
+            </p>
+          )}
+        </div>
+      </details>
       <div className={styles.actions}>
         {button}
         {body.written_by === "code" && <span className={styles.tag}>{body.code_reason ?? "Written by code"}</span>}
