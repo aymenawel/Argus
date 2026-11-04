@@ -79,6 +79,32 @@ Judges and voters don't have the hardware. Publish a read-only page for one fini
 | [royshil/obs-mcp](https://github.com/royshil/obs-mcp) | **Plan B.** Lets Claude start and stop OBS recording and switch scenes (GPL-2.0, a tool, not shipped). OBS is installed; Aymen would enable OBS's WebSocket server and set its password himself, add the server to the Claude config and restart. The recorded window must be in front |
 | [prompt-motion.com](https://prompt-motion.com/) | **Inspiration only.** A gallery of motion clips made with Claude, with their prompts (Product UI, Charts, Diagrams). Aymen can point at 2–3 clips whose feel he likes |
 
+### Ad references (processed by Aymen, Nov 3)
+
+Five professional launch ads, broken down shot by shot with frames and transcripts, in Aymen's local folder
+`C:\Users\aymen.LIGER\No-Code projects\Reels\knowledge\sections\ads-inspiration` (not copied here: they are other
+companies' ads, for reference only): OpenAI ChatGPT Work "Sites" (29 s, silent), Anthropic Claude Cowork (69 s,
+silent), Google Canvas in Gemini (60 s, silent, dark with glow), Google Gemini for business (102 s, silent, pastel,
+blur-to-sharp type), Google "Welcome to the Gemini era" (60 s, voiced, live action). What to take for Argus:
+
+| Pattern (seen in) | Argus's version |
+| --- | --- |
+| **One task told end to end** instead of a feature montage (Cowork) | Follow one experiment: three glasses set up → watched → measured with ± → a question asked → the honest verdict → the next run |
+| **Escalation**: each example more impressive, the strongest last (Canvas) | Dye run first (simple, visual), then the seed plate (published data, curves, a statistical next run), the models working together last |
+| **Bookends**: mark → one bold line → the product → mark + link (all of them) | The Argus eye mark → one plain line → … → mark + `argus-replay.vercel.app` as the call to action |
+| **Short type cards** between beats, built word by word or blur-to-sharp (Canvas, Gemini for business) | Plain one-liners in Inter on the light canvas: "It measures." "It checks itself." "It tells you what to try next." |
+| **Real UI, not mockups**; the screen recording is the proof (Sites) | Real captures of the redesigned app and demo, with camera moves into the part that matters (already D-96) |
+| **A calm "working" state**: plain "Thinking" text, a checklist that ticks (Sites, Cowork) | Ask Argus's "Argus is looking…", the verdict's checks ticking passed / not settled / failed from the real check list, "✓ numbers checked" on an answer |
+| **Agents made visible**: a labelled node and a glowing connector line (Gemini for business) | A 4–5 s diagram: SAM 3.1 outlines → code measures → Muse Spark writes → the claim checker → Muse Wonder judges and critiques → Ax and Muse pick the next run |
+| **One repeated AI signature** across screens (Gemini's pill button) | The Argus eye mark and the "Ask Argus" pill, the same every time they appear |
+| **Fine print on sped-up footage** (Canvas: "Sequences shortened") | A small line wherever footage is sped up or replayed: "Recorded run, shown 60× faster; every number is Argus's own measurement" |
+| **One accent per scene on a neutral base** (Sites) | The light clean-lab canvas with teal on the data, as in the app |
+| **A plain closing call to action with the link** (Canvas, Gemini) | "Open the demo: argus-replay.vercel.app", with "Built Oct 27 – Nov 4" |
+
+Differences to respect: four of the five are silent and 30–70 s long; Argus's video is up to 3 minutes for judges and
+has an AI voice (D-96), so the voice carries the longer explanation while the pacing follows these ads (1–3 s cuts in the
+hook, longer holds on the UI beats). Their dark-glow look (Canvas) doesn't match Argus's light app and is not used.
+
 ## Start a long experiment today
 
 Slow features need real footage by demo day. Run the chosen **salt-stress germination dose-response** (3 salt levels × 2 jars, side view) on the **Canon XA50 in fast motion** on AC power; full protocol in `20-demo-experiment-germination.md`. Show it in the video as a **labeled replay** ("recorded Oct 27–30, analyzed by Argus, 600× speed") plus one short genuinely live moment. Argus analyzes it later through Import video with the time-scale factor. Record only raw footage early; all analysis shown must come from hackathon code. Optional second run on the webcam: yeast fermentation or salt crystals.
