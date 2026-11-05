@@ -265,8 +265,10 @@ async def segment_with_retries(
                 ctx.reserved_usd -= expected
         if result is not None:
             limit = ctx.settings.sam_max_objects
-            # Pointed, SAM traces one object per box, and Argus sends at most 16: no sign there are more to find.
-            if not prompts and len(result.tracks) >= limit and concept not in ctx.limit_reported:
+            # The cap is on video requests (KB 04). Pointed, SAM traces one object per box and Argus sends at most 16;
+            # by name on one image it returns them all (24 of 24 coins, 133 yeast cells): no sign there are more.
+            video = not isinstance(media, np.ndarray)
+            if video and len(result.tracks) >= limit and concept not in ctx.limit_reported:
                 ctx.limit_reported.add(concept)  # SAM keeps the first `limit`: there may be more than it found
                 message = (
                     f"SAM 3.1 returns at most {limit} objects per request: there may be more '{concept}' than found"
@@ -552,8 +554,9 @@ async def analyze_frame(
     # Measurement: geometry only where this vessel's concept was segmented on this frame (a vessel missing from
     # `keyed` is a gap, not a zero); colour on the newest masks there are.
     drafts: list[MeasurementDraft] = []
-    # grown_count compares each object with its first sighting, so it needs SAM's mask per object, not the union.
-    per_object = {m.source for m in ctx.recipe.measurements if m.method == "grown_count"}
+    # grown_count compares each object with its first sighting and object_count counts touching objects apart, so
+    # both need SAM's mask per object, not the union.
+    per_object = {m.source for m in ctx.recipe.measurements if m.method in ("grown_count", "object_count")}
     for vessel in (v for v in ctx.vessels if v.id not in blocked):
         segmented_here = set(keyed.get(vessel.id, {}))
         geometry_recipe = ctx.recipe.model_copy(update={"measurements": due_measurements(ctx.recipe, segmented_here)})

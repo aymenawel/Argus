@@ -19,7 +19,7 @@ import cv2
 import numpy as np
 
 from argus.calibration.run import RulerInput, calibrate, card_moved
-from argus.capture.quality import DEFAULT_THRESHOLDS, REBASELINED, QualityGate, QualityThresholds
+from argus.capture.quality import DEFAULT_THRESHOLDS, REBASELINED, QualityGate, QualityThresholds, thresholds_for
 from argus.capture.webcam import CameraSettings, open_webcam
 from argus.domain import CameraProperty, EventKind, RunStatus
 from argus.pipeline.analyzer import RunContext, analyze_frame
@@ -204,7 +204,7 @@ async def run_live(
     properties = camera_properties or {}
     t0: float | None = None
     last_store = last_segment = -math.inf
-    gate = QualityGate(ctx.vessels, quality)
+    gate = QualityGate(ctx.vessels, thresholds_for(ctx.recipe, quality))
     watching = asyncio.Lock()  # the watcher is read in a worker thread and updated when a segmentation lands
     pending: set[asyncio.Task] = set()
     segmenting: asyncio.Task | None = None

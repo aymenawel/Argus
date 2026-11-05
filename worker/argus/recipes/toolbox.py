@@ -26,6 +26,12 @@ TOOLBOX: tuple[Tool, ...] = (
     Tool("skeleton_length", "size", "mm", "the length along a thin object (a root, a shoot, a crack)"),
     Tool("component_count", "count", "count", "how many separate objects of the concept there are"),
     Tool(
+        "object_count",
+        "count",
+        "count",
+        "how many objects SAM outlined, each counted on its own even when they touch (cells in a clump, D-103)",
+    ),
+    Tool(
         "touching_count",
         "count",
         "count",

@@ -216,11 +216,11 @@ def next_run_numbers(db: Database, run: Run, recipe: Recipe, plan: Plan | None) 
     )
 
     hours = run_length_h(fits)
-    levelled = [time_to_level_off(f) for f in fits.values() if f.ok]
-    still_rising = any(f.ok and not f.reached for f in fits.values()) or any(
-        t is not None and t > last_h for t in levelled
-    )
-    if quantity == "level" and checkpoint is not None and not still_rising:
+    # Levelled off only on evidence: every sample's curve fitted, and each reached its plateau before the run ended.
+    # A curve that never levels off (exponential, linear) or a run whose curves didn't fit has shown no plateau (D-103).
+    levelled = [time_to_level_off(f) for f in fits.values()]
+    levelled_off = bool(fits) and all(t is not None and t <= last_h for t in levelled)
+    if quantity == "level" and checkpoint is not None and levelled_off:
         hours = checkpoint / 3600
         hours_reason = (
             "the plan's check time, when the reading is judged; this run's readings had levelled off by its end"

@@ -354,21 +354,39 @@ async def test_concepts_are_segmented_at_the_same_time(ctx, scene):
 
 
 @pytest.mark.anyio
-async def test_a_result_at_sams_object_limit_is_flagged_once(ctx, scene):
-    image, _ = scene
+async def test_a_video_result_at_sams_object_limit_is_flagged_once(ctx, tmp_path):
+    def sixteen(concept):
+        patch = MaskPatch(0, 0, np.ones((2, 2), bool))
+        return SegmentResult([Track(f"obj{i}", concept, (TrackFrame(0, patch, 0.9),)) for i in range(16)], call())
 
     class Full(FakeSegmenter):
-        async def image(self, image_bgr, concept):
-            patch = MaskPatch(0, 0, np.ones((2, 2), bool))
-            return SegmentResult([Track(f"obj{i}", concept, (TrackFrame(0, patch, 0.9),)) for i in range(16)], call())
+        async def video(self, clip, concept):
+            return sixteen(concept)
 
     ctx.segmenter = Full()
+    clip = Clip(tmp_path / "c.mp4", frame_count=60, width=10, height=10)
     for t in (0.0, 60.0):
-        await analyze_frame(ctx, t, image, segment=True)
+        await segment_with_retries(ctx, clip, "root", t=t)
     [limit] = [e for e in events_for_run(ctx.db, ctx.run.id) if e.kind == "quality"]
     assert (
         limit.detail["concept"] == "root" and limit.detail["objects"] == 16 and "at most 16" in limit.detail["message"]
     )
+
+
+@pytest.mark.anyio
+async def test_an_image_result_past_sixteen_objects_is_not_a_limit(ctx, scene):
+    """SAM's 16-object cap is for video and pointed requests: by name on one image it found 24 of 24 coins (KB 04)
+    and 133 yeast cells, so many objects on an image are no sign that some were left out (D-103)."""
+    image, _ = scene
+
+    class Many(FakeSegmenter):
+        async def image(self, image_bgr, concept):
+            patch = MaskPatch(0, 0, np.ones((2, 2), bool))
+            return SegmentResult([Track(f"obj{i}", concept, (TrackFrame(0, patch, 0.9),)) for i in range(40)], call())
+
+    ctx.segmenter = Many()
+    await segment_with_retries(ctx, image, "root", t=0.0)
+    assert "quality" not in kinds(ctx)
 
 
 @pytest.mark.anyio

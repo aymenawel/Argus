@@ -202,7 +202,7 @@ def measure_vessel(
             continue
         mask = np.asarray(masks.get(spec.source, empty), bool)
         if spec.family in ("size", "count"):
-            counted = ("component_count", "touching_count", "grown_count")
+            counted = ("component_count", "object_count", "touching_count", "grown_count")
             if spec.method not in ("area", "height", "skeleton_length", *counted):
                 continue  # rule-based counts and thresholds are evaluated in phase 4
             region = region or _Region(vessel, image_bgr, cal)
@@ -222,7 +222,11 @@ def measure_vessel(
             elif spec.method == "grown_count" and spec.min_length_mm is not None:
                 given = objects.get(spec.source) if objects else None
                 found = (
-                    [o for o in (region.view(np.asarray(m, bool)) for m in given) if _big_enough(o, mmpp, recipe.min_count_area_mm2)]
+                    [
+                        o
+                        for o in (region.view(np.asarray(m, bool)) for m in given)
+                        if _big_enough(o, mmpp, recipe.min_count_area_mm2)
+                    ]
                     if given is not None
                     else _objects(view, mmpp, recipe.min_count_area_mm2)
                 )
@@ -245,9 +249,15 @@ def measure_vessel(
                 draft(spec.id, float(sum(f.grown for f in library)), 0.0, "count", "grown_count/2")
             elif spec.method == "touching_count" and spec.touching is not None and spec.min_length_mm is not None:
                 touched = views[spec.touching]
-                n = touching_count(_objects(view, mmpp, recipe.min_count_area_mm2), touched, mmpp, min_length_mm=spec.min_length_mm)
+                pieces = _objects(view, mmpp, recipe.min_count_area_mm2)
+                n = touching_count(pieces, touched, mmpp, min_length_mm=spec.min_length_mm)
                 draft(spec.id, float(n), 0.0, "count", "touching_count/1")  # an exact count of what was seen
-            else:
+            elif spec.method == "object_count" and objects and objects.get(spec.source) is not None:
+                # SAM's own outline per object: cells touching in a clump still count one by one (D-103).
+                found = [region.view(np.asarray(m, bool)) for m in objects[spec.source]]
+                n = sum(1 for o in found if _big_enough(o, mmpp, recipe.min_count_area_mm2))
+                draft(spec.id, float(n), 0.0, "count", "object_count/1")
+            else:  # component_count, and object_count when SAM's objects aren't known: the mask's separate blobs
                 metric = component_count(view, mmpp, min_area_mm2=recipe.min_count_area_mm2)
                 draft(spec.id, metric.value, 0.0, metric.unit, metric.method_version)
         elif spec.family == "colour":

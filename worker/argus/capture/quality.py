@@ -9,12 +9,16 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
 
 from argus.domain import Vessel
 from argus.rois import roi_box, roi_mask
+
+if TYPE_CHECKING:
+    from argus.recipes.model import Recipe
 
 SATURATED_LEVEL = 250
 CHANGED_GREY = 40  # grey levels a pixel must move by to count as changed (after matching brightness)
@@ -33,6 +37,11 @@ class QualityThresholds:
 
 
 DEFAULT_THRESHOLDS = QualityThresholds()
+
+
+def thresholds_for(recipe: Recipe, base: QualityThresholds = DEFAULT_THRESHOLDS) -> QualityThresholds:
+    """The gate's thresholds for a recipe's frames: its own sharpness floor when it sets one (D-103)."""
+    return base if recipe.blur_min is None else replace(base, blur_min=recipe.blur_min)
 
 
 @dataclass(frozen=True)

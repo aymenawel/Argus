@@ -331,3 +331,15 @@ def test_the_suggestion_counts_samples_in_plain_words():
     assert _next_refs(numbers)["next:replicates"].display == f"{n} samples"
     assert "vessel" not in _next_refs(numbers)["next:replicates"].label
     assert "two-sample" not in reason and "1 in 20" in reason
+
+
+def test_a_curve_that_never_levels_off_is_never_said_to_have_levelled_off(db):
+    """An exponential curve (yeast cells under a microscope) has no plateau: a level plan's run length must not be
+    justified by readings that 'levelled off' when nothing showed they did (D-103)."""
+    from argus.analyze.next_run import next_run_numbers
+    from argus.storage.repos import first_locked_plan
+
+    run = finished_run(db, quantity=None, checkpoint_s=43200.0)
+    plan = first_locked_plan(db, run.experiment_id)
+    numbers = next_run_numbers(db, run, RECIPE.model_copy(update={"curve": "exponential"}), plan)
+    assert "levelled off by its end" not in numbers.hours_reason

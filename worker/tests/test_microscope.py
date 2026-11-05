@@ -7,6 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from argus.calibration.run import calibrate
+from argus.capture.quality import DEFAULT_THRESHOLDS, QualityGate, thresholds_for
 from argus.config import REPO_ROOT
 from argus.domain import Role, RulerInput, Vessel
 from argus.measure.engine import measure_vessel
@@ -31,7 +32,7 @@ def field_vessel() -> Vessel:
     return Vessel(id="ves_F", run_id="run_1", label="Field", role=Role.TREATMENT, roi=roi)
 
 
-def measure(recipe, image, mask):
+def measure(recipe, image, mask, objects=None):
     # A stage micrometer: two marks 0.1 mm apart are 200 px apart, so 0.5 µm a pixel.
     cal = calibrate(image, ruler=RulerInput(p1=(20.0, 20.0), p2=(220.0, 20.0), distance_mm=0.1))
     out = measure_vessel(
@@ -45,12 +46,14 @@ def measure(recipe, image, mask):
         baselines={},
         current_reference=None,
         families=frozenset({"size", "count"}),
+        objects=objects,
     )
     return {d.metric: d for d in out.drafts}
 
 
 def test_the_microscope_recipe_counts_cells_and_measures_their_area_in_square_micrometres():
     assert MICROSCOPE.id == "microscope" and MICROSCOPE.main_measurement == "cells"
+    assert {m.id: m.method for m in MICROSCOPE.measurements} == {"cells": "object_count", "cell_area": "area"}
     units = {m.id: m.unit for m in MICROSCOPE.measurements}
     assert units == {"cells": "count", "cell_area": "um2"}
     assert MICROSCOPE.min_count_area_mm2 < 1e-5  # a cell is a few square micrometres
@@ -81,3 +84,38 @@ def test_micrometre_units_belong_to_size_methods_of_the_right_dimension():
         MeasurementSpec(id="h", family="size", method="height", source="cell", unit="um2")
     with pytest.raises(ValidationError):
         MeasurementSpec(id="n", family="count", method="component_count", source="cell", unit="um2")
+
+
+def brightfield(blur_px: int) -> np.ndarray:
+    """A brightfield field: pale cells with thin dark walls on a flat grey background, as a microscope shows."""
+    image = np.full((240, 320, 3), 200, np.uint8)
+    for x in (60, 120, 180, 240):
+        for y in (80, 160):
+            cv2.circle(image, (x, y), 12, (185, 185, 185), -1)
+            cv2.circle(image, (x, y), 12, (140, 140, 140), 2)
+    return cv2.GaussianBlur(image, (blur_px, blur_px), 0)
+
+
+def test_an_in_focus_microscope_field_passes_the_quality_gate_and_a_defocused_one_does_not():
+    """A field that is mostly flat background scores low on sharpness even in focus (the Wolfe Lab yeast clip reads
+    3 to 11, dishes 60 and up): the microscope recipe sets its own floor (D-103)."""
+    vessels = [field_vessel()]
+    thresholds = thresholds_for(MICROSCOPE)
+    assert "blurred" in QualityGate(vessels).check(0.0, brightfield(3)).flags  # the dish floor would drop it
+    assert "blurred" not in QualityGate(vessels, thresholds).check(0.0, brightfield(3)).flags
+    assert "blurred" in QualityGate(vessels, thresholds).check(0.0, brightfield(21)).flags
+    assert thresholds_for(MICROSCOPE.model_copy(update={"blur_min": None})) == DEFAULT_THRESHOLDS
+
+
+def test_touching_cells_are_counted_one_by_one_from_sams_own_outlines():
+    """Budding yeast sit in clumps: the union of their masks is one blob, but SAM outlines each cell (D-103)."""
+    image = np.full((240, 320, 3), 200, np.uint8)
+    cells = []
+    for x, y in ((100, 120), (118, 120), (240, 120)):  # the first two touch
+        one = np.zeros((240, 320), np.uint8)
+        cv2.circle(one, (x, y), 10, 1, -1)
+        cells.append(one.astype(bool))
+    union = cells[0] | cells[1] | cells[2]
+    assert measure(MICROSCOPE, image, union)["cells"].value == 2  # without SAM's objects: two blobs
+    m = measure(MICROSCOPE, image, union, objects={"cell": cells})
+    assert m["cells"].value == 3 and m["cells"].method_version == "object_count/1"

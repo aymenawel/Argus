@@ -116,14 +116,15 @@ class VesselProposal(BaseModel):
 
 
 def vessels_from_tiles(manifest: Manifest, roles: dict[str, Role] | None, factor: str) -> list[VesselDraft]:
-    """One vessel per tile, its region the tile's box; ValueError unless every condition has a role and one is
-    the control."""
+    """One vessel per tile, its region the tile's box; ValueError unless every condition has a role and, when there
+    are several to compare, one is the control. A recording of one condition (a single field under a microscope) is
+    only watched: the verdict's ceiling keeps it inconclusive for want of a control (D-103)."""
     roles = roles or {}
     conditions = list(dict.fromkeys(tile.condition for tile in manifest.tiles))
     missing = [c for c in conditions if c not in roles]
     if missing:
         raise ValueError(f"give every condition a role: {', '.join(missing)} has none")
-    if Role.CONTROL not in {roles[c] for c in conditions}:
+    if len(conditions) > 1 and Role.CONTROL not in {roles[c] for c in conditions}:
         raise ValueError("one condition must be the control")
     if not 1 <= len(manifest.tiles) <= MAX_VESSELS:
         raise ValueError(f"a run has 1 to {MAX_VESSELS} vessels")

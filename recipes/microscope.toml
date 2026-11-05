@@ -1,7 +1,8 @@
 # Microscope mode (D-103): cells, microbes or crystals under a USB microscope (it shows up as a webcam, so live runs
 # and imported recordings both work). The scale comes from a stage micrometer: two clicks on its marks with the true
 # distance between them (the two-click ruler, e.g. 0.1 mm), once per objective. Argus counts what SAM finds and
-# reports the area it covers in square micrometres; the count filter is set for cells, not dishes.
+# reports the area it covers in square micrometres; cells in a clump count one by one (SAM outlines each), and the
+# count filter is set for cells, not dishes.
 id = "microscope"
 version = 1
 title = "Microscope: cells and particles"
@@ -13,6 +14,7 @@ rivals = ["focus drift", "temperature", "light intensity", "medium drying", "the
 default_views = ["curves", "crops"]
 stills_view = "frame"
 min_count_area_mm2 = 0.000001  # 1 µm²: smaller specks are noise, not cells
+blur_min = 2.0  # a field in focus is mostly flat background: the Wolfe Lab yeast clip reads 3 to 11, dishes 60 and up
 
 [[concepts]]
 name = "cell"
@@ -20,7 +22,7 @@ name = "cell"
 [[measurements]]
 id = "cells"
 family = "count"
-method = "component_count"
+method = "object_count"
 from = "cell"
 unit = "count"
 

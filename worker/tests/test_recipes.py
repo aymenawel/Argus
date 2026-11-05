@@ -41,7 +41,8 @@ def write_recipe(directory, data):
 
 def test_bundled_recipes_load_and_point_to_real_measurements():
     recipes = load_all(REPO_ROOT / "recipes")
-    assert set(recipes) == {"seed-germination", "colour-reaction", "foam-height", "general", "colony-spread", "microscope"}
+    bundled = {"seed-germination", "colour-reaction", "foam-height", "general", "colony-spread", "microscope"}
+    assert set(recipes) == bundled
     for r in recipes.values():
         assert r.main_measurement in {m.id for m in r.measurements}
 

@@ -11,7 +11,7 @@ from argus.analyze.rules import parse_rule
 METHODS_BY_FAMILY = {
     "size": {"area", "height", "skeleton_length"},
     "colour": {"lab_mean", "delta_e"},
-    "count": {"component_count", "event_count", "touching_count", "grown_count"},
+    "count": {"component_count", "object_count", "event_count", "touching_count", "grown_count"},
     "state": {"threshold"},
 }
 
@@ -130,6 +130,9 @@ class Recipe(Spec):
     # Objects smaller than this aren't counted (specks). 1 mm² suits dishes and seeds; a microscope recipe sets it to
     # about 1 µm² (D-103).
     min_count_area_mm2: float = Field(1.0, gt=0)
+    # The quality gate's sharpness floor (variance of the Laplacian) for this recipe's frames; None keeps the gate's
+    # own, set for dishes. A microscope field is mostly flat background, so it scores low even in focus (D-103).
+    blur_min: float | None = Field(None, gt=0)
     concepts: list[Concept] = Field(min_length=1)
     measurements: list[MeasurementSpec] = Field(min_length=1)
     events: list[EventSpec] = []

@@ -228,6 +228,20 @@ def test_a_published_plate_needs_a_role_for_every_condition_and_a_control(client
     assert answer.status_code == 422 and "frame_001.jpg" in answer.json()["detail"]
 
 
+def test_a_recording_of_one_condition_imports_without_a_control(client, experiment, tmp_path):
+    """A time-lapse of a single field (yeast under a microscope) has nothing to compare: it imports as watched
+    only, and the verdict's ceiling keeps it inconclusive for want of a control (D-103)."""
+    from tests.test_images_source import write_manifest
+
+    tile = {"label": "Field", "condition": "yeast", "run": "w1", "dish": 1, "box": [0, 0, 80, 40], "seeds": 0}
+    manifest = write_manifest(tmp_path / "field", tiles=[tile])
+    url = f"/api/experiments/{experiment['id']}/runs"
+    created = client.post(url, json={"mode": "imported", "manifest": manifest, "roles": {"yeast": "treatment"}})
+    assert created.status_code == 201, created.text
+    view = wait_until_done(client, created.json()["run"]["id"])
+    assert [v["role"] for v in view["vessels"]] == ["treatment"]
+
+
 def test_a_published_plates_labels_are_kept_for_the_agreement(client, experiment, tmp_path):
     from tests.test_images_source import write_manifest
 

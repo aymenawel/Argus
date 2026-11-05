@@ -24,7 +24,7 @@ import cv2
 
 from argus.calibration.run import RulerInput, RunCalibration, calibrate, card_moved, missing_scale
 from argus.capture.images import ImageSequenceSource
-from argus.capture.quality import REBASELINED, QualityGate
+from argus.capture.quality import REBASELINED, QualityGate, thresholds_for
 from argus.capture.video import VideoFileSource, VideoFrame
 from argus.datasets.manifest import load_manifest
 from argus.domain import EventKind, ReferenceValueDraft, RunStatus, Vessel, new_id
@@ -96,7 +96,7 @@ def _scan(
     calibrations: list[tuple[float, RunCalibration]] = []
     epochs: Epochs = [(0.0, list(ctx.vessels))]
     next_sample = 0.0
-    gate = QualityGate(ctx.vessels)
+    gate = QualityGate(ctx.vessels, thresholds_for(ctx.recipe))
     scene_moved = False
     hands: set[str] = set()  # vessels with something in front of them, logged once per stretch
     for frame in _frames(request):
