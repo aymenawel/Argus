@@ -105,6 +105,41 @@ Differences to respect: four of the five are silent and 30–70 s long; Argus's 
 has an AI voice (D-96), so the voice carries the longer explanation while the pacing follows these ads (1–3 s cuts in the
 hook, longer holds on the UI beats). Their dark-glow look (Canvas) doesn't match Argus's light app and is not used.
 
+### Cut 1 (Nov 4, D-100)
+
+The project lives in git-ignored `data/film/argus-film/` (HyperFrames; `SPEC.md`, `REVIEW.md`, one scene per file in
+`compositions/`); the footage and the ElevenLabs key file stay out of the repo.
+
+- **Story (1:51):** one experiment end to end. A clock reaction's goal ("switch at exactly 30 seconds") → Argus plans a
+  fair test and locks it → watches three repeats → checked notes and a rejected invented number → Ask Argus → verdict
+  "Supported" (repeatable within 0.2 s) → next run (about half the iodate) → the five-step loop → under the hood →
+  the real demo and the link.
+- **Footage:** DIY bama, "Black Magic Water! (Iodine Clock Reaction)" (YouTube; locked camera, phone stopwatch in
+  shot), shown at 0.6x and 0.25x. Montage: Kont Kont (dye in hot, warm, cold water) and Science Explained (a ring of
+  clock reactions). Aymen takes responsibility for the YouTube rights; every source is credited on the end card.
+- **What is real:** the beaker outlines are SAM 3.1's own, from Argus's `segment()` on the exact frames shown (2 calls,
+  $0.005, logged in `data/film/model-calls.jsonl`); the times 12.5, 13.6, 13.7, 13.8 s are read off the clip's stopwatch,
+  frame by frame (never by a model); the app screens are captures of the live demo. The plan, notes, chat, verdict and
+  next-run numbers are a concept illustration with simple values, labelled on screen.
+- **Sound:** narration by ElevenLabs Eleven v4, voice "Christopher" (D-99), every line word-checked by a transcriber;
+  an instrumental bed from ElevenLabs Music entering when the beaker turns black; 39 small sounds on visible actions
+  (the video kit's and HyperFrames' bundled ones). Voice at −16 LUFS, music about 15 LU under it.
+
+### Version 2 (Nov 4, D-101)
+
+2:52, "accelerating research": researchers told Aymen they stand for hours watching experiments. Order: lab footage and
+"what slows research down" → 24 hours of real E. coli swarms (Shaw et al. 2026, CC BY 4.0) → Argus title → overnight:
+SAM 3.1's outlines from Argus's own run on every scan, the measured areas counting up, a morning chart of the real
+curves (2,658 / 2,653 / 2,499 mm² at 24 h; detection gaps dropped, D-90) → the graded clock-reaction story (plan,
+watch, checked notes, Ask Argus, verdict, next run) → the real app's dye and seed runs → microscope mode as "next"
+(not built) → under the hood → "24 h of watching → 2 min of reading" → the demo link. Credits: DIY bama and Heidi
+Arjes (YouTube), Kindel Media and Dominik Zítka (Pexels), Shaw et al. 2026, ElevenLabs voice and music.
+
+Version 3 (D-102, 2:56) swaps the clock-reaction clip for BeardedScienceGuy's two glasses (two strengths, poured
+together; B 1.4 s, A 5.3 s after the pour, measured from the frames) and retells that part as "does the strength
+change when it turns black?". Credits: BeardedScienceGuy and Heidi Arjes (YouTube), Kindel Media and Dominik Zítka
+(Pexels), Shaw et al. 2026 (CC BY 4.0), ElevenLabs.
+
 ## Start a long experiment today
 
 Slow features need real footage by demo day. Run the chosen **salt-stress germination dose-response** (3 salt levels × 2 jars, side view) on the **Canon XA50 in fast motion** on AC power; full protocol in `20-demo-experiment-germination.md`. Show it in the video as a **labeled replay** ("recorded Oct 27–30, analyzed by Argus, 600× speed") plus one short genuinely live moment. Argus analyzes it later through Import video with the time-scale factor. Record only raw footage early; all analysis shown must come from hackathon code. Optional second run on the webcam: yeast fermentation or salt crystals.
