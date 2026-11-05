@@ -41,7 +41,7 @@ def write_recipe(directory, data):
 
 def test_bundled_recipes_load_and_point_to_real_measurements():
     recipes = load_all(REPO_ROOT / "recipes")
-    assert set(recipes) == {"seed-germination", "colour-reaction", "foam-height", "general", "colony-spread"}
+    assert set(recipes) == {"seed-germination", "colour-reaction", "foam-height", "general", "colony-spread", "microscope"}
     for r in recipes.values():
         assert r.main_measurement in {m.id for m in r.measurements}
 
@@ -77,6 +77,7 @@ def test_image_sequences_show_sam_the_whole_frame_unless_a_recipe_asks_for_one_v
         "foam-height": "frame",
         "general": "frame",
         "colony-spread": "vessel",
+        "microscope": "frame",
     }
     assert [c.name for c in recipes["colony-spread"].concepts] == ["microbial colony"]
 

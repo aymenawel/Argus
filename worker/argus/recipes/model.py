@@ -76,6 +76,14 @@ class MeasurementSpec(Spec):
         return method
 
     @model_validator(mode="after")
+    def micrometres_fit_the_method(self) -> MeasurementSpec:
+        """Micrometres (microscope mode, D-103) are for sizes: µm² for an area, µm for a height or a length."""
+        wanted = {"area": "um2", "height": "um", "skeleton_length": "um"}.get(self.method)
+        if self.unit in ("um", "um2") and self.unit != wanted:
+            raise ValueError(f"'{self.id}': {self.unit} doesn't fit {self.method} (use {wanted or 'its own unit'})")
+        return self
+
+    @model_validator(mode="after")
     def lab_mean_reports_three_values(self) -> MeasurementSpec:
         if self.method == "lab_mean" and self.unit != "Lab":
             raise ValueError('lab_mean reports L*, a* and b*: use unit "Lab"')
@@ -119,6 +127,9 @@ class Recipe(Spec):
     # the whole frame, one call shared by every vessel (small objects stand out on the whole plate), or one vessel's
     # region per call (a faint object filling its dish, D-89).
     stills_view: Literal["frame", "vessel"] = "frame"
+    # Objects smaller than this aren't counted (specks). 1 mm² suits dishes and seeds; a microscope recipe sets it to
+    # about 1 µm² (D-103).
+    min_count_area_mm2: float = Field(1.0, gt=0)
     concepts: list[Concept] = Field(min_length=1)
     measurements: list[MeasurementSpec] = Field(min_length=1)
     events: list[EventSpec] = []

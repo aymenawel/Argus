@@ -15,6 +15,9 @@ test("units read as people write them", () => {
   assert.equal(unitLabel("mm2"), "mm²");
   assert.equal(unitLabel("dE00/h"), "ΔE per hour");
   assert.equal(unitLabel("mm"), "mm");
+  assert.equal(unitLabel("um2"), "µm²"); // microscope mode (D-103)
+  assert.equal(unitLabel("um"), "µm");
+  assert.equal(unitLabel("um2/h"), "µm² per hour");
 });
 
 test("a treatment is a test sample", () => {

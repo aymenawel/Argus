@@ -120,14 +120,14 @@ def _length_boundary_px(mask: np.ndarray) -> float:
     return total
 
 
-def _big_enough(mask: np.ndarray, mm_per_px: float) -> bool:
-    return np.count_nonzero(mask) * mm_per_px**2 >= MIN_COUNT_AREA_MM2
+def _big_enough(mask: np.ndarray, mm_per_px: float, min_area_mm2: float = MIN_COUNT_AREA_MM2) -> bool:
+    return np.count_nonzero(mask) * mm_per_px**2 >= min_area_mm2
 
 
-def _objects(view: np.ndarray, mm_per_px: float) -> list[np.ndarray]:
+def _objects(view: np.ndarray, mm_per_px: float, min_area_mm2: float = MIN_COUNT_AREA_MM2) -> list[np.ndarray]:
     """The separate objects in a concept's mask, as component_count sees them (specks below its size filter out)."""
     count, labels, stats, _ = cv2.connectedComponentsWithStats(np.asarray(view, np.uint8), connectivity=8)
-    return [labels == i for i in range(1, count) if stats[i, cv2.CC_STAT_AREA] * mm_per_px**2 >= MIN_COUNT_AREA_MM2]
+    return [labels == i for i in range(1, count) if stats[i, cv2.CC_STAT_AREA] * mm_per_px**2 >= min_area_mm2]
 
 
 def _colour(
@@ -191,6 +191,10 @@ def measure_vessel(
 
     def sized(spec: MeasurementSpec, metric: MetricValue, boundary_mm: float, power: int) -> None:
         u = combined_uncertainty(metric.value, boundary_mm, cal.rel_uncertainty, power=power)
+        if spec.unit in ("um", "um2"):  # microscope mode (D-103): the same reading in micrometres
+            factor = 1000.0**power
+            draft(spec.id, metric.value * factor, u * factor, spec.unit, metric.method_version)
+            return
         draft(spec.id, metric.value, u, metric.unit, metric.method_version)
 
     for spec in recipe.measurements:
@@ -218,9 +222,9 @@ def measure_vessel(
             elif spec.method == "grown_count" and spec.min_length_mm is not None:
                 given = objects.get(spec.source) if objects else None
                 found = (
-                    [o for o in (region.view(np.asarray(m, bool)) for m in given) if _big_enough(o, mmpp)]
+                    [o for o in (region.view(np.asarray(m, bool)) for m in given) if _big_enough(o, mmpp, recipe.min_count_area_mm2)]
                     if given is not None
-                    else _objects(view, mmpp)
+                    else _objects(view, mmpp, recipe.min_count_area_mm2)
                 )
                 if not found:
                     continue  # nothing seen: no count, not a count of zero
@@ -241,10 +245,10 @@ def measure_vessel(
                 draft(spec.id, float(sum(f.grown for f in library)), 0.0, "count", "grown_count/2")
             elif spec.method == "touching_count" and spec.touching is not None and spec.min_length_mm is not None:
                 touched = views[spec.touching]
-                n = touching_count(_objects(view, mmpp), touched, mmpp, min_length_mm=spec.min_length_mm)
+                n = touching_count(_objects(view, mmpp, recipe.min_count_area_mm2), touched, mmpp, min_length_mm=spec.min_length_mm)
                 draft(spec.id, float(n), 0.0, "count", "touching_count/1")  # an exact count of what was seen
             else:
-                metric = component_count(view, mmpp, min_area_mm2=MIN_COUNT_AREA_MM2)
+                metric = component_count(view, mmpp, min_area_mm2=recipe.min_count_area_mm2)
                 draft(spec.id, metric.value, 0.0, metric.unit, metric.method_version)
         elif spec.family == "colour":
             reading = _colour(image_bgr, mask, cal, current_reference)

@@ -37,7 +37,7 @@ Optional later: PlantCV `detect_color_card` + `correct_color` (supports ColorChe
 
 ## Microscope calibration
 
-A stage micrometer slide gives µm per pixel for each objective; saved as a named profile per microscope + zoom.
+A stage micrometer slide gives µm per pixel for each objective; saved as a named profile per microscope + zoom. **Built Nov 4 (D-103):** the two-click ruler takes the micrometer's marks and their true distance (e.g. 0.1 mm), and the `microscope` recipe reports µm²; named profiles per objective are still to come.
 
 ## Quantitative color: standard curves
 

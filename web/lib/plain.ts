@@ -11,7 +11,7 @@ const METRIC_WORDS: Record<string, string> = {
 };
 
 // ΔE is the standard colour-difference number: about 1 is the smallest change an eye can see.
-const UNIT_WORDS: Record<string, string> = { dE00: "ΔE", mm2: "mm²", Lab: "L*a*b*" };
+const UNIT_WORDS: Record<string, string> = { dE00: "ΔE", mm2: "mm²", um2: "µm²", um: "µm", Lab: "L*a*b*" };
 
 /** A measurement's id as a person would say it: "delta_e" → "colour change", "root_length" → "root length". */
 export function metricWords(metric: string): string {

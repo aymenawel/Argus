@@ -20,7 +20,7 @@ The original fixed modes become **starter recipes** on one shared pipeline:
 | --- | --- | --- | --- |
 | General | Webcam or phone | Whatever the researcher describes ("liquid level in the jar") | Base for all others |
 | Plant (GrowLoop) | Webcam, timelapse | Leaf area, height, greenness, droop, new growth | Smart-plug light/pump control with limits and optional approval; day/night aware |
-| Microscope | USB microscope | Particle/crystal/cell count and size over time | Calibration slide → µm |
+| Microscope | USB microscope | Particle/crystal/cell count and size over time | Calibration slide → µm (built Nov 4, D-103: `recipes/microscope.toml`, the two-click ruler on a stage micrometer) |
 | Reaction | Webcam | Color change, bubbling, precipitate, level | Defaults to Continuous |
 | Custom | Any camera | Researcher-chosen metrics and triggers | Full control |
 
